@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>C-COIN</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/home.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="content">
+        <div class="logo-section">
+            <img src="{{ url_for('static', path='images/home-X.png') }}" class="logo" alt="C-COIN Logo">
+        </div>
+
+        <div class="token-section">
+            <h3 id="token-display">
+                <span id="token-count">{{ reward }}</span>
+                <span class="coin-text">CCoin</span>
+            </h3>
+        </div>
+
+        <div class="join-about-section">
+            <button class="about-btn" onclick="window.location.href='/about';">
+                <div class="btn-left">
+                    <i class="fas fa-info-circle"></i>
+                    <span>About CCOIN</span>
+                </div>
+                <span class="arrow">&gt;</span>
+            </button>
+            <a href="https://t.me/CCOIN_OFFICIAL" class="join-community-btn" target="_blank">
+                <div class="btn-left">
+                    <i class="fas fa-users"></i>
+                    <span>Join Our Community</span>
+                </div>
+                <span class="arrow">&gt;</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="footer-icons">
+        <a href="/leaders" class="footer-btn">
+            <i class="fas fa-medal"></i>
+            <span>Leaders</span>
+        </a>
+        <a href="/friends" class="footer-btn">
+            <i class="fas fa-user-friends"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/home" class="footer-btn active">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="footer-btn">
+            <i class="fas fa-coins"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/airdrop" class="footer-btn">
+            <i class="fas fa-rocket"></i>
+            <span>AirDrop</span>
+        </a>
+    </div>
+    <script>
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    </script>
+</body>
+</html>

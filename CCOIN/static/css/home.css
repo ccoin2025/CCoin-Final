@@ -1,0 +1,111 @@
+body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Urbanist', sans-serif;
+    margin: 0;
+    padding-bottom: 100px;
+}
+
+.center-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.logo-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.logo {
+    width: 350px;
+}
+
+.token-section {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    font-size: 50px;
+    font-weight: bold;
+    margin-top: -30px;
+}
+
+.coin-text {
+    margin-left: -2px;
+    font-size: 20px;
+    position: relative;
+    top: -30px;
+}
+
+.join-about-section {
+    position: fixed;
+    bottom: 85px;
+    width: 100%;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+}
+
+.about-btn,
+.join-community-btn {
+    background-color: #111;
+    color: white;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+}
+
+.about-btn .btn-left,
+.join-community-btn .btn-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.arrow {
+    font-size: 18px;
+    margin-left: auto;
+}
+
+.footer-icons {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: #111;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 5px;
+    border-top: 1px solid #333;
+}
+
+.footer-btn {
+    color: #aaa;
+    text-align: center;
+    text-decoration: none;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.footer-btn.active {
+    color: #ffffff;
+}
+
+.footer-btn i {
+    font-size: 20px;
+    margin-bottom: 2px;
+}

@@ -1,0 +1,52 @@
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+    color: #fff;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+}
+
+.container {
+    text-align: center;
+}
+
+.logo {
+    width: 400px;
+    height: auto;
+    object-fit: contain;
+}
+
+
+h1 {
+    margin-bottom: 30px;
+}
+
+.progress-bar {
+    width: 80vw;
+    height: 15px;
+    background-color: #444;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0 auto 20px auto;
+}
+
+.progress {
+    height: 100%;
+    width: 0;
+    background-color: #00b3b3;
+    border-radius: 10px;
+    transition: width 2s ease;
+}
+
+#congrats {
+    opacity: 0;
+    transition: opacity 1s ease;
+    font-size: 20px;
+}
+

@@ -1,0 +1,154 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Urbanist', sans-serif;
+    background-color: #000;
+    color: #fff;
+    overflow-x: hidden;
+}
+
+/* Container */
+.airdrop-container {
+    padding: 20px;
+    padding-bottom: 100px;
+}
+
+/* Title */
+.box {
+    width: 100%;
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #444;
+    border-radius: 10px;
+    background: #222;
+    text-align: center;
+    box-sizing: border-box;
+    max-height: 130px;
+}
+
+.countdown {
+    font-size: 37px;
+    color: #ffc800;
+    line-height: 1.5;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.token-value {
+    font-size: 30px;
+    line-height: 1.4;
+    margin-top: -25px;
+
+}
+
+.airdrop-criteria {
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #555;
+    border-radius: 12px;
+    background: #1e1e1e;
+    font-size: 25px;
+    max-height: 400px;
+
+}
+
+.airdrop-criteria .task {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 15px 0;
+    padding: 10px 0;
+}
+
+.airdrop-criteria .task button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #333333;
+    cursor: pointer;
+    width: 100%;
+    padding: 10px 8px;
+    box-sizing: border-box;
+    line-height: .4;
+    font-size: 18px;
+
+}
+.airdrop-criteria .task button:hover {
+    color: #ffffff;
+}
+
+.task-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #ffffff;
+    background-color: #2a2a2a;
+    border: none;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.task-button:hover {
+    background-color: #3c3c3c;
+}
+
+.task-button .left-text {
+    text-align: left;
+}
+
+.task-button .right-icon {
+    font-size: 16px;
+    color: #aaa;
+}
+
+
+
+.task-completed .task-icon {
+    color: #00c853;
+}
+
+/* Footer styles */
+.footer-icons {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #111;
+    border-top: 1px solid #333;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px 0;
+    z-index: 1000;
+}
+
+.footer-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #aaa;
+    font-size: 12px;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.footer-btn i {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.footer-btn:hover,
+.footer-btn.active {
+    color: #fff;
+}

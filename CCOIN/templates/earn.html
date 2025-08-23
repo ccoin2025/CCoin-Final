@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Earn Tokens</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/earn.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="earn-content">
+        <h1 class="task-title">TASKS</h1>
+        <p class="subtitle">GET REWARDS FOR COMPLETING QUESTS</p>
+        <p class="note">
+            <i>"Note: The airdrop checks the task section daily, and if it is found that the user has unfollowed the pages after receiving the reward, the equivalent reward will be deducted from their account."</i>
+        </p>
+
+        <div class="task-list">
+            {% for task in tasks %}
+            <button class="task-button {% if task.completed %}completed{% endif %}"
+                    onclick="handleAction(this, '{{ task.platform | lower }}')">
+                <div class="left">
+                    <img src="{{ url_for('static', path='images/icons/' ~ task.icon) }}" alt="{{ task.label }} icon"
+                         class="task-icon"/>
+                    <span>{{ task.label }}</span>
+                </div>
+                <div class="right">
+                    {% if task.completed %}
+                    <span class="status done">Task Completed!</span>
+                    {% else %}
+                    <span class="status">+{{ task.reward }} ccoin</span>
+                    {% endif %}
+                </div>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="footer-icons">
+        <a href="/leaders" class="footer-btn">
+            <i class="fas fa-medal"></i>
+            <span>Leaders</span>
+        </a>
+        <a href="/friends" class="footer-btn">
+            <i class="fas fa-user-friends"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/home" class="footer-btn">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="footer-btn active">
+            <i class="fas fa-coins"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/airdrop" class="footer-btn">
+            <i class="fas fa-rocket"></i>
+            <span>AirDrop</span>
+        </a>
+    </div>
+
+    <script>
+        const USER_ID = "{{ user_id }}";
+    </script>
+    <script src="{{ url_for('static', path='js/earn.js') }}"></script>
+    <script>
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    </script>
+</body>
+</html>
