@@ -1,8 +1,9 @@
 from telegram import Update, Bot
-from telegram.ext import AsyncDispatcher, CommandHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from CCOIN.models.user import User
 from CCOIN.database import get_db
 from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
+from sqlalchemy.orm import Session
 import requests
 import uuid
 import logging
@@ -21,6 +22,7 @@ structlog.configure(
 )
 logger = structlog.get_logger()
 
+
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
@@ -36,12 +38,15 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         logger.error(f"Error checking Telegram channel membership: {e}")
         return False
 
-async def start(update: Update, context, db: Session = Depends(get_db)):
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    db: Session = next(get_db())  # گرفتن session از generator
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     last_name = update.message.from_user.last_name
     referral_code = context.args[0] if context.args else None
+
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         user = User(
@@ -61,9 +66,14 @@ async def start(update: Update, context, db: Session = Depends(get_db)):
                 referrer.tokens += 50
         db.commit()
         db.refresh(user)
+
     await update.message.reply_text("Welcome! Go to /load")
     logger.info(f"User {telegram_id} started bot")
 
-bot = Bot(token=BOT_TOKEN)
-dispatcher = AsyncDispatcher(bot, None)
-dispatcher.add_handler(CommandHandler("start", start, pass_args=True))
+
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+
+if __name__ == "__main__":
+    app.run_polling()
