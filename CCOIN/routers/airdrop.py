@@ -19,7 +19,6 @@ from datetime import datetime
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 router.state = type("State", (), {"limiter": limiter})()
-router.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 solana_client = Client(SOLANA_RPC)
