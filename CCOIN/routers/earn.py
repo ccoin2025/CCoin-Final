@@ -16,7 +16,6 @@ from CCOIN.config import REDIS_URL
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 router.state = type("State", (), {"limiter": limiter})()
-router.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 redis_client = redis.Redis.from_url(REDIS_URL)
