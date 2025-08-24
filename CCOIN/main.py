@@ -139,14 +139,14 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     user.tokens = 0
     db.commit()
     return JSONResponse({"message": "Tokens airdropped successfully"})
-    
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request, exc):
     return JSONResponse(
         status_code=429,
         content={"detail": "Too Many Requests"}
     )
-
+    
 app.include_router(load.router, prefix="/load")
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
