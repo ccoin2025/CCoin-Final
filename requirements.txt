@@ -4,7 +4,7 @@ sqlalchemy==2.0.35
 psycopg2-binary==2.9.9
 celery==5.4.0
 redis==4.5.4
-python-telegram-bot==20.7
+python-telegram-bot==20.3
 aiohttp==3.8.4
 structlog==22.1.0
 python-dotenv==1.0.0
@@ -28,3 +28,17 @@ construct-typing==0.5.6
 cffi==1.17.1
 limits==1.6
 MarkupSafe==3.0.2
+starlette==0.27.0
+pydantic==1.10.22
+click==8.2.1
+h11==0.16.0
+greenlet==3.2.4
+click-repl==0.3.0
+click-plugins==1.1.1.2
+tzdata==2025.2
+billiard==4.2.1
+kombu==5.5.4
+click-didyoumean==0.3.1
+python-dateutil==2.9.0.post0
+vine==5.1.0
+async-timeout==5.0.1
