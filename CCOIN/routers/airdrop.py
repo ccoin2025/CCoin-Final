@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.system_program import TransferParams, transfer
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL
 from datetime import datetime
@@ -64,7 +64,7 @@ async def connect_wallet(wallet: str, request: Request, db: Session = Depends(ge
     if not wallet or not isinstance(wallet, str):
         raise HTTPException(status_code=400, detail="Invalid wallet address")
     try:
-        PublicKey(wallet)
+        Pubkey.from_string(wallet)
         user.wallet_address = wallet
         db.commit()
         cache_key = f"wallet:{telegram_id}"
@@ -90,8 +90,8 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
         if not ADMIN_WALLET:
             raise HTTPException(status_code=500, detail="Invalid ADMIN_WALLET in config")
         commission_amount = int(COMMISSION_AMOUNT * 10 ** 9)
-        from_pubkey = PublicKey(user.wallet_address)
-        to_pubkey = PublicKey(ADMIN_WALLET)
+        from_pubkey = Pubkey.from_string(user.wallet_address)
+        to_pubkey = Pubkey.from_string(ADMIN_WALLET)
         cache_key = f"blockhash:{telegram_id}"
         cached_blockhash = redis_client.get(cache_key)
         if cached_blockhash:
