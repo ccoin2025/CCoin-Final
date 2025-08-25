@@ -72,7 +72,7 @@ async def verify_telegram_init_data(request: Request):
 async def telegram_webhook(webhook_token: str, update: Update, request: Request, db: Session = Depends(get_db)):
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         raise HTTPException(status_code=403, detail="Invalid webhook token")
-    if not is_telegram_ip(request.client.host):
+    if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
         raise HTTPException(status_code=403, detail="Request not from Telegram")
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
@@ -139,14 +139,13 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     user.tokens = 0
     db.commit()
     return JSONResponse({"message": "Tokens airdropped successfully"})
-
+    
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request, exc):
     return JSONResponse(
         status_code=429,
         content={"detail": "Too Many Requests"}
     )
-    
 app.include_router(load.router, prefix="/load")
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
