@@ -14,11 +14,11 @@ from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, us
 from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import dispatcher
-from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS
+from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET
 from apscheduler.schedulers.background import BackgroundScheduler
 from solana.rpc.async_api import AsyncClient
 from solana.transaction import Transaction
-from solana.system_program import TransferParams, transfer
+from solders.system_program import TransferParams, transfer
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from fastapi.responses import JSONResponse
@@ -67,6 +67,15 @@ async def verify_telegram_init_data(request: Request):
     if not secrets.compare_digest(init_data, bot_token_hash):
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
     return init_data
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 @app.post("/telegram_webhook/{webhook_token}")
 async def telegram_webhook(webhook_token: str, update: Update, request: Request, db: Session = Depends(get_db)):
@@ -139,13 +148,14 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     user.tokens = 0
     db.commit()
     return JSONResponse({"message": "Tokens airdropped successfully"})
-    
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request, exc):
     return JSONResponse(
         status_code=429,
         content={"detail": "Too Many Requests"}
     )
+    
 app.include_router(load.router, prefix="/load")
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
