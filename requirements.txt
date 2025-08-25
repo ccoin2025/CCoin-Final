@@ -5,6 +5,7 @@ psycopg2-binary==2.9.9
 alembic==1.13.3
 pydantic==2.9.2
 solana==0.34.3
+solders==0.21.0
 base58==2.1.1
 bcrypt==4.2.0
 pyjwt==2.9.0
