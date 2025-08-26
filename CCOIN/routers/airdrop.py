@@ -18,7 +18,6 @@ from datetime import datetime
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-router.state.limiter = limiter
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 solana_client = Client(SOLANA_RPC)
