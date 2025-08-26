@@ -1,12 +1,12 @@
+from fastapi import HTTPException, Request
+from sqlalchemy.orm import Session
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from CCOIN.models.user import User
 from CCOIN.database import get_db
 from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
-from sqlalchemy.orm import Session
 import requests
 import uuid
-import logging
 import structlog
 
 structlog.configure(
@@ -21,7 +21,6 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 logger = structlog.get_logger()
-
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
@@ -38,6 +37,14 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         logger.error(f"Error checking Telegram channel membership: {e}")
         return False
 
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db: Session = next(get_db())  # گرفتن session از generator
@@ -69,7 +76,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Welcome! Go to /load")
     logger.info(f"User {telegram_id} started bot")
-
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
