@@ -48,7 +48,6 @@ logger = structlog.get_logger()
 app = FastAPI(debug=ENV == "development")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 Base.metadata.create_all(bind=engine)
 
@@ -150,12 +149,12 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"message": "Tokens airdropped successfully"})
 
 @app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request, exc):
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"detail": "Too Many Requests"}
+        content={"detail": "Rate limit exceeded. Please try again later."}
     )
-    
+
 app.include_router(load.router, prefix="/load")
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
