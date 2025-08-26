@@ -11,14 +11,16 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from solders.pubkey import Pubkey
-from solana.system_program import TransferParams, transfer
+from CCOIN.utils.telegram_security import get_current_user
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL
+from solders.pubkey import Pubkey
+from solders.system_program import TransferParams, transfer
 from datetime import datetime
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 router.state = type("State", (), {"limiter": limiter})()
+router.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 solana_client = Client(SOLANA_RPC)
