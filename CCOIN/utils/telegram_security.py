@@ -22,6 +22,9 @@ structlog.configure(
 )
 logger = structlog.get_logger()
 
+# Initialize Telegram Bot Application
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
@@ -47,7 +50,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db: Session = next(get_db())  # گرفتن session از generator
+    db: Session = next(get_db())  # Get session from generator
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
@@ -76,10 +79,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Welcome! Go to /load")
     logger.info(f"User {telegram_id} started bot")
+    return {"ok": True}
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-
+# Add command handler
 app.add_handler(CommandHandler("start", start))
-
-if __name__ == "__main__":
-    app.run_polling()
