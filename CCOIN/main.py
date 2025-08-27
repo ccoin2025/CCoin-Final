@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users
 from CCOIN.tasks.social_check import check_social_tasks
