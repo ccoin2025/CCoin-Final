@@ -187,7 +187,7 @@ scheduler.start()
 async def startup():
     logger.info("App started")
     bot = Bot(token=BOT_TOKEN)
-    webhook_url = f"https://your-domain.com/telegram_webhook/{os.getenv('WEBHOOK_TOKEN')}"
+    webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{os.getenv('WEBHOOK_TOKEN')}"
     await bot.set_webhook(url=webhook_url)
     logger.info("Telegram webhook set")
 
