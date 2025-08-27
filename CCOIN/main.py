@@ -78,11 +78,22 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 @app.post("/telegram_webhook/{webhook_token}")
-async def telegram_webhook(webhook_token: str, update: Update, request: Request, db: Session = Depends(get_db)):
+async def telegram_webhook(webhook_token: str, request: Request, db: Session = Depends(get_db)):
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         raise HTTPException(status_code=403, detail="Invalid webhook token")
     if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
         raise HTTPException(status_code=403, detail="Request not from Telegram")
+    
+    # Read raw JSON data from request
+    update_data = await request.json()
+    try:
+        update = Update.de_json(update_data, bot=None)  # Create Update object from JSON
+        if not update or not update.message:
+            raise HTTPException(status_code=400, detail="Invalid Telegram update")
+    except Exception as e:
+        logger.error(f"Error parsing Telegram update: {e}")
+        raise HTTPException(status_code=400, detail="Invalid Telegram update")
+
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
@@ -90,6 +101,7 @@ async def telegram_webhook(webhook_token: str, update: Update, request: Request,
     referral_code = update.message.text.split()[1] if update.message.text and len(update.message.text.split()) > 1 else None
     if referral_code and len(referral_code) > 50:
         raise HTTPException(status_code=400, detail="Invalid referral code")
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         user = User(
@@ -109,6 +121,7 @@ async def telegram_webhook(webhook_token: str, update: Update, request: Request,
                 user.referred_by = referrer.id
         db.commit()
         db.refresh(user)
+    
     request.session["telegram_id"] = telegram_id
     request.session["csrf_token"] = secrets.token_hex(16)
     await telegram_app.process_update(update)
