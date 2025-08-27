@@ -13,7 +13,7 @@ from CCOIN.database import Base, engine, get_db
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users
 from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
-from CCOIN.utils.telegram_security import dispatcher
+from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET
 from apscheduler.schedulers.background import BackgroundScheduler
 from solana.rpc.async_api import AsyncClient
@@ -110,7 +110,7 @@ async def telegram_webhook(webhook_token: str, update: Update, request: Request,
         db.refresh(user)
     request.session["telegram_id"] = telegram_id
     request.session["csrf_token"] = secrets.token_hex(16)
-    await dispatcher.process_update(update)
+    await telegram_app.process_update(update)
     return {"ok": True}
 
 @app.get("/connect-wallet")
