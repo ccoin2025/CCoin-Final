@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from CCOIN.models.usertask import UserTask
 from CCOIN.models.user import User
 from CCOIN.database import get_db
@@ -12,7 +11,6 @@ from CCOIN.config import REDIS_URL
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-router.state = type("State", (), {"limiter": limiter})()
 
 redis_client = redis.Redis.from_url(REDIS_URL)
 
@@ -47,14 +45,17 @@ async def complete_task(task_type: str, platform: str, request: Request, db: Ses
 
 @router.get("/status")
 @limiter.limit("10/minute")
-async def get_task_status(user_id: str, db: Session = Depends(get_db)):
+async def get_task_status(request: Request, user_id: str, db: Session = Depends(get_db)):
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id or telegram_id != user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid user ID")
     user = db.query(User).filter(User.telegram_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     cache_key = f"task_status:{user_id}"
     cached_status = redis_client.get(cache_key)
     if cached_status:
-        return cached_status.decode()
+        return eval(cached_status.decode())  # Convert string back to dict
     status = {
         "task": any(t.completed for t in user.tasks),
         "invite": len(user.referrals) > 0,
