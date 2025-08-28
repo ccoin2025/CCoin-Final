@@ -81,8 +81,8 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 async def telegram_webhook(webhook_token: str, request: Request, db: Session = Depends(get_db)):
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         raise HTTPException(status_code=403, detail="Invalid webhook token")
-    if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
-        raise HTTPException(status_code=403, detail="Request not from Telegram")
+   # if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
+       # raise HTTPException(status_code=403, detail="Request not from Telegram")
     
     # Read raw JSON data from request
     update_data = await request.json()
