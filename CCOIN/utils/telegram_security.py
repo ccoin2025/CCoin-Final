@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request, Depends
 from sqlalchemy.orm import Session
-from telegram import Update, Bot
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from CCOIN.models.user import User
 from CCOIN.database import get_db
@@ -8,6 +8,9 @@ from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
 import requests
 import uuid
 import structlog
+import os
+from urllib.parse import urlencode
+import asyncio
 
 structlog.configure(
     processors=[
@@ -24,6 +27,14 @@ logger = structlog.get_logger()
 
 # Initialize Telegram Bot Application
 app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+# Initialize Application at module level
+async def initialize_application():
+    await app.initialize()
+    logger.info("Telegram Application initialized")
+
+# Run initialization
+asyncio.run(initialize_application())
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
@@ -77,7 +88,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
         db.refresh(user)
 
-    await update.message.reply_text("Welcome! Go to /load")
+    # Create Web App URL with Telegram initData
+    web_app_url = f"{os.getenv('APP_DOMAIN')}/load"
+    init_data = {
+        "user": {
+            "id": update.message.from_user.id,
+            "username": username or "",
+            "first_name": first_name or "",
+            "last_name": last_name or ""
+        }
+    }
+    encoded_init_data = urlencode({"initData": str(init_data)})
+    full_web_app_url = f"{web_app_url}?{encoded_init_data}"
+
+    # Create InlineKeyboardButton for Web App
+    keyboard = [
+        [InlineKeyboardButton("Open Web App", web_app=full_web_app_url)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text("Welcome! Click below to open the web app:", reply_markup=reply_markup)
     logger.info(f"User {telegram_id} started bot")
     return {"ok": True}
 
