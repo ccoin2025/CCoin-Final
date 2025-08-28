@@ -10,7 +10,6 @@ import uuid
 import structlog
 import os
 from urllib.parse import urlencode
-import asyncio
 
 structlog.configure(
     processors=[
@@ -27,14 +26,6 @@ logger = structlog.get_logger()
 
 # Initialize Telegram Bot Application
 app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-# Initialize Application at module level
-async def initialize_application():
-    await app.initialize()
-    logger.info("Telegram Application initialized")
-
-# Run initialization
-asyncio.run(initialize_application())
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
