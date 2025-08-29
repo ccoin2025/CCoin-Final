@@ -1,4 +1,5 @@
 from fastapi import HTTPException, Request, Depends
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -45,7 +46,8 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        # Redirect to Telegram bot for authentication
+        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
