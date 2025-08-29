@@ -112,6 +112,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     update_data = await request.json()
     try:
         bot = Bot(token=BOT_TOKEN)
+        await bot.initialize()  # Initialize the Bot instance
         update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
         if not update or not update.message:
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
@@ -150,6 +151,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     request.session["telegram_id"] = telegram_id
     request.session["csrf_token"] = secrets.token_hex(16)
     await telegram_app.process_update(update)
+    await bot.shutdown()  # Shutdown the Bot instance to clean up
     return {"ok": True}
 
 @app.get("/connect-wallet")
@@ -214,9 +216,11 @@ scheduler.start()
 async def startup():
     logger.info("App started")
     bot = Bot(token=BOT_TOKEN)
+    await bot.initialize()  # Initialize the Bot instance for webhook setup
     webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{os.getenv('WEBHOOK_TOKEN')}"
     await telegram_app.initialize()  # Initialize Telegram Application
     await bot.set_webhook(url=webhook_url)
+    await bot.shutdown()  # Shutdown the Bot instance to clean up
     logger.info("Telegram webhook set")
 
 @app.on_event("shutdown")
