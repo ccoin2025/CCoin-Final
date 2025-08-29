@@ -46,7 +46,6 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
-        # Redirect to Telegram bot for authentication
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
@@ -81,8 +80,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
         db.refresh(user)
 
-    # Create Web App URL with Telegram initData
-    web_app_url = f"{os.getenv('APP_DOMAIN')}/load"
+    # Determine Web App URL based on first_login
+    web_app_url = f"{os.getenv('APP_DOMAIN')}/{'load' if user.first_login else 'home'}"
     init_data = {
         "user": {
             "id": update.message.from_user.id,
@@ -101,7 +100,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text("Welcome! Click below to open the web app:", reply_markup=reply_markup)
-    logger.info(f"User {telegram_id} started bot")
+    logger.info(f"User {telegram_id} started bot, first_login={user.first_login}")
     return {"ok": True}
 
 # Add command handler
