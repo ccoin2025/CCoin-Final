@@ -105,7 +105,8 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     # Read raw JSON data from request
     update_data = await request.json()
     try:
-        update = Update.de_json(update_data, bot=None)  # Create Update object from JSON
+        bot = Bot(token=BOT_TOKEN)
+        update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
         if not update or not update.message:
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
     except Exception as e:
