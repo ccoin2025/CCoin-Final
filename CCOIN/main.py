@@ -68,10 +68,16 @@ app.add_middleware(
     https_only=True if ENV == "production" else False
 )
 
-# Redirect root to /load
+# Redirect root based on first_login
 @app.get("/")
-async def root():
-    return RedirectResponse(url="/load")
+async def root(request: Request, db: Session = Depends(get_db)):
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+    return RedirectResponse(url="/load" if user.first_login else "/home")
 
 # Anti-bot verification middleware
 async def verify_telegram_init_data(request: Request):
@@ -88,7 +94,7 @@ async def verify_telegram_init_data(request: Request):
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
