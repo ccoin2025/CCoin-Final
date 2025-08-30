@@ -73,10 +73,10 @@ app.add_middleware(
 async def root(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
-        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+        return templates.TemplateResponse("landing.html", {"request": request})
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+        return templates.TemplateResponse("landing.html", {"request": request})
     return RedirectResponse(url="/load" if user.first_login else "/home")
 
 # Anti-bot verification middleware
@@ -198,7 +198,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Rate limit exceeded. Please try again later."}
     )
 
-app.include_router(load.router, prefix="/load")
+app.include_router(load.router) 
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
 app.include_router(friends.router, prefix="/friends")
