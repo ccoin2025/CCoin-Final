@@ -16,6 +16,10 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 def generate_referral_link(code: str) -> str:
+    # بررسی کنید که کد خالی نباشد
+    if not code:
+        return "https://t.me/CTG_COIN_BOT"
+    
     # نام Bot واقعی شما را از متغیر محیطی بگیرید
     bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
     return f"https://t.me/{bot_username}?start={code}"
