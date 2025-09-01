@@ -74,17 +74,28 @@ app.add_middleware(
 # Redirect root based on first_login
 @app.get("/")
 async def root(request: Request, db: Session = Depends(get_db)):
-    telegram_id = request.session.get("telegram_id")
+    # telegram_id را از query parameter یا session بگیرید
+    telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
+    
     if not telegram_id:
         logger.info("No telegram_id in session for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
+    
+    # telegram_id را در session تنظیم کنید
+    request.session["telegram_id"] = telegram_id
     
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info("User not found for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
     
-    return RedirectResponse(url="/load" if user.first_login else "/home")
+    # هدایت براساس وضعیت first_login
+    if user.first_login:
+        logger.info(f"User {telegram_id} first login, redirecting to load")
+        return RedirectResponse(url=f"/load?telegram_id={telegram_id}")
+    else:
+        logger.info(f"User {telegram_id} returning user, redirecting to home")
+        return RedirectResponse(url=f"/home?telegram_id={telegram_id}")
 
 # Anti-bot verification middleware
 async def verify_telegram_init_data(request: Request):
@@ -265,7 +276,7 @@ async def startup():
             from telegram import MenuButtonWebApp, WebAppInfo
             menu_button = MenuButtonWebApp(
                 text="🚀 Open CCoin",
-                web_app=WebAppInfo(url="https://ccoin-final.onrender.com/load")
+                web_app=WebAppInfo(url="https://ccoin-final.onrender.com")
             )
             await bot.set_chat_menu_button(menu_button=menu_button)
             logger.info("Menu button set successfully")
