@@ -8,6 +8,7 @@ from CCOIN.models.user import User
 from CCOIN.utils.helpers import generate_referral_link
 from fastapi.templating import Jinja2Templates
 import os
+import uuid
 import structlog
 
 structlog.configure(
@@ -47,6 +48,20 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
+    # بررسی و تولید کد رفرال اگر موجود نباشد
+    if not user.referral_code:
+        # تولید کد رفرال جدید
+        while True:
+            new_code = str(uuid.uuid4())[:8]
+            # بررسی کنید که کد تکراری نباشد
+            existing = db.query(User).filter(User.referral_code == new_code).first()
+            if not existing:
+                user.referral_code = new_code
+                db.commit()
+                db.refresh(user)
+                logger.info(f"Generated new referral code for user {telegram_id}: {new_code}")
+                break
+    
     invited_users = db.query(User).filter(User.referred_by == user.id).all()
     referral_link = generate_referral_link(user.referral_code)
     
@@ -56,5 +71,6 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "invited_users": invited_users,
         "referral_link": referral_link,
+        "referral_code": user.referral_code,
         "user": user
     })
