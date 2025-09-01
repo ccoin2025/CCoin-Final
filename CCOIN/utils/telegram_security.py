@@ -3,7 +3,6 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import WebAppInfo  # این import مهم است
 from CCOIN.models.user import User
 from CCOIN.database import get_db
 from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
@@ -101,13 +100,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
         web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
         
-        # استفاده از WebAppInfo بجای url
-        web_app = WebAppInfo(url=web_app_url)
-        
-        # Create button with web_app parameter
-        keyboard = [
-            [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
-        ]
+        # سعی می‌کنیم WebAppInfo را import کنیم
+        try:
+            from telegram import WebAppInfo
+            web_app = WebAppInfo(url=web_app_url)
+            keyboard = [
+                [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
+            ]
+            logger.info("Using WebAppInfo for inline button")
+        except ImportError:
+            # اگر WebAppInfo موجود نبود، از url استفاده کنیم
+            keyboard = [
+                [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
+            ]
+            logger.info("WebAppInfo not available, using URL")
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -124,6 +130,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         
+        logger.info(f"Start message sent to user {telegram_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in start command: {e}")
+        await update.message.reply_text("خطایی رخ داد. لطفاً دوباره تلاش کنید.")
     finally:
         db.close()
 
