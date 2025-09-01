@@ -256,8 +256,23 @@ async def startup():
     webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{webhook_token}"
     
     try:
+        # تنظیم webhook
         await bot.set_webhook(url=webhook_url)
         logger.info(f"Telegram webhook set to: {webhook_url}")
+        
+        # تنظیم Menu Button برای Web App
+        try:
+            from telegram import MenuButtonWebApp, WebAppInfo
+            menu_button = MenuButtonWebApp(
+                text="🚀 Open CCoin",
+                web_app=WebAppInfo(url="https://ccoin-final.onrender.com/load")
+            )
+            await bot.set_chat_menu_button(menu_button=menu_button)
+            logger.info("Menu button set successfully")
+        except ImportError:
+            logger.info("MenuButtonWebApp not available in this version")
+        except Exception as e:
+            logger.error(f"Error setting menu button: {e}")
         
         webhook_info = await bot.get_webhook_info()
         logger.info(f"Webhook info: {webhook_info}")
