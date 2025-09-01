@@ -14,3 +14,7 @@ ADMIN_WALLET = os.getenv("ADMIN_WALLET")
 INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 X_API_KEY = os.getenv("X_API_KEY", "")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
+
+APP_DOMAIN = os.getenv("APP_DOMAIN", "https://ccoin-final.onrender.com")
+WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN")
+ADMIN_PRIVATE_KEY = os.getenv("ADMIN_PRIVATE_KEY")
