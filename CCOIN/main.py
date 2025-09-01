@@ -73,9 +73,11 @@ app.add_middleware(
 async def root(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
+        logger.info("No telegram_id in session for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
+        logger.info("User not found for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
     return RedirectResponse(url="/load" if user.first_login else "/home")
 
@@ -83,26 +85,31 @@ async def root(request: Request, db: Session = Depends(get_db)):
 async def verify_telegram_init_data(request: Request):
     init_data = request.headers.get("X-Telegram-Init-Data") or request.query_params.get("initData")
     if not init_data:
+        logger.info("Missing Telegram init data")
         raise HTTPException(status_code=401, detail="Missing Telegram Web App init data")
     data_check_string = "\n".join(sorted([f"{k}={v[0]}" for k, v in parse_qs(init_data).items() if k != "hash"]))
     secret_key = hmac.new("WebAppData".encode(), BOT_TOKEN.encode(), hashlib.sha256).digest()
     data_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     if not secrets.compare_digest(data_hash, parse_qs(init_data).get("hash", [""])[0]):
+        logger.info("Invalid Telegram init data")
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
     return init_data
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
+        logger.info("No telegram_id in session for get_current_user, redirecting to bot")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
+        logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
 @app.post("/telegram_webhook/{webhook_token}")
 async def telegram_webhook(webhook_token: str, request: Request, db: Session = Depends(get_db)):
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
+        logger.info("Invalid webhook token")
         raise HTTPException(status_code=403, detail="Invalid webhook token")
     # Temporarily disable IP check for testing
     # if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
@@ -115,6 +122,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
         await bot.initialize()  # Initialize the Bot instance
         update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
         if not update or not update.message:
+            logger.info("Invalid Telegram update")
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
     except Exception as e:
         logger.error(f"Error parsing Telegram update: {e}")
@@ -126,6 +134,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     last_name = update.message.from_user.last_name
     referral_code = update.message.text.split()[1] if update.message.text and len(update.message.text.split()) > 1 else None
     if referral_code and len(referral_code) > 50:
+        logger.info("Invalid referral code")
         raise HTTPException(status_code=400, detail="Invalid referral code")
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -150,6 +159,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
 
     request.session["telegram_id"] = telegram_id
     request.session["csrf_token"] = secrets.token_hex(16)
+    logger.info(f"Set telegram_id {telegram_id} in session for webhook")
     await telegram_app.process_update(update)
     await bot.shutdown()  # Shutdown the Bot instance to clean up
     return {"ok": True}
@@ -198,7 +208,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Rate limit exceeded. Please try again later."}
     )
 
-app.include_router(load.router) 
+app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
 app.include_router(friends.router, prefix="/friends")
