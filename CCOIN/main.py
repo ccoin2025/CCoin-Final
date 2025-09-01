@@ -231,6 +231,33 @@ async def webhook_info():
     except Exception as e:
         return {"error": str(e)}
 
+# اضافه کردن endpoint برای fix کردن کاربرهای موجود
+@app.get("/fix-referral-codes")
+async def fix_referral_codes(db: Session = Depends(get_db)):
+    """Fix users without referral codes - فقط برای admin"""
+    users_without_code = db.query(User).filter(
+        (User.referral_code == None) | (User.referral_code == "")
+    ).all()
+    
+    fixed_count = 0
+    for user in users_without_code:
+        # تولید کد رفرال جدید
+        while True:
+            new_code = str(uuid.uuid4())[:8]
+            # بررسی کنید که کد تکراری نباشد
+            existing = db.query(User).filter(User.referral_code == new_code).first()
+            if not existing:
+                user.referral_code = new_code
+                fixed_count += 1
+                break
+    
+    db.commit()
+    
+    return {
+        "message": f"Fixed {fixed_count} users without referral codes",
+        "fixed_users": fixed_count
+    }
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
