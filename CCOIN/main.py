@@ -116,35 +116,25 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     
     return user
 
-@app.post("/telegram_webhook/{webhook_token}")
+@app.api_route("/telegram_webhook/{webhook_token}", methods=["GET", "POST"])
 async def telegram_webhook(webhook_token: str, request: Request, db: Session = Depends(get_db)):
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         logger.info("Invalid webhook token")
         raise HTTPException(status_code=403, detail="Invalid webhook token")
     
-    # موقتاً IP check را غیرفعال می‌کنیم
-    # client_ip = request.headers.get("X-Forwarded-For", request.client.host)
-    # if client_ip:
-    #     client_ip = client_ip.split(',')[0].strip()
-    # else:
-    #     client_ip = request.client.host
+    # اگر GET request است، فقط تایید کنید
+    if request.method == "GET":
+        logger.info("GET request to webhook - verification")
+        return {"ok": True, "message": "Webhook endpoint is active"}
     
-    # try:
-    #     if not any(ipaddress.ip_address(client_ip) in network for network in TELEGRAM_IP_RANGES):
-    #         logger.warning(f"Request from non-Telegram IP: {client_ip}")
-    #         raise HTTPException(status_code=403, detail="Request not from Telegram")
-    # except ValueError:
-    #     logger.warning(f"Invalid IP address: {client_ip}")
-    #     raise HTTPException(status_code=403, detail="Invalid IP address")
-    
-    # Read raw JSON data from request
+    # ادامه کد برای POST request
     update_data = await request.json()
     logger.info(f"Received webhook data: {update_data}")
     
     try:
         bot = Bot(token=BOT_TOKEN)
-        await bot.initialize()  # Initialize the Bot instance
-        update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
+        await bot.initialize()
+        update = Update.de_json(update_data, bot=bot)
         
         if not update:
             logger.info("Invalid Telegram update")
@@ -153,7 +143,7 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
         # پردازش update با telegram app
         await telegram_app.process_update(update)
         
-        await bot.shutdown()  # Shutdown the Bot instance to clean up
+        await bot.shutdown()
         
         logger.info("Update processed successfully")
         return {"ok": True}
@@ -191,7 +181,7 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     async with AsyncClient(SOLANA_RPC) as client:
         admin_keypair = Keypair.from_base58_string(admin_private_key)
         
-        amount = int(user.tokens * 1_000_000_000)  # Convert to lamports
+        amount = int(user.tokens * 1_000_000_000)
         
         transaction = Transaction().add(
             transfer(TransferParams(
@@ -255,23 +245,20 @@ scheduler.start()
 async def startup():
     logger.info("App started")
     
-    # بررسی متغیرهای محیطی
     webhook_token = os.getenv('WEBHOOK_TOKEN')
     if not webhook_token:
         logger.error("WEBHOOK_TOKEN not set!")
         return
     
     bot = Bot(token=BOT_TOKEN)
-    await bot.initialize()  # Initialize the Bot instance for webhook setup
+    await bot.initialize()
     
     webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{webhook_token}"
     
     try:
-        # تنظیم webhook
         await bot.set_webhook(url=webhook_url)
         logger.info(f"Telegram webhook set to: {webhook_url}")
         
-        # بررسی وضعیت webhook
         webhook_info = await bot.get_webhook_info()
         logger.info(f"Webhook info: {webhook_info}")
         
@@ -279,13 +266,12 @@ async def startup():
         logger.error(f"Error setting webhook: {e}")
     
     try:
-        # راه‌اندازی telegram app
-        await telegram_app.initialize()  # Initialize Telegram Application
+        await telegram_app.initialize()
         logger.info("Telegram app initialized")
     except Exception as e:
         logger.error(f"Error initializing telegram app: {e}")
     
-    await bot.shutdown()  # Shutdown the Bot instance to clean up
+    await bot.shutdown()
 
 @app.on_event("shutdown")
 def shutdown():
