@@ -33,6 +33,7 @@ import hashlib
 from dotenv import load_dotenv
 
 load_dotenv()
+
 ENV = os.getenv("ENV", "production")
 
 TELEGRAM_IP_RANGES = [
@@ -51,9 +52,11 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
+
 logger = structlog.get_logger()
 
 app = FastAPI(debug=ENV == "development")
+
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
@@ -75,10 +78,12 @@ async def root(request: Request, db: Session = Depends(get_db)):
     if not telegram_id:
         logger.info("No telegram_id in session for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info("User not found for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
+    
     return RedirectResponse(url="/load" if user.first_login else "/home")
 
 # Anti-bot verification middleware
@@ -87,12 +92,15 @@ async def verify_telegram_init_data(request: Request):
     if not init_data:
         logger.info("Missing Telegram init data")
         raise HTTPException(status_code=401, detail="Missing Telegram Web App init data")
+    
     data_check_string = "\n".join(sorted([f"{k}={v[0]}" for k, v in parse_qs(init_data).items() if k != "hash"]))
     secret_key = hmac.new("WebAppData".encode(), BOT_TOKEN.encode(), hashlib.sha256).digest()
     data_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    
     if not secrets.compare_digest(data_hash, parse_qs(init_data).get("hash", [""])[0]):
         logger.info("Invalid Telegram init data")
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    
     return init_data
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
@@ -100,10 +108,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if not telegram_id:
         logger.info("No telegram_id in session for get_current_user, redirecting to bot")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
+    
     return user
 
 @app.post("/telegram_webhook/{webhook_token}")
@@ -111,33 +121,49 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         logger.info("Invalid webhook token")
         raise HTTPException(status_code=403, detail="Invalid webhook token")
-    # Temporarily disable IP check for testing
-    # if not any(ipaddress.ip_address(request.client.host) in network for network in TELEGRAM_IP_RANGES):
-    #     raise HTTPException(status_code=403, detail="Request not from Telegram")
-
+    
+    # IP Check for security
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+    if client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    else:
+        client_ip = request.client.host
+    
+    try:
+        if not any(ipaddress.ip_address(client_ip) in network for network in TELEGRAM_IP_RANGES):
+            logger.warning(f"Request from non-Telegram IP: {client_ip}")
+            raise HTTPException(status_code=403, detail="Request not from Telegram")
+    except ValueError:
+        logger.warning(f"Invalid IP address: {client_ip}")
+        raise HTTPException(status_code=403, detail="Invalid IP address")
+    
     # Read raw JSON data from request
     update_data = await request.json()
+    
     try:
         bot = Bot(token=BOT_TOKEN)
         await bot.initialize()  # Initialize the Bot instance
         update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
+        
         if not update or not update.message:
             logger.info("Invalid Telegram update")
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
     except Exception as e:
         logger.error(f"Error parsing Telegram update: {e}")
         raise HTTPException(status_code=400, detail="Invalid Telegram update")
-
+    
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     last_name = update.message.from_user.last_name
     referral_code = update.message.text.split()[1] if update.message.text and len(update.message.text.split()) > 1 else None
+    
     if referral_code and len(referral_code) > 50:
         logger.info("Invalid referral code")
         raise HTTPException(status_code=400, detail="Invalid referral code")
-
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    
     if not user:
         user = User(
             telegram_id=telegram_id,
@@ -149,19 +175,24 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
             first_login=True,
         )
         db.add(user)
+        
         if referral_code:
             referrer = db.query(User).filter(User.referral_code == referral_code).first()
             if referrer:
                 referrer.tokens += 50
                 user.referred_by = referrer.id
+        
         db.commit()
         db.refresh(user)
-
+    
     request.session["telegram_id"] = telegram_id
     request.session["csrf_token"] = secrets.token_hex(16)
+    
     logger.info(f"Set telegram_id {telegram_id} in session for webhook")
+    
     await telegram_app.process_update(update)
     await bot.shutdown()  # Shutdown the Bot instance to clean up
+    
     return {"ok": True}
 
 @app.get("/connect-wallet")
@@ -182,13 +213,19 @@ async def submit_wallet(request: Request, wallet_address: str, db: Session = Dep
 async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     await verify_telegram_init_data(request)
     user = await get_current_user(request, db)
+    
     if not user.wallet_address:
         raise HTTPException(status_code=400, detail="No wallet connected")
+    
+    admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
+    if not admin_private_key:
+        raise HTTPException(status_code=500, detail="Admin keypair not configured")
+    
     async with AsyncClient(SOLANA_RPC) as client:
-        admin_keypair = Keypair.from_base58_string(os.getenv("ADMIN_PRIVATE_KEY", ""))
-        if not admin_keypair:
-            raise HTTPException(status_code=500, detail="Admin keypair not configured")
+        admin_keypair = Keypair.from_base58_string(admin_private_key)
+        
         amount = int(user.tokens * 1_000_000_000)  # Convert to lamports
+        
         transaction = Transaction().add(
             transfer(TransferParams(
                 from_pubkey=Pubkey.from_string(ADMIN_WALLET),
@@ -196,10 +233,13 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
                 lamports=amount
             ))
         )
+        
         await client.send_transaction(transaction, admin_keypair)
-    user.tokens = 0
-    db.commit()
-    return JSONResponse({"message": "Tokens airdropped successfully"})
+        
+        user.tokens = 0
+        db.commit()
+        
+        return JSONResponse({"message": "Tokens airdropped successfully"})
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
@@ -227,11 +267,19 @@ async def startup():
     logger.info("App started")
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()  # Initialize the Bot instance for webhook setup
-    webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{os.getenv('WEBHOOK_TOKEN')}"
+    
+    webhook_token = os.getenv('WEBHOOK_TOKEN')
+    if not webhook_token:
+        logger.error("WEBHOOK_TOKEN not set")
+        return
+    
+    webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{webhook_token}"
+    
     await telegram_app.initialize()  # Initialize Telegram Application
     await bot.set_webhook(url=webhook_url)
     await bot.shutdown()  # Shutdown the Bot instance to clean up
-    logger.info("Telegram webhook set")
+    
+    logger.info(f"Telegram webhook set to: {webhook_url}")
 
 @app.on_event("shutdown")
 def shutdown():
