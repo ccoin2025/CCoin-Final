@@ -46,13 +46,19 @@ async def get_load(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
+    # بررسی کنید که آیا این اولین ورود است
+    if not user.first_login:
+        logger.info(f"User {telegram_id} is not first login, redirecting to home")
+        return RedirectResponse(url="/home")
+    
     reward = user.tokens
     
+    # فقط اگر first_login=True باشد، آن را False کنید
     if user.first_login:
         user.first_login = False
         db.commit()
         db.refresh(user)
-        logger.info(f"User {telegram_id} first login, set first_login=False")
+        logger.info(f"User {telegram_id} completed first login, set first_login=False")
     
     logger.info(f"Rendering load.html for user {telegram_id}, reward: {reward}")
     
