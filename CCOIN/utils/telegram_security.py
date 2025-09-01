@@ -80,6 +80,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
         db.refresh(user)
 
+    # Set telegram_id in session
+    context.user_data["telegram_id"] = telegram_id  # Store in context for webhook
+    logger.info(f"User {telegram_id} started bot, first_login={user.first_login}")
+
     # Determine Web App URL based on first_login
     web_app_url = f"{os.getenv('APP_DOMAIN')}/{'load' if user.first_login else 'home'}"
     init_data = {
@@ -100,7 +104,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text("Welcome! Click below to open the web app:", reply_markup=reply_markup)
-    logger.info(f"User {telegram_id} started bot, first_login={user.first_login}")
     return {"ok": True}
 
 # Add command handler
