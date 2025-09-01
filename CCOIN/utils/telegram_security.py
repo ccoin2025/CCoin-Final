@@ -1,7 +1,7 @@
 from fastapi import HTTPException, Request, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, WebApp
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from CCOIN.models.user import User
 from CCOIN.database import get_db
@@ -98,12 +98,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
     web_app_url = f"{base_url}/{'load' if user.first_login else 'home'}"
     
-    # Create WebApp object
-    web_app = WebApp(url=web_app_url)
-    
-    # Create InlineKeyboardButton for Web App
+    # Create InlineKeyboardButton with URL instead of WebApp object
     keyboard = [
-        [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
+        [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
