@@ -1,7 +1,7 @@
 from fastapi import HTTPException, Request, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, WebApp
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from CCOIN.models.user import User
 from CCOIN.database import get_db
@@ -23,6 +23,7 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
+
 logger = structlog.get_logger()
 
 # Initialize Telegram Bot Application
@@ -33,10 +34,12 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": f"@{TELEGRAM_CHANNEL_USERNAME}", "user_id": user_id}
         response = requests.get(url, params=params)
+        
         if response.status_code == 200:
             data = response.json()
             status = data.get("result", {}).get("status")
             return status in ["member", "administrator", "creator"]
+        
         logger.error(f"Telegram API error: {response.status_code} - {response.text}")
         return False
     except Exception as e:
@@ -47,20 +50,24 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
     return user
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db: Session = next(get_db())  # Get session from generator
+    
     telegram_id = str(update.message.from_user.id)
     username = update.message.from_user.username
     first_name = update.message.from_user.first_name
     last_name = update.message.from_user.last_name
     referral_code = context.args[0] if context.args else None
-
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    
     if not user:
         user = User(
             telegram_id=telegram_id,
@@ -72,38 +79,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             first_login=True,
         )
         db.add(user)
+        
         if referral_code:
             referrer = db.query(User).filter(User.referral_code == referral_code).first()
             if referrer:
                 user.referred_by = referrer.id
                 referrer.tokens += 50
+        
         db.commit()
         db.refresh(user)
-
-    # Set telegram_id in session
-    context.user_data["telegram_id"] = telegram_id  # Store in context for webhook
+    
+    # Store telegram_id in context for webhook
+    context.user_data["telegram_id"] = telegram_id
+    
     logger.info(f"User {telegram_id} started bot, first_login={user.first_login}")
-
+    
     # Determine Web App URL based on first_login
-    web_app_url = f"{os.getenv('APP_DOMAIN')}/{'load' if user.first_login else 'home'}"
-    init_data = {
-        "user": {
-            "id": update.message.from_user.id,
-            "username": username or "",
-            "first_name": first_name or "",
-            "last_name": last_name or ""
-        }
-    }
-    encoded_init_data = urlencode({"initData": str(init_data)})
-    full_web_app_url = f"{web_app_url}?{encoded_init_data}"
-
+    base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
+    web_app_url = f"{base_url}/{'load' if user.first_login else 'home'}"
+    
+    # Create WebApp object
+    web_app = WebApp(url=web_app_url)
+    
     # Create InlineKeyboardButton for Web App
     keyboard = [
-        [InlineKeyboardButton("Open Web App", web_app=full_web_app_url)]
+        [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
     ]
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text("Welcome! Click below to open the web app:", reply_markup=reply_markup)
+    
+    welcome_message = (
+        "💰 **Welcome to CCoin!**\n\n"
+        "🎉 Your crypto journey starts here!\n"
+        "💎 Earn tokens, complete tasks, and build your wealth!\n\n"
+        "👇 Click the button below to open the app:"
+    )
+    
+    await update.message.reply_text(
+        welcome_message, 
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    
     return {"ok": True}
 
 # Add command handler
