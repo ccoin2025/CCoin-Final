@@ -5,13 +5,11 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from CCOIN.utils.helpers import generate_referral_link
+from CCOIN.utils.helpers import generate_referral_link, generate_unique_referral_code
 from fastapi.templating import Jinja2Templates
 import os
 import uuid
 import structlog
-import secrets 
-
 
 structlog.configure(
     processors=[
@@ -51,48 +49,44 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
-    logger.info(f"User found: {user.username}, current referral_code: {user.referral_code}")
+    logger.info(f"User found: {user.username}, current referral_code: '{user.referral_code}'")
     
     # بررسی و تولید کد رفرال اگر موجود نباشد
-    if not user.referral_code:
+    if not user.referral_code or user.referral_code.strip() == "":
         try:
-            # تولید کد رفرال جدید
-            max_attempts = 10  # حداکثر تلاش برای جلوگیری از حلقه بی‌نهایت
-            attempts = 0
+            logger.info(f"Generating new referral code for user {telegram_id}")
             
-            while attempts < max_attempts:
-                attempts += 1
-                # استفاده از secrets برای امنیت بیشتر
-                new_code = secrets.token_hex(4).upper()  # 8 کاراکتر هگزادسیمال
-                
-                # بررسی کنید که کد تکراری نباشد
-                existing = db.query(User).filter(User.referral_code == new_code).first()
-                
-                if not existing:
-                    user.referral_code = new_code
-                    db.commit()
-                    db.refresh(user)
-                    logger.info(f"Generated new referral code for user {telegram_id}: {new_code}")
-                    break
-                else:
-                    logger.warning(f"Referral code {new_code} already exists, trying again... (attempt {attempts})")
+            # استفاده از تابع جداگانه برای تولید کد یکتا
+            new_code = generate_unique_referral_code(db)
             
-            if attempts >= max_attempts:
-                logger.error(f"Failed to generate unique referral code after {max_attempts} attempts")
-                raise HTTPException(status_code=500, detail="Failed to generate referral code")
-                
+            # تنظیم کد جدید
+            user.referral_code = new_code
+            
+            # ذخیره در دیتابیس
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Successfully generated new referral code for user {telegram_id}: {new_code}")
+            
         except Exception as e:
             logger.error(f"Error generating referral code for user {telegram_id}: {str(e)}")
             db.rollback()
-            # در صورت خطا، یک کد موقت ایجاد کنید
-            user.referral_code = f"TEMP_{telegram_id}"
+            
+            # در صورت خطا، کد موقت بر اساس telegram_id ایجاد کنید
+            temp_code = f"U{telegram_id}"[-8:]
             try:
+                user.referral_code = temp_code
                 db.commit()
                 db.refresh(user)
-                logger.info(f"Created temporary referral code for user {telegram_id}")
+                logger.info(f"Created temporary referral code for user {telegram_id}: {temp_code}")
             except Exception as commit_error:
                 logger.error(f"Failed to save temporary referral code: {commit_error}")
                 raise HTTPException(status_code=500, detail="Database error")
+    
+    # اطمینان از اینکه کد رفرال وجود دارد
+    if not user.referral_code:
+        logger.error(f"User {telegram_id} still has no referral code after generation attempt")
+        raise HTTPException(status_code=500, detail="Failed to generate referral code")
     
     # دریافت کاربران دعوت شده
     try:
@@ -106,10 +100,18 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
     try:
         referral_link = generate_referral_link(user.referral_code)
         logger.info(f"Generated referral link for user {telegram_id}: {referral_link}")
+        
+        # بررسی اضافی که لینک درست تولید شده
+        if referral_link.endswith("?start="):
+            logger.error(f"Generated invalid referral link for user {telegram_id}")
+            raise Exception("Invalid referral link generated")
+            
     except Exception as e:
         logger.error(f"Error generating referral link: {e}")
         # لینک پیش‌فرض در صورت خطا
-        referral_link = f"https://t.me/CTG_COIN_BOT?start={user.referral_code}"
+        bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
+        referral_link = f"https://t.me/{bot_username}?start={user.referral_code}"
+        logger.info(f"Using fallback referral link: {referral_link}")
     
     return templates.TemplateResponse("friends.html", {
         "request": request,
