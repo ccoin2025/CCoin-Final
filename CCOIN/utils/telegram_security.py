@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import WebAppInfo  # این import مهم است
 from CCOIN.models.user import User
 from CCOIN.database import get_db
 from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
@@ -58,7 +59,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from CCOIN.database import SessionLocal  # Import اینجا برای جلوگیری از circular import
+    from CCOIN.database import SessionLocal
     
     db = SessionLocal()
     try:
@@ -96,13 +97,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.info(f"Existing user: {telegram_id}")
         
-        # Create Web App URL with telegram ID for session management
+        # Create Web App URL
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
         web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
         
-        # Create button with URL
+        # استفاده از WebAppInfo بجای url
+        web_app = WebAppInfo(url=web_app_url)
+        
+        # Create button with web_app parameter
         keyboard = [
-            [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
+            [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
