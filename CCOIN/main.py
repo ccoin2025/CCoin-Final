@@ -122,78 +122,45 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
         logger.info("Invalid webhook token")
         raise HTTPException(status_code=403, detail="Invalid webhook token")
     
-    # IP Check for security
-    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
-    if client_ip:
-        client_ip = client_ip.split(',')[0].strip()
-    else:
-        client_ip = request.client.host
+    # موقتاً IP check را غیرفعال می‌کنیم
+    # client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+    # if client_ip:
+    #     client_ip = client_ip.split(',')[0].strip()
+    # else:
+    #     client_ip = request.client.host
     
-    try:
-        if not any(ipaddress.ip_address(client_ip) in network for network in TELEGRAM_IP_RANGES):
-            logger.warning(f"Request from non-Telegram IP: {client_ip}")
-            raise HTTPException(status_code=403, detail="Request not from Telegram")
-    except ValueError:
-        logger.warning(f"Invalid IP address: {client_ip}")
-        raise HTTPException(status_code=403, detail="Invalid IP address")
+    # try:
+    #     if not any(ipaddress.ip_address(client_ip) in network for network in TELEGRAM_IP_RANGES):
+    #         logger.warning(f"Request from non-Telegram IP: {client_ip}")
+    #         raise HTTPException(status_code=403, detail="Request not from Telegram")
+    # except ValueError:
+    #     logger.warning(f"Invalid IP address: {client_ip}")
+    #     raise HTTPException(status_code=403, detail="Invalid IP address")
     
     # Read raw JSON data from request
     update_data = await request.json()
+    logger.info(f"Received webhook data: {update_data}")
     
     try:
         bot = Bot(token=BOT_TOKEN)
         await bot.initialize()  # Initialize the Bot instance
         update = Update.de_json(update_data, bot=bot)  # Pass bot instance to Update
         
-        if not update or not update.message:
+        if not update:
             logger.info("Invalid Telegram update")
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
+        
+        # پردازش update با telegram app
+        await telegram_app.process_update(update)
+        
+        await bot.shutdown()  # Shutdown the Bot instance to clean up
+        
+        logger.info("Update processed successfully")
+        return {"ok": True}
+        
     except Exception as e:
-        logger.error(f"Error parsing Telegram update: {e}")
-        raise HTTPException(status_code=400, detail="Invalid Telegram update")
-    
-    telegram_id = str(update.message.from_user.id)
-    username = update.message.from_user.username
-    first_name = update.message.from_user.first_name
-    last_name = update.message.from_user.last_name
-    referral_code = update.message.text.split()[1] if update.message.text and len(update.message.text.split()) > 1 else None
-    
-    if referral_code and len(referral_code) > 50:
-        logger.info("Invalid referral code")
-        raise HTTPException(status_code=400, detail="Invalid referral code")
-    
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    
-    if not user:
-        user = User(
-            telegram_id=telegram_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name,
-            referral_code=str(uuid.uuid4())[:8],
-            tokens=0,
-            first_login=True,
-        )
-        db.add(user)
-        
-        if referral_code:
-            referrer = db.query(User).filter(User.referral_code == referral_code).first()
-            if referrer:
-                referrer.tokens += 50
-                user.referred_by = referrer.id
-        
-        db.commit()
-        db.refresh(user)
-    
-    request.session["telegram_id"] = telegram_id
-    request.session["csrf_token"] = secrets.token_hex(16)
-    
-    logger.info(f"Set telegram_id {telegram_id} in session for webhook")
-    
-    await telegram_app.process_update(update)
-    await bot.shutdown()  # Shutdown the Bot instance to clean up
-    
-    return {"ok": True}
+        logger.error(f"Error processing Telegram update: {e}")
+        return {"ok": False, "error": str(e)}
 
 @app.get("/connect-wallet")
 async def connect_wallet(request: Request, db: Session = Depends(get_db)):
@@ -241,6 +208,28 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
         
         return JSONResponse({"message": "Tokens airdropped successfully"})
 
+# Route جدید برای تست webhook
+@app.get("/webhook-info")
+async def webhook_info():
+    """endpoint برای بررسی وضعیت webhook"""
+    try:
+        bot = Bot(token=BOT_TOKEN)
+        await bot.initialize()
+        webhook_info = await bot.get_webhook_info()
+        await bot.shutdown()
+        
+        return {
+            "webhook_url": webhook_info.url,
+            "has_custom_certificate": webhook_info.has_custom_certificate,
+            "pending_update_count": webhook_info.pending_update_count,
+            "last_error_date": webhook_info.last_error_date,
+            "last_error_message": webhook_info.last_error_message,
+            "max_connections": webhook_info.max_connections,
+            "allowed_updates": webhook_info.allowed_updates
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
@@ -265,21 +254,38 @@ scheduler.start()
 @app.on_event("startup")
 async def startup():
     logger.info("App started")
+    
+    # بررسی متغیرهای محیطی
+    webhook_token = os.getenv('WEBHOOK_TOKEN')
+    if not webhook_token:
+        logger.error("WEBHOOK_TOKEN not set!")
+        return
+    
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()  # Initialize the Bot instance for webhook setup
     
-    webhook_token = os.getenv('WEBHOOK_TOKEN')
-    if not webhook_token:
-        logger.error("WEBHOOK_TOKEN not set")
-        return
-    
     webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{webhook_token}"
     
-    await telegram_app.initialize()  # Initialize Telegram Application
-    await bot.set_webhook(url=webhook_url)
-    await bot.shutdown()  # Shutdown the Bot instance to clean up
+    try:
+        # تنظیم webhook
+        await bot.set_webhook(url=webhook_url)
+        logger.info(f"Telegram webhook set to: {webhook_url}")
+        
+        # بررسی وضعیت webhook
+        webhook_info = await bot.get_webhook_info()
+        logger.info(f"Webhook info: {webhook_info}")
+        
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
     
-    logger.info(f"Telegram webhook set to: {webhook_url}")
+    try:
+        # راه‌اندازی telegram app
+        await telegram_app.initialize()  # Initialize Telegram Application
+        logger.info("Telegram app initialized")
+    except Exception as e:
+        logger.error(f"Error initializing telegram app: {e}")
+    
+    await bot.shutdown()  # Shutdown the Bot instance to clean up
 
 @app.on_event("shutdown")
 def shutdown():
