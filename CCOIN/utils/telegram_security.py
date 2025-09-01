@@ -58,67 +58,70 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db: Session = next(get_db())  # Get session from generator
+    from CCOIN.database import SessionLocal  # Import اینجا برای جلوگیری از circular import
     
-    telegram_id = str(update.message.from_user.id)
-    username = update.message.from_user.username
-    first_name = update.message.from_user.first_name
-    last_name = update.message.from_user.last_name
-    referral_code = context.args[0] if context.args else None
-    
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    
-    if not user:
-        user = User(
-            telegram_id=telegram_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name,
-            referral_code=str(uuid.uuid4())[:8],
-            tokens=0,
-            first_login=True,
+    db = SessionLocal()
+    try:
+        telegram_id = str(update.message.from_user.id)
+        username = update.message.from_user.username
+        first_name = update.message.from_user.first_name
+        last_name = update.message.from_user.last_name
+        referral_code = context.args[0] if context.args else None
+        
+        logger.info(f"Processing /start command for user {telegram_id}")
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        
+        if not user:
+            user = User(
+                telegram_id=telegram_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+                referral_code=str(uuid.uuid4())[:8],
+                tokens=2000,  # welcome bonus
+                first_login=True,
+            )
+            db.add(user)
+            
+            if referral_code:
+                referrer = db.query(User).filter(User.referral_code == referral_code).first()
+                if referrer:
+                    user.referred_by = referrer.id
+                    referrer.tokens += 50
+            
+            db.commit()
+            db.refresh(user)
+            logger.info(f"New user created: {telegram_id}")
+        else:
+            logger.info(f"Existing user: {telegram_id}")
+        
+        # Create Web App URL with telegram ID for session management
+        base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
+        web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
+        
+        # Create button with URL
+        keyboard = [
+            [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        welcome_message = (
+            "💰 **Welcome to CCoin!**\n\n"
+            "🎉 Your crypto journey starts here!\n"
+            "💎 Earn tokens, complete tasks, and build your wealth!\n\n"
+            "👇 Click the button below to open the app:"
         )
-        db.add(user)
         
-        if referral_code:
-            referrer = db.query(User).filter(User.referral_code == referral_code).first()
-            if referrer:
-                user.referred_by = referrer.id
-                referrer.tokens += 50
+        await update.message.reply_text(
+            welcome_message, 
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
         
-        db.commit()
-        db.refresh(user)
-    
-    # Store telegram_id in context for webhook
-    context.user_data["telegram_id"] = telegram_id
-    
-    logger.info(f"User {telegram_id} started bot, first_login={user.first_login}")
-    
-    # Determine Web App URL based on first_login
-    base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
-    web_app_url = f"{base_url}/{'load' if user.first_login else 'home'}"
-    
-    # Create InlineKeyboardButton with URL instead of WebApp object
-    keyboard = [
-        [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    welcome_message = (
-        "💰 **Welcome to CCoin!**\n\n"
-        "🎉 Your crypto journey starts here!\n"
-        "💎 Earn tokens, complete tasks, and build your wealth!\n\n"
-        "👇 Click the button below to open the app:"
-    )
-    
-    await update.message.reply_text(
-        welcome_message, 
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-    
-    return {"ok": True}
+    finally:
+        db.close()
 
 # Add command handler
 app.add_handler(CommandHandler("start", start))
