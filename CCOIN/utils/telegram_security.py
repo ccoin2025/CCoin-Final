@@ -72,7 +72,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         
+        is_new_user = False
         if not user:
+            is_new_user = True
             user = User(
                 telegram_id=telegram_id,
                 username=username,
@@ -92,15 +94,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             db.commit()
             db.refresh(user)
-            logger.info(f"New user created: {telegram_id}")
+            logger.info(f"New user created: {telegram_id} with 2000 tokens")
         else:
-            logger.info(f"Existing user: {telegram_id}")
+            logger.info(f"Existing user: {telegram_id}, first_login={user.first_login}")
         
-        # Create Web App URL
+        # Create Web App URL based on user status
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
-        web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
         
-        # سعی می‌کنیم WebAppInfo را import کنیم
+        # اگر کاربر جدید است یا first_login=True است، به load برود
+        if user.first_login:
+            web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
+        else:
+            web_app_url = f"{base_url}/home?telegram_id={telegram_id}"
+        
+        # استفاده از WebAppInfo
         try:
             from telegram import WebAppInfo
             web_app = WebAppInfo(url=web_app_url)
@@ -109,7 +116,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             logger.info("Using WebAppInfo for inline button")
         except ImportError:
-            # اگر WebAppInfo موجود نبود، از url استفاده کنیم
             keyboard = [
                 [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
             ]
@@ -117,12 +123,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        welcome_message = (
-            "💰 **Welcome to CCoin!**\n\n"
-            "🎉 Your crypto journey starts here!\n"
-            "💎 Earn tokens, complete tasks, and build your wealth!\n\n"
-            "👇 Click the button below to open the app:"
-        )
+        if is_new_user:
+            welcome_message = (
+                "💰 **Welcome to CCoin!**\n\n"
+                "🎉 Your crypto journey starts here!\n"
+                "💎 You received 2000 CCoin as welcome bonus!\n"
+                "🎯 Complete tasks and earn more tokens!\n\n"
+                "👇 Click the button below to open the app:"
+            )
+        else:
+            welcome_message = (
+                "💰 **Welcome back to CCoin!**\n\n"
+                f"💎 You have {user.tokens} tokens\n"
+                "🎯 Ready to earn more?\n\n"
+                "👇 Click the button below to open the app:"
+            )
         
         await update.message.reply_text(
             welcome_message, 
