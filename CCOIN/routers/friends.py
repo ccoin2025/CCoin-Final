@@ -5,10 +5,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from CCOIN.utils.helpers import generate_referral_link, generate_unique_referral_code
+from CCOIN.utils.helpers import generate_referral_link
 from fastapi.templating import Jinja2Templates
 import os
+import uuid
 import structlog
+import secrets
+import time
 
 structlog.configure(
     processors=[
@@ -28,6 +31,31 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
+
+def generate_unique_referral_code_internal(db: Session) -> str:
+    """تولید کد رفرال یکتا"""
+    logger.info("Starting to generate unique referral code")
+    
+    max_attempts = 20
+    
+    for attempt in range(max_attempts):
+        # تولید کد 8 کاراختری
+        new_code = secrets.token_hex(4).upper()
+        logger.info(f"Attempt {attempt + 1}: Generated code {new_code}")
+        
+        # بررسی یکتا بودن
+        existing = db.query(User).filter(User.referral_code == new_code).first()
+        
+        if not existing:
+            logger.info(f"Code {new_code} is unique, returning it")
+            return new_code
+        else:
+            logger.warning(f"Code {new_code} already exists, trying again")
+    
+    # اگر پس از 20 تلاش موفق نشد، از timestamp استفاده کنید
+    fallback_code = f"REF{int(time.time())}"[-8:]
+    logger.warning(f"Using fallback code: {fallback_code}")
+    return fallback_code
 
 @router.get("/", response_class=HTMLResponse)
 @limiter.limit("10/minute")
@@ -58,8 +86,8 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User {telegram_id} needs a new referral code")
         
         try:
-            # استفاده از تابع جداگانه برای تولید کد یکتا
-            new_code = generate_unique_referral_code(db)
+            # استفاده از تابع داخلی برای تولید کد یکتا
+            new_code = generate_unique_referral_code_internal(db)
             logger.info(f"Generated new code: {new_code}")
             
             # تنظیم کد جدید
@@ -110,15 +138,21 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
     
     # تولید لینک رفرال
     try:
-        referral_link = generate_referral_link(user.referral_code)
+        # بررسی مستقیم کد رفرال
+        final_code = user.referral_code
+        if not final_code or str(final_code).strip() == "":
+            logger.error("Final code is still empty!")
+            final_code = f"EMERGENCY{telegram_id}"[-8:]
+        
+        bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
+        referral_link = f"https://t.me/{bot_username}?start={final_code}"
+        
         logger.info(f"Final referral link for user {telegram_id}: {referral_link}")
         
     except Exception as e:
         logger.error(f"Error generating referral link: {e}")
-        # لینک پیش‌فرض در صورت خطا
         bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
-        referral_link = f"https://t.me/{bot_username}?start={user.referral_code}"
-        logger.info(f"Using fallback referral link: {referral_link}")
+        referral_link = f"https://t.me/{bot_username}?start=ERROR"
     
     logger.info("=== FRIENDS ENDPOINT COMPLETED ===")
     
