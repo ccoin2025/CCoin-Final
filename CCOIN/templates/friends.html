@@ -62,79 +62,13 @@
     </a>
   </div>
 
-  <!-- اضافه کردن متغیرهای JavaScript -->
   <script>
-    // متغیرهای سرور
-    const REFERRAL_LINK = "{{ referral_link }}";
-    const REFERRAL_CODE = "{{ referral_code }}";
+    // متغیرهای سرور - فقط این بخش اضافه شده
+    window.REFERRAL_LINK = "{{ referral_link }}";
+    window.REFERRAL_CODE = "{{ referral_code }}";
     
-    console.log("Referral link from server:", REFERRAL_LINK);
-    console.log("Referral code from server:", REFERRAL_CODE);
-    
-    // تابع کپی لینک
-    function copyReferralLink() {
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
-        alert('Error: Invalid referral link!');
-        return;
-      }
-      
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
-          alert('Link copied!');
-        }).catch(() => {
-          alert('Copy failed!');
-        });
-      } else {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = REFERRAL_LINK;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-          document.execCommand('copy');
-          alert('Link copied!');
-        } catch (err) {
-          alert('Copy failed!');
-        }
-        document.body.removeChild(textArea);
-      }
-    }
-    
-    // تابع دعوت دوست
-    function inviteReferralFriend() {
-      console.log("Inviting friend with link:", REFERRAL_LINK);
-      
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
-        alert('Error: Invalid referral link!');
-        console.error("Invalid referral link:", REFERRAL_LINK);
-        return;
-      }
-      
-      if (window.Telegram && window.Telegram.WebApp) {
-        try {
-          window.Telegram.WebApp.openLink(REFERRAL_LINK);
-        } catch (e) {
-          console.error("Telegram WebApp error:", e);
-          window.open(REFERRAL_LINK, '_blank');
-        }
-      } else {
-        window.open(REFERRAL_LINK, '_blank');
-      }
-    }
-    
-    // اتصال event listener ها
-    document.addEventListener('DOMContentLoaded', function() {
-      const inviteButton = document.getElementById('inviteButton');
-      const copyButton = document.getElementById('copyButton');
-      
-      if (inviteButton) {
-        inviteButton.addEventListener('click', inviteReferralFriend);
-      }
-      
-      if (copyButton) {
-        copyButton.addEventListener('click', copyReferralLink);
-      }
-    });
+    console.log("Server referral link:", window.REFERRAL_LINK);
+    console.log("Server referral code:", window.REFERRAL_CODE);
     
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
