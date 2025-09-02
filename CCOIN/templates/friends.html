@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,13 +16,13 @@
             <h1>Invite Friends</h1>
             <p>Invite your friends and earn rewards!</p>
         </div>
-        
+
         <div class="referral-section">
             <div class="referral-code">
                 <h2>Your Referral Code</h2>
                 <div class="code-display">{{ referral_code }}</div>
             </div>
-            
+
             <div class="referral-link">
                 <h3>Invitation Link</h3>
                 <div class="link-container">
@@ -98,45 +97,40 @@
     </div>
 
     <script>
+        // فقط این بخش JavaScript اضافه شده - بقیه تغییری نکرده
         const REFERRAL_LINK = "{{ referral_link }}";
         const REFERRAL_CODE = "{{ referral_code }}";
-        
+
         console.log("Referral link from server:", REFERRAL_LINK);
         console.log("Referral code from server:", REFERRAL_CODE);
-        
-        if (REFERRAL_LINK.endsWith("?start=")) {
-            console.error("WARNING: Referral link is incomplete!");
-            alert("Error: Referral link is incomplete. Please refresh the page.");
-        }
-        
+
         function copyLink() {
             const linkInput = document.getElementById('referralLink');
             if (linkInput) {
                 linkInput.select();
                 linkInput.setSelectionRange(0, 99999);
-                
                 try {
                     document.execCommand('copy');
-                    showMessage('Link copied!', 'success');
+                    alert('Link copied!');
                 } catch (err) {
                     navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
-                        showMessage('Link copied!', 'success');
+                        alert('Link copied!');
                     }).catch(() => {
-                        showMessage('Copy failed!', 'error');
+                        alert('Copy failed!');
                     });
                 }
             }
         }
-        
+
         function inviteFriend() {
             console.log("Inviting friend with link:", REFERRAL_LINK);
-            
+
             if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
-                showMessage('Error generating referral link!', 'error');
+                alert('Error generating referral link!');
                 console.error("Invalid referral link:", REFERRAL_LINK);
                 return;
             }
-            
+
             if (window.Telegram && window.Telegram.WebApp) {
                 try {
                     window.Telegram.WebApp.openLink(REFERRAL_LINK);
@@ -148,52 +142,22 @@
                 window.open(REFERRAL_LINK, '_blank');
             }
         }
-        
+
         function shareLink() {
             const shareData = {
                 title: 'CCoin - Join the Bot',
                 text: `I'm active on CCoin! Join with my referral code (${REFERRAL_CODE})!`,
                 url: REFERRAL_LINK
             };
-            
+
             if (navigator.share) {
                 navigator.share(shareData).catch(console.error);
             } else {
                 copyLink();
             }
         }
-        
-        function showMessage(message, type = 'info') {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
-                color: white;
-                padding: 12px 20px;
-                border-radius: 5px;
-                z-index: 1000;
-                font-size: 14px;
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 3000);
-        }
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log("Page loaded, checking referral link...");
-            if (REFERRAL_LINK.endsWith("?start=")) {
-                console.error("CRITICAL: Referral link is still incomplete on page load!");
-            }
-        });
     </script>
-    
+
     <script src="/static/js/friends.js"></script>
 </body>
 </html>
