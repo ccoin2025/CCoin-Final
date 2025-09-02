@@ -1,4 +1,4 @@
-<!-- templates/friends.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,61 +11,189 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <div class="center-content">
-    <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
-    <h1>Invite Friends</h1>
-    <p class="subheading">Get 50 points for each friend</p>
-  </div>
+    <div class="container">
+        <div class="header">
+            <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
+            <h1>Invite Friends</h1>
+            <p>Invite your friends and earn rewards!</p>
+        </div>
+        
+        <div class="referral-section">
+            <div class="referral-code">
+                <h2>Your Referral Code</h2>
+                <div class="code-display">{{ referral_code }}</div>
+            </div>
+            
+            <div class="referral-link">
+                <h3>Invitation Link</h3>
+                <div class="link-container">
+                    <input type="text" id="referralLink" value="{{ referral_link }}" readonly>
+                    <button onclick="copyLink()" class="copy-btn">Copy</button>
+                </div>
+            </div>
+        </div>
 
-  <div class="invite-list">
-    <h2>Your Invites</h2>
-    <div class="invite-box">
-      {% if invited_users %}
-        {% for user in invited_users %}
-          <div class="friend-item">
-            <div class="user-circle">{{ user.first_name[0] }}{{ user.last_name[0] }}</div>
-            <div class="telegram-id">@{{ user.telegram_id }}</div>
-            <div class="tokens">{{ user.tokens }} Tokens</div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p>No friends invited yet!</p>
-      {% endif %}
+        <div class="action-buttons">
+            <button onclick="inviteFriend()" class="invite-btn">
+                <span>Invite Friends</span>
+                <span>📤</span>
+            </button>
+            <button onclick="shareLink()" class="share-btn">
+                <span>Share Link</span>
+                <span>🔗</span>
+            </button>
+        </div>
+
+        <div class="stats-section">
+            <div class="stat-item">
+                <div class="stat-number">{{ invited_users|length }}</div>
+                <div class="stat-label">Friends Invited</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ user.tokens }}</div>
+                <div class="stat-label">Total Tokens</div>
+            </div>
+        </div>
+
+        <div class="invited-users">
+            <h3>Invited Friends</h3>
+            {% if invited_users %}
+                {% for user in invited_users %}
+                    <div class="user-item">
+                        <div class="user-info">
+                            <span class="username">{{ user.username or user.first_name or 'Unknown User' }}</span>
+                            <span class="join-date">{{ user.created_at.strftime('%Y/%m/%d') if user.created_at else 'Unknown' }}</span>
+                        </div>
+                        <div class="user-status">
+                            <span class="status-badge">Active</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <p>No friends invited yet</p>
+                    <p>Invite your friends and earn rewards!</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="navigation">
+            <a href="/home?telegram_id={{ request.session.get('telegram_id') }}" class="nav-btn">
+                <span>🏠</span>
+                <span>Home</span>
+            </a>
+            <a href="/earn?telegram_id={{ request.session.get('telegram_id') }}" class="nav-btn">
+                <span>💰</span>
+                <span>Earn</span>
+            </a>
+            <a href="/friends?telegram_id={{ request.session.get('telegram_id') }}" class="nav-btn active">
+                <span>👥</span>
+                <span>Friends</span>
+            </a>
+            <a href="/airdrop?telegram_id={{ request.session.get('telegram_id') }}" class="nav-btn">
+                <span>🎁</span>
+                <span>Airdrop</span>
+            </a>
+        </div>
     </div>
-  </div>
 
-  <div class="buttons-container">
-    <button id="inviteButton">Invite Friends</button>
-    <button id="copyButton"><i class="fas fa-link"></i></button>
-  </div>
-
-  <div class="footer-icons">
-    <a href="/leaders" class="footer-btn">
-      <i class="fas fa-medal"></i>
-      <span>Leaders</span>
-    </a>
-    <a href="/friends" class="footer-btn active">
-      <i class="fas fa-user-friends"></i>
-      <span>Friends</span>
-    </a>
-    <a href="/home" class="footer-btn">
-      <i class="fas fa-home"></i>
-      <span>Home</span>
-    </a>
-    <a href="/earn" class="footer-btn">
-      <i class="fas fa-coins"></i>
-      <span>Earn</span>
-    </a>
-    <a href="/airdrop" class="footer-btn">
-      <i class="fas fa-rocket"></i>
-      <span>AirDrop</span>
-    </a>
-  </div>
-
-  <script>
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
-  </script>
-  <script src="{{ url_for('static', path='js/friends.js') }}"></script>
+    <script>
+        const REFERRAL_LINK = "{{ referral_link }}";
+        const REFERRAL_CODE = "{{ referral_code }}";
+        
+        console.log("Referral link from server:", REFERRAL_LINK);
+        console.log("Referral code from server:", REFERRAL_CODE);
+        
+        if (REFERRAL_LINK.endsWith("?start=")) {
+            console.error("WARNING: Referral link is incomplete!");
+            alert("Error: Referral link is incomplete. Please refresh the page.");
+        }
+        
+        function copyLink() {
+            const linkInput = document.getElementById('referralLink');
+            if (linkInput) {
+                linkInput.select();
+                linkInput.setSelectionRange(0, 99999);
+                
+                try {
+                    document.execCommand('copy');
+                    showMessage('Link copied!', 'success');
+                } catch (err) {
+                    navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
+                        showMessage('Link copied!', 'success');
+                    }).catch(() => {
+                        showMessage('Copy failed!', 'error');
+                    });
+                }
+            }
+        }
+        
+        function inviteFriend() {
+            console.log("Inviting friend with link:", REFERRAL_LINK);
+            
+            if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
+                showMessage('Error generating referral link!', 'error');
+                console.error("Invalid referral link:", REFERRAL_LINK);
+                return;
+            }
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                try {
+                    window.Telegram.WebApp.openLink(REFERRAL_LINK);
+                } catch (e) {
+                    console.error("Telegram WebApp error:", e);
+                    window.open(REFERRAL_LINK, '_blank');
+                }
+            } else {
+                window.open(REFERRAL_LINK, '_blank');
+            }
+        }
+        
+        function shareLink() {
+            const shareData = {
+                title: 'CCoin - Join the Bot',
+                text: `I'm active on CCoin! Join with my referral code (${REFERRAL_CODE})!`,
+                url: REFERRAL_LINK
+            };
+            
+            if (navigator.share) {
+                navigator.share(shareData).catch(console.error);
+            } else {
+                copyLink();
+            }
+        }
+        
+        function showMessage(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                font-size: 14px;
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Page loaded, checking referral link...");
+            if (REFERRAL_LINK.endsWith("?start=")) {
+                console.error("CRITICAL: Referral link is still incomplete on page load!");
+            }
+        });
+    </script>
+    
+    <script src="/static/js/friends.js"></script>
 </body>
 </html>
