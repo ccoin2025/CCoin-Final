@@ -34,6 +34,12 @@
     </div>
   </div>
 
+  <!-- Debug: نمایش متغیرها -->
+  <div style="display:none;" id="debug">
+    <p>Referral Code: {{ referral_code }}</p>
+    <p>Referral Link: {{ referral_link }}</p>
+  </div>
+
   <div class="buttons-container">
     <button id="inviteButton">Invite Friends</button>
     <button id="copyButton"><i class="fas fa-link"></i></button>
@@ -63,12 +69,29 @@
   </div>
 
   <script>
-    // متغیرهای سرور - فقط این بخش اضافه شده
-    window.REFERRAL_LINK = "{{ referral_link }}";
-    window.REFERRAL_CODE = "{{ referral_code }}";
+    // متغیرهای template با encoding مناسب
+    window.REFERRAL_CODE = {{ referral_code|tojson }};
+    window.REFERRAL_LINK = {{ referral_link|tojson }};
     
-    console.log("Server referral link:", window.REFERRAL_LINK);
-    console.log("Server referral code:", window.REFERRAL_CODE);
+    // Debug logs
+    console.log("=== TEMPLATE VARIABLES DEBUG ===");
+    console.log("Raw referral_code from template:", "{{ referral_code }}");
+    console.log("Raw referral_link from template:", "{{ referral_link }}");
+    console.log("Parsed REFERRAL_CODE:", window.REFERRAL_CODE);
+    console.log("Parsed REFERRAL_LINK:", window.REFERRAL_LINK);
+    console.log("=== END DEBUG ===");
+    
+    // بررسی که متغیرها خالی نباشند
+    if (!window.REFERRAL_LINK || window.REFERRAL_LINK === "" || window.REFERRAL_LINK.endsWith("?start=")) {
+      console.error("ERROR: REFERRAL_LINK is empty or incomplete!");
+      console.error("REFERRAL_LINK value:", window.REFERRAL_LINK);
+      
+      // تلاش برای ساخت لینک دستی
+      if (window.REFERRAL_CODE && window.REFERRAL_CODE !== "") {
+        window.REFERRAL_LINK = "https://t.me/CTG_COIN_BOT?start=" + window.REFERRAL_CODE;
+        console.log("Created manual link:", window.REFERRAL_LINK);
+      }
+    }
     
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
