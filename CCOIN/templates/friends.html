@@ -9,14 +9,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body data-referral-code="{{ referral_code }}" data-referral-link="{{ referral_link }}">
+<body>
     
-    <!-- Debug برای مشاهده مقادیر -->
-    <div style="display: none;">
-        <p>DEBUG - Referral Code: {{ referral_code }}</p>
-        <p>DEBUG - Referral Link: {{ referral_link }}</p>
-    </div>
-
     <div class="center-content">
         <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
         <h1>Invite Friends</h1>
@@ -41,8 +35,8 @@
     </div>
 
     <div class="buttons-container">
-        <button id="inviteButton" type="button">Invite Friends</button>
-        <button id="copyButton" type="button"><i class="fas fa-link"></i></button>
+        <button onclick="inviteFunction()">Invite Friends</button>
+        <button onclick="copyFunction()"><i class="fas fa-link"></i></button>
     </div>
 
     <div class="footer-icons">
@@ -69,13 +63,44 @@
     </div>
 
     <script>
-        // فقط Telegram WebApp را initialize می‌کنیم
+        // متغیرهای مستقیم
+        const REFERRAL_LINK = "{{ referral_link }}";
+        const REFERRAL_CODE = "{{ referral_code }}";
+        
+        console.log("Direct REFERRAL_LINK:", REFERRAL_LINK);
+        console.log("Direct REFERRAL_CODE:", REFERRAL_CODE);
+
+        function inviteFunction() {
+            console.log("Invite clicked, link:", REFERRAL_LINK);
+            if (REFERRAL_LINK) {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.openLink(REFERRAL_LINK);
+                } else {
+                    window.open(REFERRAL_LINK, '_blank');
+                }
+            } else {
+                alert('لینک موجود نیست');
+            }
+        }
+
+        function copyFunction() {
+            console.log("Copy clicked, link:", REFERRAL_LINK);
+            if (REFERRAL_LINK) {
+                navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
+                    alert('لینک کپی شد!');
+                }).catch(() => {
+                    alert('خطا در کپی');
+                });
+            } else {
+                alert('لینک موجود نیست');
+            }
+        }
+
+        // Initialize Telegram
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
         }
     </script>
-    
-    <script src="{{ url_for('static', path='js/friends.js') }}"></script>
 </body>
 </html>
