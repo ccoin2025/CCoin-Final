@@ -11,209 +11,271 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-<div class="container">
-  <div class="box">
-    <div class="countdown">
-      <span id="days">00</span>d :
-      <span id="hours">00</span>h :
-      <span id="minutes">00</span>m :
-      <span id="seconds">00</span>s
+    <div class="container">
+        <div class="box">
+            <div class="countdown">
+                <span id="days">00</span>d :
+                <span id="hours">00</span>h :
+                <span id="minutes">00</span>m :
+                <span id="seconds">00</span>s
+            </div>
+            <div class="token-value">
+                <p>1 CCoin = $ 0.02</p>
+            </div>
+        </div>
+
+        <div class="airdrop-criteria">
+            <h2>Airdrop Criteria</h2>
+            
+            <div id="task-completion" class="task-box">
+                <button onclick="handleTaskCompletion()" class="task-button">
+                    <span class="left-text">Tasks Completion</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
+            
+            <div id="inviting-friends" class="task-box">
+                <button onclick="handleInviteCheck()" class="task-button">
+                    <span class="left-text">Inviting Friends</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
+            
+            <div id="connect-wallet" class="task-box">
+                <button onclick="connectWallet()" class="task-button">
+                    <span class="left-text">Connect Wallet</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
+            
+            <div id="pay-commission" class="task-box">
+                <button onclick="payCommission()" class="task-button">
+                    <span class="left-text">Pay for the Commission</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="footer-icons">
+            <a href="/leaders" class="footer-btn">
+                <i class="fas fa-medal"></i>
+                <span>Leaders</span>
+            </a>
+            <a href="/friends" class="footer-btn">
+                <i class="fas fa-user-friends"></i>
+                <span>Friends</span>
+            </a>
+            <a href="/home" class="footer-btn">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="/earn" class="footer-btn">
+                <i class="fas fa-coins"></i>
+                <span>Earn</span>
+            </a>
+            <a href="/airdrop" class="footer-btn active">
+                <i class="fas fa-rocket"></i>
+                <span>AirDrop</span>
+            </a>
+        </div>
     </div>
-    <div class="token-value">
-      <p>1 CCoin = $ 0.02</p>
-    </div>
-  </div>
 
-  <div class="airdrop-criteria">
-      <h2>Airdrop Criteria</h2>
+    <script>
+        const USER_ID = "{{ request.session.telegram_id }}";
+        console.log("airdrop.js loaded");
 
-      <div id="task-completion" class="task-box">
-          <button onclick="handleTaskCompletion()" class="task-button">
-              <span class="left-text">Tasks Completion</span>
-              <i class="fas fa-chevron-right right-icon"></i>
-          </button>
-      </div>
-
-      <div id="inviting-friends" class="task-box">
-          <button onclick="handleInviteCheck()" class="task-button">
-              <span class="left-text">Inviting Friends</span>
-              <i class="fas fa-chevron-right right-icon"></i>
-          </button>
-      </div>
-
-      <div id="connect-wallet" class="task-box">
-          <button onclick="connectWallet()" class="task-button">
-              <span class="left-text">Connect Wallet</span>
-              <i class="fas fa-chevron-right right-icon"></i>
-          </button>
-      </div>
-
-      <div id="pay-commission" class="task-box">
-          <button onclick="payCommission()" class="task-button">
-              <span class="left-text">Pay for the Commission</span>
-              <i class="fas fa-chevron-right right-icon"></i>
-          </button>
-      </div>
-  </div>
-
-  <div class="footer-icons">
-      <a href="/leaders" class="footer-btn">
-          <i class="fas fa-medal"></i>
-          <span>Leaders</span>
-      </a>
-      <a href="/friends" class="footer-btn">
-          <i class="fas fa-user-friends"></i>
-          <span>Friends</span>
-      </a>
-      <a href="/home" class="footer-btn">
-          <i class="fas fa-home"></i>
-          <span>Home</span>
-      </a>
-      <a href="/earn" class="footer-btn">
-          <i class="fas fa-coins"></i>
-          <span>Earn</span>
-      </a>
-      <a href="/airdrop" class="footer-btn active">
-          <i class="fas fa-rocket"></i>
-          <span>AirDrop</span>
-      </a>
-  </div>
-</div>
-
-<script>
-    const USER_ID = "{{ request.session.telegram_id }}";
-    console.log("airdrop.js loaded");
-
-    function markAsCompleted(id) {
-        const box = document.getElementById(id);
-        const icon = box.querySelector(".right-icon");
-        icon.classList.remove("fa-chevron-right");
-        icon.classList.add("fa-check");
-        box.classList.add("completed");
-    }
-
-    let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
-
-    async function checkUserTasks() {
-        try {
-            const response = await fetch(`/api/user-tasks/status?user_id=${USER_ID}`);
-            const data = await response.json();
-
-            if (data.task) markAsCompleted("task-completion");
-            if (data.invite) markAsCompleted("inviting-friends");
-            if (data.wallet) markAsCompleted("connect-wallet");
-            if (data.pay) markAsCompleted("pay-commission");
-
-            tasksCompleted.task = data.task;
-            tasksCompleted.invite = data.invite;
-            tasksCompleted.wallet = data.wallet;
-            tasksCompleted.pay = data.pay;
-        } catch (error) {
-            console.error("Error fetching task status:", error);
+        function markAsCompleted(id) {
+            const box = document.getElementById(id);
+            const icon = box.querySelector(".right-icon");
+            icon.classList.remove("fa-chevron-right");
+            icon.classList.add("fa-check");
+            box.classList.add("completed");
         }
-    }
 
-    checkUserTasks();
+        let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
 
-    async function payCommission() {
-        console.log("payCommission called");
-        try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const res = await fetch("/airdrop/pay_commission", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRF-Token": csrfToken
-                },
-                body: JSON.stringify({})
-            });
-            const data = await res.json();
-            console.log("Fetch response: ", data);
-            if (data.transaction) {
-                console.log("Transaction received: ", data.transaction);
-                if (window.solana && window.solana.isConnected) {
-                    const signedTx = await window.solana.signTransaction(data.transaction);
-                    const confirmRes = await fetch("/airdrop/confirm_commission", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRF-Token": csrfToken
-                        },
-                        body: JSON.stringify({ tx_hash: signedTx.signature })
-                    });
-                    const confirmData = await confirmRes.json();
-                    alert(confirmData.message || "Commission paid successfully!");
-                    location.reload();
-                } else {
-                    alert("Please install and connect a Solana wallet (e.g., Phantom).");
-                }
-            } else {
-                alert(data.message || "Failed to prepare transaction.");
-            }
-        } catch (err) {
-            console.error("Error paying commission:", err);
-            alert("Error: " + err.message);
-        }
-    }
-
-    async function connectWallet() {
-        if (tasksCompleted.wallet) return;
-        if (window.solana) {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        async function checkUserTasks() {
             try {
-                const resp = await window.solana.connect();
-                const response = await fetch('/airdrop/connect_wallet', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: JSON.stringify({ wallet: resp.publicKey.toString() })
-                });
+                const response = await fetch(`/api/user-tasks/status?user_id=${USER_ID}`);
                 const data = await response.json();
-                if (response.ok) {
-                    markAsCompleted("connect-wallet");
-                    tasksCompleted.wallet = true;
-                    location.reload();
-                } else {
-                    console.error("Wallet connection failed:", data.detail);
-                    alert(data.detail || "Wallet connection failed");
-                }
+                if (data.task) markAsCompleted("task-completion");
+                if (data.invite) markAsCompleted("inviting-friends");
+                if (data.wallet) markAsCompleted("connect-wallet");
+                if (data.pay) markAsCompleted("pay-commission");
+                
+                tasksCompleted.task = data.task;
+                tasksCompleted.invite = data.invite;
+                tasksCompleted.wallet = data.wallet;
+                tasksCompleted.pay = data.pay;
             } catch (error) {
-                console.error("Solana not available:", error);
-                alert("Error connecting wallet: " + error.message);
-            }
-        } else {
-            const userAgent = navigator.userAgent.toLowerCase();
-            if (userAgent.includes("android")) {
-                window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
-            } else if (userAgent.includes("iphone") || userAgent.includes("ipad")) {
-                window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
-            } else {
-                alert("Please install the Phantom wallet extension.");
+                console.error("Error fetching task status:", error);
             }
         }
-    }
 
-    function handleTaskCompletion() {
-        if (tasksCompleted.task) return;
-        window.location.href = "/earn";
-    }
+        checkUserTasks();
 
-    function handleInviteCheck() {
-        if (tasksCompleted.invite) return;
-        window.location.href = "/friends";
-    }
+        async function payCommission() {
+            console.log("payCommission called");
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const res = await fetch("/airdrop/pay_commission", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": csrfToken
+                    },
+                    body: JSON.stringify({})
+                });
 
-    function handleConnectWallet() {
-        console.log("handleConnectWallet called");
-        connectWallet();
-    }
-</script>
-<script>
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
-</script>
-<script src="{{ request.url_for('static', path='js/airdrop.js') }}"></script>
+                const data = await res.json();
+                console.log("Fetch response: ", data);
+
+                if (data.transaction) {
+                    console.log("Transaction received: ", data.transaction);
+                    
+                    if (window.solana && window.solana.isConnected) {
+                        const signedTx = await window.solana.signTransaction(data.transaction);
+                        const confirmRes = await fetch("/airdrop/confirm_commission", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRF-Token": csrfToken
+                            },
+                            body: JSON.stringify({ tx_hash: signedTx.signature })
+                        });
+
+                        const confirmData = await confirmRes.json();
+                        alert(confirmData.message || "Commission paid successfully!");
+                        location.reload();
+                    } else {
+                        alert("Please connect your Phantom wallet first.");
+                    }
+                } else {
+                    alert(data.message || "Failed to prepare transaction.");
+                }
+            } catch (err) {
+                console.error("Error paying commission:", err);
+                alert("Error: " + err.message);
+            }
+        }
+
+        async function connectWallet() {
+            if (tasksCompleted.wallet) return;
+            
+            console.log("connectWallet called");
+            
+            // بررسی اینکه آیا در محیط Telegram WebApp هستیم
+            if (window.Telegram && window.Telegram.WebApp) {
+                console.log("Detected Telegram WebApp environment");
+                
+                // تلاش برای باز کردن Phantom با deep link
+                try {
+                    const currentUrl = window.location.href;
+                    const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&cluster=mainnet`;
+                    
+                    console.log("Opening Phantom with URL:", phantomUrl);
+                    
+                    // استفاده از Telegram WebApp برای باز کردن لینک
+                    if (window.Telegram.WebApp.openLink) {
+                        window.Telegram.WebApp.openLink(phantomUrl);
+                    } else {
+                        window.open(phantomUrl, '_blank');
+                    }
+                    
+                    // نمایش پیام راهنما
+                    alert("Phantom wallet is opening. Please connect your wallet and return to this app.");
+                    
+                    return;
+                } catch (error) {
+                    console.error("Error opening Phantom deep link:", error);
+                }
+            }
+            
+            // تلاش برای اتصال مستقیم (برای مرورگر دسکتاپ)
+            if (window.solana) {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
+                try {
+                    const resp = await window.solana.connect();
+                    const response = await fetch('/airdrop/connect_wallet', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify({ wallet: resp.publicKey.toString() })
+                    });
+
+                    const data = await response.json();
+                    if (response.ok) {
+                        markAsCompleted("connect-wallet");
+                        tasksCompleted.wallet = true;
+                        location.reload();
+                    } else {
+                        console.error("Wallet connection failed:", data.detail);
+                        alert(data.detail || "Wallet connection failed");
+                    }
+                } catch (error) {
+                    console.error("Solana connection error:", error);
+                    alert("Error connecting wallet: " + error.message);
+                }
+            } else {
+                // اگر Phantom در دسترس نیست، deep link را امتحان کنید
+                console.log("Solana object not available, trying deep link");
+                
+                const userAgent = navigator.userAgent.toLowerCase();
+                let phantomUrl;
+                
+                if (userAgent.includes("android")) {
+                    phantomUrl = `intent://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet#Intent;scheme=https;package=app.phantom;end`;
+                } else if (userAgent.includes("iphone") || userAgent.includes("ipad")) {
+                    phantomUrl = `phantom://v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet`;
+                } else {
+                    // Desktop fallback
+                    phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet`;
+                }
+                
+                console.log("Using platform-specific Phantom URL:", phantomUrl);
+                
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+                    window.Telegram.WebApp.openLink(phantomUrl);
+                } else {
+                    window.location.href = phantomUrl;
+                }
+                
+                alert("Opening Phantom wallet. Please connect and return to this app.");
+            }
+        }
+
+        function handleTaskCompletion() {
+            if (tasksCompleted.task) return;
+            window.location.href = "/earn";
+        }
+
+        function handleInviteCheck() {
+            if (tasksCompleted.invite) return;
+            window.location.href = "/friends";
+        }
+
+        function handleConnectWallet() {
+            console.log("handleConnectWallet called");
+            connectWallet();
+        }
+
+        // Listener برای detect کردن برگشت از Phantom
+        window.addEventListener('focus', function() {
+            console.log("Window focused - user might have returned from Phantom");
+            // بررسی مجدد وضعیت wallet
+            setTimeout(checkUserTasks, 1000);
+        });
+
+        // Initialize Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+    </script>
+
+    <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
