@@ -35,8 +35,8 @@
     </div>
 
     <div class="buttons-container">
-        <button onclick="inviteFunction()">Invite Friends</button>
-        <button onclick="copyFunction()"><i class="fas fa-link"></i></button>
+        <button id="inviteButton" onclick="inviteFunction()">Invite Friends</button>
+        <button id="copyButton" onclick="copyFunction()"><i class="fas fa-link"></i></button>
     </div>
 
     <div class="footer-icons">
@@ -67,39 +67,80 @@
         const REFERRAL_LINK = "{{ referral_link }}";
         const REFERRAL_CODE = "{{ referral_code }}";
         
-        console.log("Direct REFERRAL_LINK:", REFERRAL_LINK);
-        console.log("Direct REFERRAL_CODE:", REFERRAL_CODE);
+        console.log("REFERRAL_LINK:", REFERRAL_LINK);
+        console.log("REFERRAL_CODE:", REFERRAL_CODE);
 
         function inviteFunction() {
-            console.log("Invite clicked, link:", REFERRAL_LINK);
-            if (REFERRAL_LINK) {
-                if (window.Telegram && window.Telegram.WebApp) {
+            console.log("Invite button clicked");
+            console.log("Opening link:", REFERRAL_LINK);
+            
+            if (!REFERRAL_LINK) {
+                alert('Referral link not available');
+                return;
+            }
+            
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+                    console.log("Using Telegram WebApp openLink");
                     window.Telegram.WebApp.openLink(REFERRAL_LINK);
+                } else if (window.Telegram && window.Telegram.WebApp) {
+                    console.log("Telegram WebApp available but no openLink, using window.open");
+                    window.open(REFERRAL_LINK, '_blank');
                 } else {
+                    console.log("No Telegram WebApp, using window.open");
                     window.open(REFERRAL_LINK, '_blank');
                 }
-            } else {
-                alert('لینک موجود نیست');
+            } catch (error) {
+                console.error("Error in invite function:", error);
+                window.open(REFERRAL_LINK, '_blank');
             }
         }
 
         function copyFunction() {
-            console.log("Copy clicked, link:", REFERRAL_LINK);
-            if (REFERRAL_LINK) {
+            console.log("Copy button clicked");
+            console.log("Copying link:", REFERRAL_LINK);
+            
+            if (!REFERRAL_LINK) {
+                alert('Referral link not available');
+                return;
+            }
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
-                    alert('لینک کپی شد!');
-                }).catch(() => {
-                    alert('خطا در کپی');
+                    alert('Link copied!');
+                }).catch((error) => {
+                    console.error("Clipboard failed:", error);
+                    fallbackCopy();
                 });
             } else {
-                alert('لینک موجود نیست');
+                fallbackCopy();
+            }
+        }
+        
+        function fallbackCopy() {
+            try {
+                const textArea = document.createElement('textarea');
+                textArea.value = REFERRAL_LINK;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Link copied!');
+            } catch (error) {
+                console.error("Fallback copy failed:", error);
+                alert('Copy failed');
             }
         }
 
-        // Initialize Telegram
+        // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            console.log("Telegram WebApp initialized");
+        } else {
+            console.log("Telegram WebApp not available");
         }
     </script>
 </body>
