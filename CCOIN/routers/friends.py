@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 def generate_unique_referral_code_internal(db: Session) -> str:
@@ -32,12 +31,11 @@ def generate_unique_referral_code_internal(db: Session) -> str:
     for attempt in range(max_attempts):
         # تولید کد 8 کاراختری
         new_code = secrets.token_hex(4).upper()
-        print(f"Attempt {attempt + 1}: Generated code {new_code}")
-        logger.info(f"Attempt {attempt + 1}: Generated code {new_code}")
+        print(f"Attempt {attempt+1}: Generated code {new_code}")
+        logger.info(f"Attempt {attempt+1}: Generated code {new_code}")
         
         # بررسی یکتا بودن
         existing = db.query(User).filter(User.referral_code == new_code).first()
-        
         if not existing:
             print(f"Code {new_code} is unique, returning it")
             logger.info(f"Code {new_code} is unique, returning it")
@@ -52,6 +50,20 @@ def generate_unique_referral_code_internal(db: Session) -> str:
     logger.warning(f"Using fallback code: {fallback_code}")
     return fallback_code
 
+def validate_referral_code(code: str) -> bool:
+    """بررسی صحت کد رفرال"""
+    if not code:
+        return False
+    
+    code_str = str(code).strip()
+    if code_str == "" or code_str == "None" or code_str == "null":
+        return False
+    
+    if len(code_str) < 3:  # کد رفرال باید حداقل 3 کاراختر باشد
+        return False
+    
+    return True
+
 @router.get("/", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def get_friends(request: Request, db: Session = Depends(get_db)):
@@ -60,12 +72,11 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
     
     # telegram_id را از query parameter یا session بگیرید
     telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
-    
     print(f"telegram_id: {telegram_id}")
     
     if not telegram_id:
         print("No telegram_id found for friends")
-        logger.info("No telegram_id found for friends, redirecting to bot")
+        logger.error("No telegram_id found for friends, redirecting to bot")
         raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
     
     # telegram_id را در session تنظیم کنید
@@ -73,20 +84,20 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
     print(f"Processing friends request for telegram_id: {telegram_id}")
     logger.info(f"Processing friends request for telegram_id: {telegram_id}")
     
+    # پیدا کردن کاربر
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    
     if not user:
         print(f"User not found for telegram_id: {telegram_id}")
-        logger.info(f"User not found for telegram_id: {telegram_id}")
+        logger.error(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
     print(f"User found: {user.username}, current referral_code: '{user.referral_code}'")
     logger.info(f"User found: {user.username}, current referral_code: '{user.referral_code}', type: {type(user.referral_code)}")
     
-    # بررسی و تولید کد رفرال اگر موجود نباشد
-    if not user.referral_code or str(user.referral_code).strip() == "" or str(user.referral_code) == "None":
-        print(f"User {telegram_id} needs a new referral code")
-        logger.info(f"User {telegram_id} needs a new referral code")
+    # بررسی و تولید کد رفرال اگر موجود نباشد یا نامعتبر باشد
+    if not validate_referral_code(user.referral_code):
+        print(f"User {telegram_id} needs a new referral code. Current code: '{user.referral_code}'")
+        logger.info(f"User {telegram_id} needs a new referral code. Current code: '{user.referral_code}'")
         
         try:
             # استفاده از تابع داخلی برای تولید کد یکتا
@@ -129,17 +140,22 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
                 logger.error(f"Failed to save temporary referral code: {commit_error}")
                 raise HTTPException(status_code=500, detail="Database error")
     
-    # اطمینان نهایی از وجود کد رفرال
-    if not user.referral_code or str(user.referral_code).strip() == "":
-        print("CRITICAL: User still has no referral code!")
-        logger.error(f"CRITICAL: User {telegram_id} still has no referral code after all attempts")
+    # اطمینان نهایی از وجود کد رفرال معتبر
+    if not validate_referral_code(user.referral_code):
+        print("CRITICAL: User still has no valid referral code!")
+        logger.error(f"CRITICAL: User {telegram_id} still has no valid referral code after all attempts")
+        
         # اجباری یک کد تنظیم کنید
         emergency_code = f"E{telegram_id}"[-8:].upper()
-        user.referral_code = emergency_code
-        db.commit()
-        db.refresh(user)
-        print(f"Emergency referral code set: {emergency_code}")
-        logger.info(f"Emergency referral code set: {emergency_code}")
+        try:
+            user.referral_code = emergency_code
+            db.commit()
+            db.refresh(user)
+            print(f"Emergency referral code set: {emergency_code}")
+            logger.info(f"Emergency referral code set: {emergency_code}")
+        except Exception as e:
+            logger.error(f"Failed to set emergency referral code: {e}")
+            raise HTTPException(status_code=500, detail="Critical database error")
     
     # دریافت کاربران دعوت شده
     try:
@@ -155,25 +171,53 @@ async def get_friends(request: Request, db: Session = Depends(get_db)):
     try:
         # بررسی مستقیم کد رفرال
         final_code = user.referral_code
-        if not final_code or str(final_code).strip() == "":
-            print("Final code is still empty!")
-            logger.error("Final code is still empty!")
-            final_code = f"EMERGENCY{telegram_id}"[-8:]
         
+        # validation نهایی کد رفرال
+        if not validate_referral_code(final_code):
+            print("Final code is still invalid!")
+            logger.error(f"Final code is still invalid: '{final_code}'")
+            final_code = f"EMERGENCY{telegram_id}"[-8:]
+            
+            # تلاش برای ذخیره کد اضطراری
+            try:
+                user.referral_code = final_code
+                db.commit()
+                db.refresh(user)
+                logger.warning(f"Set emergency final code: {final_code}")
+            except Exception as e:
+                logger.error(f"Failed to save emergency final code: {e}")
+        
+        # تولید لینک
         bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
         referral_link = f"https://t.me/{bot_username}?start={final_code}"
         
+        # validation نهایی لینک
+        if not referral_link.split("?start=")[1]:
+            logger.error("CRITICAL: Referral link has empty start parameter")
+            referral_link = f"https://t.me/{bot_username}?start=ERROR{telegram_id}"[-8:]
+        
         print(f"Final referral link: {referral_link}")
         logger.info(f"Final referral link for user {telegram_id}: {referral_link}")
+        
+        # بررسی نهایی صحت لینک
+        link_code = referral_link.split("?start=")[1]
+        if not link_code or len(link_code) < 3:
+            logger.error(f"Generated referral link has invalid code: '{link_code}'")
+            referral_link = f"https://t.me/{bot_username}?start=FALLBACK{int(time.time())}"[-8:]
+            logger.warning(f"Using fallback referral link: {referral_link}")
         
     except Exception as e:
         print(f"Error generating referral link: {e}")
         logger.error(f"Error generating referral link: {e}")
         bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
-        referral_link = f"https://t.me/{bot_username}?start=ERROR"
+        referral_link = f"https://t.me/{bot_username}?start=ERROR{int(time.time())}"[-8:]
+        logger.warning(f"Using error referral link: {referral_link}")
     
     print("===== FRIENDS ENDPOINT COMPLETED =====")
     logger.info("=== FRIENDS ENDPOINT COMPLETED ===")
+    
+    # log نهایی برای debugging
+    logger.info(f"Final output - User: {telegram_id}, Code: '{user.referral_code}', Link: '{referral_link}'")
     
     return templates.TemplateResponse("friends.html", {
         "request": request,
