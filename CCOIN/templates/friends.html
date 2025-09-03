@@ -14,7 +14,7 @@
   <div class="center-content">
     <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
     <h1>Invite Friends</h1>
-    <p class="subheading">Get 50 points for each friend</p>
+    <p class="subheading">Get 50 CCoin for each friend</p>
   </div>
 
   <div class="invite-list">
@@ -68,9 +68,8 @@
     const REFERRAL_LINK = document.body.getAttribute('data-referral-link');
     
     function inviteFriend() {
-      alert('Debug: Code=' + REFERRAL_CODE + ' Link=' + REFERRAL_LINK);
-      
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=") || REFERRAL_LINK === "") {
+      // شرط اصلاح شده - فقط بررسی می‌کند که exactly برابر "?start=" باشد
+      if (!REFERRAL_LINK || REFERRAL_LINK === "https://t.me/CTG_COIN_BOT?start=" || REFERRAL_LINK === "") {
         alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
         return;
       }
@@ -87,9 +86,8 @@
     }
     
     function copyLink() {
-      alert('Debug: Code=' + REFERRAL_CODE + ' Link=' + REFERRAL_LINK);
-      
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=") || REFERRAL_LINK === "") {
+      // همان شرط اصلاح شده
+      if (!REFERRAL_LINK || REFERRAL_LINK === "https://t.me/CTG_COIN_BOT?start=" || REFERRAL_LINK === "") {
         alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
         return;
       }
