@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body>
+<body data-referral-code="{{ referral_code }}" data-referral-link="{{ referral_link }}">
   <div class="center-content">
     <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
     <h1>Invite Friends</h1>
@@ -63,16 +63,15 @@
   </div>
 
   <script>
-    // متغیرهای سرور
-    const REFERRAL_LINK = "{{ referral_link }}";
-    const REFERRAL_CODE = "{{ referral_code }}";
+    // دریافت متغیرها از body data attributes
+    const REFERRAL_CODE = document.body.getAttribute('data-referral-code');
+    const REFERRAL_LINK = document.body.getAttribute('data-referral-link');
     
     function inviteFriend() {
-      console.log("Invite friend function called");
-      console.log("Referral link:", REFERRAL_LINK);
+      alert('Debug: Code=' + REFERRAL_CODE + ' Link=' + REFERRAL_LINK);
       
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
-        alert('Error: Invalid referral link!');
+      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=") || REFERRAL_LINK === "") {
+        alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
         return;
       }
       
@@ -80,7 +79,6 @@
         try {
           window.Telegram.WebApp.openLink(REFERRAL_LINK);
         } catch (e) {
-          console.log("Telegram WebApp error, using window.open");
           window.open(REFERRAL_LINK, '_blank');
         }
       } else {
@@ -89,10 +87,10 @@
     }
     
     function copyLink() {
-      console.log("Copy link function called");
+      alert('Debug: Code=' + REFERRAL_CODE + ' Link=' + REFERRAL_LINK);
       
-      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=")) {
-        alert('Error: Invalid referral link!');
+      if (!REFERRAL_LINK || REFERRAL_LINK.endsWith("?start=") || REFERRAL_LINK === "") {
+        alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
         return;
       }
       
