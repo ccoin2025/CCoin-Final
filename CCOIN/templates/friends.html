@@ -2,120 +2,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Friends</title>
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', path='css/friends.css') }}">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Friends</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/friends.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-referral-code="{{ referral_code }}" data-referral-link="{{ referral_link }}">
-  <div class="center-content">
-    <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
-    <h1>Invite Friends</h1>
-    <p class="subheading">Get 50 CCoin for each friend</p>
-  </div>
-
-  <div class="invite-list">
-    <h2>Your Invites</h2>
-    <div class="invite-box">
-      {% if invited_users %}
-        {% for user in invited_users %}
-          <div class="friend-item">
-            <div class="user-circle">{{ user.first_name[0] }}{{ user.last_name[0] }}</div>
-            <div class="telegram-id">@{{ user.telegram_id }}</div>
-            <div class="tokens">{{ user.tokens }} Tokens</div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p>No friends invited yet!</p>
-      {% endif %}
+    <div class="center-content">
+        <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
+        <h1>Invite Friends</h1>
+        <p class="subheading">Get 50 CCoin for each friend</p>
     </div>
-  </div>
 
-  <div class="buttons-container">
-    <button id="inviteButton" onclick="inviteFriend()">Invite Friends</button>
-    <button id="copyButton" onclick="copyLink()"><i class="fas fa-link"></i></button>
-  </div>
+    <div class="invite-list">
+        <h2>Your Invites</h2>
+        <div class="invite-box">
+            {% if invited_users %}
+                {% for user in invited_users %}
+                <div class="friend-item">
+                    <div class="user-circle">{{ user.first_name[0] }}{{ user.last_name[0] }}</div>
+                    <div class="telegram-id">@{{ user.telegram_id }}</div>
+                    <div class="tokens">{{ user.tokens }} Tokens</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No friends invited yet!</p>
+            {% endif %}
+        </div>
+    </div>
 
-  <div class="footer-icons">
-    <a href="/leaders" class="footer-btn">
-      <i class="fas fa-medal"></i>
-      <span>Leaders</span>
-    </a>
-    <a href="/friends" class="footer-btn active">
-      <i class="fas fa-user-friends"></i>
-      <span>Friends</span>
-    </a>
-    <a href="/home" class="footer-btn">
-      <i class="fas fa-home"></i>
-      <span>Home</span>
-    </a>
-    <a href="/earn" class="footer-btn">
-      <i class="fas fa-coins"></i>
-      <span>Earn</span>
-    </a>
-    <a href="/airdrop" class="footer-btn">
-      <i class="fas fa-rocket"></i>
-      <span>AirDrop</span>
-    </a>
-  </div>
+    <div class="buttons-container">
+        <button id="inviteButton">Invite Friends</button>
+        <button id="copyButton"><i class="fas fa-link"></i></button>
+    </div>
 
-  <script>
-    // دریافت متغیرها از body data attributes
-    const REFERRAL_CODE = document.body.getAttribute('data-referral-code');
-    const REFERRAL_LINK = document.body.getAttribute('data-referral-link');
-    
-    function inviteFriend() {
-      // شرط اصلاح شده - فقط بررسی می‌کند که exactly برابر "?start=" باشد
-      if (!REFERRAL_LINK || REFERRAL_LINK === "https://t.me/CTG_COIN_BOT?start=" || REFERRAL_LINK === "") {
-        alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
-        return;
-      }
-      
-      if (window.Telegram && window.Telegram.WebApp) {
-        try {
-          window.Telegram.WebApp.openLink(REFERRAL_LINK);
-        } catch (e) {
-          window.open(REFERRAL_LINK, '_blank');
+    <div class="footer-icons">
+        <a href="/leaders" class="footer-btn">
+            <i class="fas fa-medal"></i>
+            <span>Leaders</span>
+        </a>
+        <a href="/friends" class="footer-btn active">
+            <i class="fas fa-user-friends"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/home" class="footer-btn">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="footer-btn">
+            <i class="fas fa-coins"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/airdrop" class="footer-btn">
+            <i class="fas fa-rocket"></i>
+            <span>AirDrop</span>
+        </a>
+    </div>
+
+    <script>
+        // Initialize Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
         }
-      } else {
-        window.open(REFERRAL_LINK, '_blank');
-      }
-    }
-    
-    function copyLink() {
-      // همان شرط اصلاح شده
-      if (!REFERRAL_LINK || REFERRAL_LINK === "https://t.me/CTG_COIN_BOT?start=" || REFERRAL_LINK === "") {
-        alert('Error: Invalid referral link! Link=' + REFERRAL_LINK);
-        return;
-      }
-      
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
-          alert('Link copied!');
-        }).catch(() => {
-          alert('Copy failed!');
-        });
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = REFERRAL_LINK;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-          document.execCommand('copy');
-          alert('Link copied!');
-        } catch (err) {
-          alert('Copy failed!');
-        }
-        document.body.removeChild(textArea);
-      }
-    }
-    
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
-  </script>
-  <script src="{{ url_for('static', path='js/friends.js') }}"></script>
+    </script>
+    <script src="{{ url_for('static', path='js/friends.js') }}"></script>
 </body>
 </html>
