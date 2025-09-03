@@ -162,88 +162,50 @@
         async function connectWallet() {
             if (tasksCompleted.wallet) return;
             
-            console.log("connectWallet called");
+            console.log("connectWallet called for mobile");
             
-            // بررسی اینکه آیا در محیط Telegram WebApp هستیم
-            if (window.Telegram && window.Telegram.WebApp) {
-                console.log("Detected Telegram WebApp environment");
-                
-                // تلاش برای باز کردن Phantom با deep link
-                try {
-                    const currentUrl = window.location.href;
-                    const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&cluster=mainnet`;
-                    
-                    console.log("Opening Phantom with URL:", phantomUrl);
-                    
-                    // استفاده از Telegram WebApp برای باز کردن لینک
-                    if (window.Telegram.WebApp.openLink) {
-                        window.Telegram.WebApp.openLink(phantomUrl);
-                    } else {
-                        window.open(phantomUrl, '_blank');
-                    }
-                    
-                    // نمایش پیام راهنما
-                    alert("Phantom wallet is opening. Please connect your wallet and return to this app.");
-                    
-                    return;
-                } catch (error) {
-                    console.error("Error opening Phantom deep link:", error);
-                }
-            }
+            // تشخیص نوع موبایل
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
-            // تلاش برای اتصال مستقیم (برای مرورگر دسکتاپ)
-            if (window.solana) {
-                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                
+            console.log("isAndroid:", isAndroid);
+            console.log("isIOS:", isIOS);
+            
+            if (isAndroid) {
+                console.log("Opening Phantom for Android");
                 try {
-                    const resp = await window.solana.connect();
-                    const response = await fetch('/airdrop/connect_wallet', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-Token': csrfToken
-                        },
-                        body: JSON.stringify({ wallet: resp.publicKey.toString() })
-                    });
-
-                    const data = await response.json();
-                    if (response.ok) {
-                        markAsCompleted("connect-wallet");
-                        tasksCompleted.wallet = true;
-                        location.reload();
-                    } else {
-                        console.error("Wallet connection failed:", data.detail);
-                        alert(data.detail || "Wallet connection failed");
-                    }
+                    // تلاش اول: deep link ساده
+                    window.location.href = "phantom://";
+                    
+                    // بعد از 3 ثانیه اگر هنوز اینجا هستیم، به Play Store برویم
+                    setTimeout(() => {
+                        window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
+                    }, 3000);
+                    
                 } catch (error) {
-                    console.error("Solana connection error:", error);
-                    alert("Error connecting wallet: " + error.message);
+                    console.error("Error with Android deep link:", error);
+                    window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
                 }
+                
+            } else if (isIOS) {
+                console.log("Opening Phantom for iOS");
+                try {
+                    // تلاش اول: deep link ساده
+                    window.location.href = "phantom://";
+                    
+                    // بعد از 3 ثانیه اگر هنوز اینجا هستیم، به App Store برویم
+                    setTimeout(() => {
+                        window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
+                    }, 3000);
+                    
+                } catch (error) {
+                    console.error("Error with iOS deep link:", error);
+                    window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
+                }
+                
             } else {
-                // اگر Phantom در دسترس نیست، deep link را امتحان کنید
-                console.log("Solana object not available, trying deep link");
-                
-                const userAgent = navigator.userAgent.toLowerCase();
-                let phantomUrl;
-                
-                if (userAgent.includes("android")) {
-                    phantomUrl = `intent://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet#Intent;scheme=https;package=app.phantom;end`;
-                } else if (userAgent.includes("iphone") || userAgent.includes("ipad")) {
-                    phantomUrl = `phantom://v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet`;
-                } else {
-                    // Desktop fallback
-                    phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(window.location.href)}&cluster=mainnet`;
-                }
-                
-                console.log("Using platform-specific Phantom URL:", phantomUrl);
-                
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-                    window.Telegram.WebApp.openLink(phantomUrl);
-                } else {
-                    window.location.href = phantomUrl;
-                }
-                
-                alert("Opening Phantom wallet. Please connect and return to this app.");
+                // اگر دسکتاپ است، پیام نمایش دهید
+                alert("This app is designed for mobile devices only. Please use your smartphone.");
             }
         }
 
@@ -256,18 +218,6 @@
             if (tasksCompleted.invite) return;
             window.location.href = "/friends";
         }
-
-        function handleConnectWallet() {
-            console.log("handleConnectWallet called");
-            connectWallet();
-        }
-
-        // Listener برای detect کردن برگشت از Phantom
-        window.addEventListener('focus', function() {
-            console.log("Window focused - user might have returned from Phantom");
-            // بررسی مجدد وضعیت wallet
-            setTimeout(checkUserTasks, 1000);
-        });
 
         // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
