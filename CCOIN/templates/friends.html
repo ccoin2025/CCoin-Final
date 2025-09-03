@@ -1,4 +1,3 @@
-<!-- templates/friends.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,16 +10,17 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-referral-code="{{ referral_code }}" data-referral-link="{{ referral_link }}">
+    
+    <!-- Debug برای مشاهده مقادیر -->
+    <div style="display: none;">
+        <p>DEBUG - Referral Code: {{ referral_code }}</p>
+        <p>DEBUG - Referral Link: {{ referral_link }}</p>
+    </div>
+
     <div class="center-content">
         <img src="{{ url_for('static', path='images/invite.png') }}" class="logo" alt="invite Logo">
         <h1>Invite Friends</h1>
         <p class="subheading">Get 50 CCoin for each friend</p>
-        
-        <!-- اضافه کردن debug info در صورت نیاز -->
-        <div style="display: none;" id="debug-info">
-            <p>Referral Code: {{ referral_code }}</p>
-            <p>Referral Link: {{ referral_link }}</p>
-        </div>
     </div>
 
     <div class="invite-list">
@@ -69,16 +69,13 @@
     </div>
 
     <script>
-        // Initialize Telegram WebApp
-        console.log("Initializing Telegram WebApp");
+        // فقط Telegram WebApp را initialize می‌کنیم
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
-            console.log("Telegram WebApp initialized successfully");
-        } else {
-            console.log("Telegram WebApp not available");
         }
     </script>
+    
     <script src="{{ url_for('static', path='js/friends.js') }}"></script>
 </body>
 </html>
