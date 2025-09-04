@@ -135,6 +135,16 @@
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
         }
+
+        // بررسی وضعیت اتصال wallet در صفحه airdrop
+       document.addEventListener('DOMContentLoaded', () => {
+           const isWalletConnected = localStorage.getItem('phantomConnected');
+           if (isWalletConnected === 'true') {
+               markAsCompleted("connect-wallet");
+               tasksCompleted.wallet = true;
+                console.log("Wallet connection status loaded from localStorage");
+          }
+      });
     </script>
 
     <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
