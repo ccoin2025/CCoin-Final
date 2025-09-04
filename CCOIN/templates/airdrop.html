@@ -3,259 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Connect Phantom Wallet</title>
+    <meta name="csrf-token" content="{{ request.session.csrf_token }}">
+    <title>Airdrop</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Urbanist', sans-serif;
-        }
-        .wallet-connect-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-            text-align: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .wallet-box {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 350px;
-            width: 100%;
-        }
-        .phantom-logo {
-            width: 80px;
-            height: 80px;
-            background: #4C44FF;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 40px;
-            color: white;
-        }
-        h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 24px;
-            font-weight: 600;
-        }
-        p {
-            color: #666;
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
-        .instruction {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            color: #856404;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-size: 14px;
-            line-height: 1.5;
-            text-align: left;
-        }
-        .connect-btn {
-            background: #4C44FF;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 15px;
-            font-size: 16px;
-            font-weight: 600;
-            width: 100%;
-            margin: 10px 0;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .connect-btn:hover {
-            background: #3a35cc;
-            transform: translateY(-2px);
-        }
-        .external-btn {
-            background: #17a2b8;
-        }
-        .external-btn:hover {
-            background: #138496;
-        }
-        .back-btn {
-            background: #f5f5f5;
-            color: #333;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 12px;
-            font-size: 14px;
-            margin-top: 15px;
-            cursor: pointer;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .step-box {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-            text-align: left;
-            font-size: 14px;
-        }
-        .step-number {
-            background: #4C44FF;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 10px;
-            font-size: 12px;
-        }
-    </style>
 </head>
 <body>
-    <div class="wallet-connect-container">
-        <div class="wallet-box">
-            <div class="phantom-logo">
-                <i class="fas fa-wallet"></i>
+    <div class="container">
+        <div class="box">
+            <div class="countdown">
+                <span id="days">00</span>d :
+                <span id="hours">00</span>h :
+                <span id="minutes">00</span>m :
+                <span id="seconds">00</span>s
             </div>
-            <h2>Connect Phantom Wallet</h2>
-            <p>To connect your Phantom wallet, please follow these steps:</p>
-            
-            <div class="instruction">
-                <strong>⚠️ Important:</strong> Due to Telegram limitations, we need to use an external browser to connect safely.
+            <div class="token-value">
+                <p>1 CCoin = $ 0.02</p>
             </div>
-            
-            <div class="step-box">
-                <div style="margin-bottom: 10px;">
-                    <span class="step-number">1</span>
-                    <strong>Open External Browser</strong>
-                </div>
-                <div style="margin-left: 34px; color: #666;">
-                    Click the button below to open our wallet connection page in your default browser
-                </div>
+        </div>
+
+        <div class="airdrop-criteria">
+            <h2>Airdrop Criteria</h2>
+            <div id="task-completion" class="task-box">
+                <button onclick="handleTaskCompletion()" class="task-button">
+                    <span class="left-text">Tasks Completion</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
             </div>
-            
-            <div class="step-box">
-                <div style="margin-bottom: 10px;">
-                    <span class="step-number">2</span>
-                    <strong>Connect in Browser</strong>
-                </div>
-                <div style="margin-left: 34px; color: #666;">
-                    In the browser, click "Connect Phantom" and approve the connection
-                </div>
+            <div id="inviting-friends" class="task-box">
+                <button onclick="handleInviteCheck()" class="task-button">
+                    <span class="left-text">Inviting Friends</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
             </div>
-            
-            <div class="step-box">
-                <div style="margin-bottom: 10px;">
-                    <span class="step-number">3</span>
-                    <strong>Return to App</strong>
-                </div>
-                <div style="margin-left: 34px; color: #666;">
-                    Come back to this Telegram app and your wallet will be connected
-                </div>
+            <div id="connect-wallet" class="task-box">
+                <button onclick="connectWallet()" class="task-button">
+                    <span class="left-text">Connect Wallet</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
             </div>
-            
-            <button onclick="openExternalBrowser()" class="connect-btn external-btn">
-                <i class="fas fa-external-link-alt"></i>
-                Open in Browser
-            </button>
-            
-            <button onclick="checkConnection()" class="connect-btn">
-                <i class="fas fa-sync"></i>
-                Check Connection Status
-            </button>
-            
-            <button onclick="goBack()" class="back-btn">
-                <i class="fas fa-arrow-left"></i>
-                Back to Airdrop
-            </button>
+            <div id="pay-commission" class="task-box">
+                <button onclick="payCommission()" class="task-button">
+                    <span class="left-text">Pay for the Commission</span>
+                    <i class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="footer-icons">
+            <a href="/leaders" class="footer-btn">
+                <i class="fas fa-medal"></i>
+                <span>Leaders</span>
+            </a>
+            <a href="/friends" class="footer-btn">
+                <i class="fas fa-user-friends"></i>
+                <span>Friends</span>
+            </a>
+            <a href="/home" class="footer-btn">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="/earn" class="footer-btn">
+                <i class="fas fa-coins"></i>
+                <span>Earn</span>
+            </a>
+            <a href="/airdrop" class="footer-btn active">
+                <i class="fas fa-rocket"></i>
+                <span>AirDrop</span>
+            </a>
         </div>
     </div>
 
     <script>
+        const USER_ID = "{{ request.session.telegram_id }}";
+        console.log("airdrop.js loaded");
+
+        function markAsCompleted(id) {
+            const box = document.getElementById(id);
+            const icon = box.querySelector(".right-icon");
+            icon.classList.remove("fa-chevron-right");
+            icon.classList.add("fa-check");
+            box.classList.add("completed");
+        }
+
+        let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
+
+        async function checkUserTasks() {
+            try {
+                const response = await fetch(`/api/user-tasks/status?user_id=${USER_ID}`);
+                const data = await response.json();
+                if (data.task) markAsCompleted("task-completion");
+            } catch (err) {
+                console.error("Error checking tasks:", err);
+            }
+        }
+
+        // تابع اصلی connectWallet - فقط هدایت به صفحه wallet-connect
+        async function connectWallet() {
+            // بررسی موبایل بودن
+            const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
+            if (!isMobile) {
+                alert("This app is designed for mobile devices only. Please use your smartphone.");
+                return;
+            }
+
+            if (tasksCompleted.wallet) {
+                console.log("Wallet already connected");
+                return;
+            }
+
+            console.log("Redirecting to wallet connect page");
+            
+            // هدایت به صفحه اتصال کیف پول
+            window.location.href = "/wallet-connect";
+        }
+
+        function handleTaskCompletion() {
+            if (tasksCompleted.task) return;
+            window.location.href = "/earn";
+        }
+
+        function handleInviteCheck() {
+            if (tasksCompleted.invite) return;
+            window.location.href = "/friends";
+        }
+
+        function payCommission() {
+            console.log("Pay commission clicked");
+        }
+
         // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
         }
 
-        function openExternalBrowser() {
-            console.log("Opening external browser for wallet connection");
-            
-            // ایجاد URL کامل برای اتصال wallet
-            const connectUrl = window.location.origin + "/wallet-browser-connect?telegram_id=" + encodeURIComponent("{{ request.session.telegram_id }}");
-            
-            // باز کردن در مرورگر خارجی
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.openLink(connectUrl);
-            } else {
-                // fallback
-                window.open(connectUrl, '_blank');
-            }
-            
-            // نمایش پیام راهنما
-            alert("Please complete the wallet connection in the browser that just opened, then return to this app and click 'Check Connection Status'.");
-        }
-
-        function checkConnection() {
-            console.log("Checking wallet connection status");
-            
-            // بررسی وضعیت اتصال از سرور
-            fetch('/api/wallet/status?telegram_id=' + encodeURIComponent("{{ request.session.telegram_id }}"))
-                .then(response => response.json())
-                .then(data => {
-                    if (data.connected) {
-                        alert("✅ Wallet connected successfully!\nAddress: " + data.address);
-                        
-                        // ذخیره در localStorage
-                        localStorage.setItem('phantomConnected', 'true');
-                        localStorage.setItem('walletAddress', data.address);
-                        
-                        // هدایت به airdrop
-                        setTimeout(() => {
-                            window.location.href = "/airdrop";
-                        }, 1500);
-                    } else {
-                        alert("❌ Wallet not connected yet.\nPlease complete the connection in the browser first.");
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking connection:', error);
-                    alert("Error checking connection. Please try again.");
-                });
-        }
-
-        function goBack() {
-            window.location.href = "/airdrop";
-        }
-
-        // بررسی خودکار وضعیت هنگام ورود به صفحه
+        // بررسی وضعیت اتصال wallet در صفحه airdrop
         document.addEventListener('DOMContentLoaded', () => {
-            const isConnected = localStorage.getItem('phantomConnected');
-            if (isConnected === 'true') {
-                setTimeout(checkConnection, 1000);
+            checkUserTasks();
+            
+            // بررسی localStorage برای وضعیت wallet
+            const isWalletConnected = localStorage.getItem('phantomConnected');
+            if (isWalletConnected === 'true') {
+                markAsCompleted("connect-wallet");
+                tasksCompleted.wallet = true;
+                console.log("Wallet connection status loaded from localStorage");
             }
         });
     </script>
+
+    <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
