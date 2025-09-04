@@ -121,33 +121,29 @@
             if (isAndroid) {
                 console.log("Opening Phantom for Android");
                 try {
-                    // Deep link for Android
-                    const appUrl = "phantom://browse/" + encodeURIComponent(window.location.origin);
-                    window.location.href = appUrl;
+                    // اصلاح شده: استفاده از intent برای Android
+                    const intentUrl = "intent://phantom.app#Intent;scheme=https;package=app.phantom;end";
+                    window.location.href = intentUrl;
                     
                     setTimeout(() => {
-                        if (!document.hidden) {
-                            window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
-                        }
-                    }, 2500);
+                        window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
+                    }, 1500);
                 } catch (error) {
-                    console.error("Error with Android deep link:", error);
+                    console.error("Error with Android intent:", error);
                     window.location.href = "https://play.google.com/store/apps/details?id=app.phantom";
                 }
             } else if (isIOS) {
                 console.log("Opening Phantom for iOS");
                 try {
-                    // Deep link for iOS
-                    const appUrl = "phantom://browse/" + encodeURIComponent(window.location.origin);
-                    window.location.href = appUrl;
+                    // اصلاح شده: استفاده از universal link برای iOS
+                    const universalLink = "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.origin);
+                    window.location.href = universalLink;
                     
                     setTimeout(() => {
-                        if (!document.hidden) {
-                            window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
-                        }
-                    }, 2500);
+                        window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
+                    }, 1500);
                 } catch (error) {
-                    console.error("Error with iOS deep link:", error);
+                    console.error("Error with iOS universal link:", error);
                     window.location.href = "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977";
                 }
             } else {
