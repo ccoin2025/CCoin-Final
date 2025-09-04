@@ -15,11 +15,7 @@ async def wallet_connect_page(request: Request):
 @router.get("/wallet-callback")
 async def wallet_callback(request: Request, db: Session = Depends(get_db)):
     """صفحه callback بعد از اتصال به wallet"""
-    # اینجا می‌توانید منطق ذخیره اطلاعات wallet را پیاده‌سازی کنید
     telegram_id = request.session.get("telegram_id")
-    
-    # منطق ذخیره wallet address
-    # ...
     
     # هدایت به صفحه airdrop
     return RedirectResponse(url="/airdrop")
