@@ -110,6 +110,17 @@
         .back-btn:hover {
             background: #e9ecef;
         }
+        .status-message {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -122,20 +133,29 @@
             <p>To continue with CCoin airdrop, you need to connect your Phantom wallet.</p>
             
             <div class="instruction">
-                <strong>Instructions:</strong><br>
-                1. Click "Open Phantom" below<br>
-                2. If you don't have Phantom, download it first<br>
-                3. Complete the connection in Phantom app
+                <strong>Step by step:</strong><br>
+                1. First, make sure Phantom wallet is installed<br>
+                2. Click "Try Open Phantom" to test<br>
+                3. If it doesn't work, download Phantom first
             </div>
             
-            <button onclick="openPhantomDirect()" class="connect-btn">
-                <i class="fas fa-external-link-alt"></i>
-                Open Phantom App
+            <div id="status-message" class="status-message hidden">
+                Checking for Phantom wallet...
+            </div>
+            
+            <button onclick="tryOpenPhantom()" class="connect-btn" id="open-btn">
+                <i class="fas fa-rocket"></i>
+                Try Open Phantom
             </button>
             
             <button onclick="downloadPhantom()" class="connect-btn download-btn">
                 <i class="fas fa-download"></i>
-                Download Phantom First
+                Download Phantom
+            </button>
+            
+            <button onclick="simulateConnection()" class="connect-btn" style="background: #ff9800;">
+                <i class="fas fa-check"></i>
+                Simulate Connection (Test)
             </button>
             
             <button onclick="goBack()" class="back-btn">
@@ -152,11 +172,93 @@
             window.Telegram.WebApp.expand();
         }
 
-        function openPhantomDirect() {
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        function tryOpenPhantom() {
             const isAndroid = /android/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
-            console.log("Opening Phantom app...");
+            showStatus("Attempting to open Phantom app...", "info");
+            
+            console.log("Device detection:", { isAndroid, isIOS });
+            
+            if (isAndroid) {
+                // تلاش با روش‌های مختلف برای Android
+                attemptAndroidOpen();
+            } else if (isIOS) {
+                // تلاش با روش‌های مختلف برای iOS
+                attemptIOSOpen();
+            } else {
+                showStatus("Please use Android or iOS device", "warning");
+            }
+        }
+
+        function attemptAndroidOpen() {
+            console.log("Attempting Android open methods...");
+            
+            // روش 1: Intent URL
+            try {
+                const intentUrl = "intent://browse#Intent;scheme=phantom;package=app.phantom;end";
+                window.location.href = intentUrl;
+                
+                setTimeout(() => {
+                    showStatus("If Phantom didn't open, please download it first", "warning");
+                    console.log("Intent method may have failed");
+                }, 2000);
+                
+            } catch (error) {
+                console.error("Intent method failed:", error);
+                
+                // روش 2: مستقیم به Play Store
+                setTimeout(() => {
+                    showStatus("Opening Play Store to download Phantom...", "info");
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
+                    }
+                }, 1000);
+            }
+        }
+
+        function attemptIOSOpen() {
+            console.log("Attempting iOS open methods...");
+            
+            // روش 1: Custom URL Scheme
+            try {
+                const customUrl = "phantom://browse";
+                window.location.href = customUrl;
+                
+                setTimeout(() => {
+                    showStatus("If Phantom didn't open, please download it first", "warning");
+                    console.log("Custom URL method may have failed");
+                }, 2000);
+                
+            } catch (error) {
+                console.error("Custom URL method failed:", error);
+                
+                // روش 2: مستقیم به App Store
+                setTimeout(() => {
+                    showStatus("Opening App Store to download Phantom...", "info");
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
+                    }
+                }, 1000);
+            }
+        }
+
+        function downloadPhantom() {
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            showStatus("Opening app store...", "info");
             
             if (window.Telegram && window.Telegram.WebApp) {
                 if (isAndroid) {
@@ -167,19 +269,16 @@
             }
         }
 
-        function downloadPhantom() {
-            const isAndroid = /android/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        // تابع شبیه‌سازی اتصال برای تست
+        function simulateConnection() {
+            showStatus("Simulating wallet connection...", "success");
             
-            console.log("Downloading Phantom...");
-            
-            if (window.Telegram && window.Telegram.WebApp) {
-                if (isAndroid) {
-                    window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
-                } else if (isIOS) {
-                    window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
-                }
-            }
+            setTimeout(() => {
+                showStatus("Connection successful! Redirecting...", "success");
+                setTimeout(() => {
+                    window.location.href = "/airdrop";
+                }, 1500);
+            }, 2000);
         }
 
         function goBack() {
