@@ -31,6 +31,8 @@ from urllib.parse import parse_qs
 import hmac
 import hashlib
 from dotenv import load_dotenv
+from CCOIN.routers import wallet
+
 
 load_dotenv()
 
@@ -265,6 +267,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Rate limit exceeded. Please try again later."}
     )
 
+app.include_router(wallet.router)
 app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
