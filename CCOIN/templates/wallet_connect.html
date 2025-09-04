@@ -67,6 +67,9 @@
             cursor: pointer;
             width: 100%;
         }
+        .hidden-link {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -92,6 +95,9 @@
         </div>
     </div>
 
+    <!-- Hidden iframe for testing app availability -->
+    <iframe id="test-frame" class="hidden-link"></iframe>
+
     <script>
         // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
@@ -103,17 +109,57 @@
             const isAndroid = /android/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
+            console.log("Attempting to open Phantom wallet", { isAndroid, isIOS });
+            
             if (isAndroid) {
-                // تلاش برای باز کردن اپ Phantom اگر نصب است
-                const phantomUrl = "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.origin + "/wallet-callback");
-                window.location.href = phantomUrl;
+                tryOpenApp(
+                    "intent://phantom.app#Intent;scheme=https;package=app.phantom;end",
+                    "https://play.google.com/store/apps/details?id=app.phantom"
+                );
             } else if (isIOS) {
-                // برای iOS
-                const phantomUrl = "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.origin + "/wallet-callback");
-                window.location.href = phantomUrl;
+                tryOpenApp(
+                    "phantom://", 
+                    "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977"
+                );
             } else {
                 alert("Please use this feature on your mobile device.");
             }
+        }
+
+        function tryOpenApp(appUrl, fallbackUrl) {
+            console.log("Trying to open app:", appUrl);
+            
+            // Create a hidden iframe to test the deep link
+            const iframe = document.getElementById('test-frame');
+            const startTime = Date.now();
+            
+            // Set up blur event listener (indicates app was opened)
+            let appOpened = false;
+            
+            const blurHandler = () => {
+                appOpened = true;
+                console.log("App opened successfully");
+                window.removeEventListener('blur', blurHandler);
+            };
+            
+            window.addEventListener('blur', blurHandler);
+            
+            // Try to open the app
+            iframe.src = appUrl;
+            
+            // Fallback after delay
+            setTimeout(() => {
+                window.removeEventListener('blur', blurHandler);
+                
+                if (!appOpened && !document.hidden) {
+                    console.log("App not found, opening fallback:", fallbackUrl);
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.openLink(fallbackUrl);
+                    } else {
+                        window.open(fallbackUrl, '_blank');
+                    }
+                }
+            }, 2000);
         }
 
         function downloadPhantom() {
@@ -130,11 +176,7 @@
         }
 
         function goBack() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.close();
-            } else {
-                window.history.back();
-            }
+            window.location.href = "/airdrop";
         }
     </script>
 </body>
