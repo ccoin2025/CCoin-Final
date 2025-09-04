@@ -110,37 +110,10 @@
 
             if (tasksCompleted.wallet) return;
 
-            console.log("connectWallet called for mobile");
-
-            const isAndroid = /android/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-            console.log("isAndroid:", isAndroid);
-            console.log("isIOS:", isIOS);
-
-            // استفاده از Telegram WebApp برای باز کردن لینک خارجی
-            if (window.Telegram && window.Telegram.WebApp) {
-                if (isAndroid) {
-                    console.log("Opening Phantom via Telegram WebApp for Android");
-                    window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
-                } else if (isIOS) {
-                    console.log("Opening Phantom via Telegram WebApp for iOS");
-                    window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
-                } else {
-                    alert("Unknown platform. Please use Android or iOS device.");
-                }
-            } else {
-                // Fallback برای حالتی که Telegram WebApp در دسترس نیست
-                if (isAndroid) {
-                    console.log("Fallback: Opening Play Store");
-                    window.open("https://play.google.com/store/apps/details?id=app.phantom", "_blank");
-                } else if (isIOS) {
-                    console.log("Fallback: Opening App Store");
-                    window.open("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977", "_blank");
-                } else {
-                    alert("Unknown platform. Please use Android or iOS device.");
-                }
-            }
+            console.log("connectWallet called - redirecting to wallet connect page");
+            
+            // هدایت به صفحه اتصال کیف پول
+            window.location.href = "/wallet-connect";
         }
 
         function handleTaskCompletion() {
