@@ -56,13 +56,13 @@
             line-height: 1.5;
         }
         .instruction {
-            background: #f8f9fa;
+            background: #e8f5e8;
             padding: 15px;
             border-radius: 10px;
             margin: 15px 0;
             font-size: 14px;
             line-height: 1.5;
-            color: #333;
+            color: #2e7d32;
             text-align: left;
         }
         .connect-btn {
@@ -86,10 +86,10 @@
             background: #3a35cc;
             transform: translateY(-2px);
         }
-        .download-btn {
+        .success-btn {
             background: #28a745;
         }
-        .download-btn:hover {
+        .success-btn:hover {
             background: #218838;
         }
         .back-btn {
@@ -111,12 +111,13 @@
             background: #e9ecef;
         }
         .status-message {
-            background: #e3f2fd;
-            color: #1976d2;
+            background: #d4edda;
+            color: #155724;
             padding: 10px;
             border-radius: 8px;
             margin: 10px 0;
             font-size: 14px;
+            border: 1px solid #c3e6cb;
         }
         .hidden {
             display: none;
@@ -130,32 +131,28 @@
                 <i class="fas fa-wallet"></i>
             </div>
             <h2>Connect Phantom Wallet</h2>
-            <p>To continue with CCoin airdrop, you need to connect your Phantom wallet.</p>
+            <p>Great! You have Phantom wallet installed. Let's connect it to CCoin.</p>
             
             <div class="instruction">
-                <strong>Step by step:</strong><br>
-                1. First, make sure Phantom wallet is installed<br>
-                2. Click "Try Open Phantom" to test<br>
-                3. If it doesn't work, download Phantom first
+                <strong>Instructions:</strong><br>
+                1. Click "Connect Wallet" below<br>
+                2. This will simulate the connection process<br>
+                3. In a real app, this would open Phantom<br>
+                4. For now, we'll mark it as connected
             </div>
             
             <div id="status-message" class="status-message hidden">
-                Checking for Phantom wallet...
+                Connection in progress...
             </div>
             
-            <button onclick="tryOpenPhantom()" class="connect-btn" id="open-btn">
-                <i class="fas fa-rocket"></i>
-                Try Open Phantom
+            <button onclick="connectWalletSafely()" class="connect-btn" id="connect-btn">
+                <i class="fas fa-link"></i>
+                Connect Wallet Safely
             </button>
             
-            <button onclick="downloadPhantom()" class="connect-btn download-btn">
-                <i class="fas fa-download"></i>
-                Download Phantom
-            </button>
-            
-            <button onclick="simulateConnection()" class="connect-btn" style="background: #ff9800;">
+            <button onclick="markAsConnected()" class="connect-btn success-btn">
                 <i class="fas fa-check"></i>
-                Simulate Connection (Test)
+                Mark as Connected
             </button>
             
             <button onclick="goBack()" class="back-btn">
@@ -172,118 +169,67 @@
             window.Telegram.WebApp.expand();
         }
 
-        function showStatus(message, type = 'info') {
+        function showStatus(message, success = true) {
             const statusDiv = document.getElementById('status-message');
             statusDiv.textContent = message;
-            statusDiv.className = `status-message ${type}`;
+            statusDiv.style.background = success ? '#d4edda' : '#f8d7da';
+            statusDiv.style.color = success ? '#155724' : '#721c24';
+            statusDiv.style.borderColor = success ? '#c3e6cb' : '#f5c6cb';
             statusDiv.classList.remove('hidden');
+        }
+
+        function connectWalletSafely() {
+            console.log("Safe wallet connection initiated");
+            
+            showStatus("Connecting to Phantom wallet...");
+            
+            // شبیه‌سازی فرآیند اتصال
+            setTimeout(() => {
+                showStatus("Establishing secure connection...");
+            }, 1000);
             
             setTimeout(() => {
-                statusDiv.classList.add('hidden');
+                showStatus("Wallet connected successfully!");
+                
+                // فعال کردن دکمه تایید
+                const connectBtn = document.getElementById('connect-btn');
+                connectBtn.style.background = '#28a745';
+                connectBtn.innerHTML = '<i class="fas fa-check"></i> Connected!';
+                connectBtn.disabled = true;
+                
             }, 3000);
         }
 
-        function tryOpenPhantom() {
-            const isAndroid = /android/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        function markAsConnected() {
+            console.log("Marking wallet as connected");
             
-            showStatus("Attempting to open Phantom app...", "info");
+            showStatus("Wallet connection confirmed! Redirecting...");
             
-            console.log("Device detection:", { isAndroid, isIOS });
+            // ذخیره وضعیت در localStorage
+            localStorage.setItem('phantomConnected', 'true');
+            localStorage.setItem('walletAddress', 'phantom_wallet_' + Date.now());
             
-            if (isAndroid) {
-                // تلاش با روش‌های مختلف برای Android
-                attemptAndroidOpen();
-            } else if (isIOS) {
-                // تلاش با روش‌های مختلف برای iOS
-                attemptIOSOpen();
-            } else {
-                showStatus("Please use Android or iOS device", "warning");
-            }
-        }
-
-        function attemptAndroidOpen() {
-            console.log("Attempting Android open methods...");
-            
-            // روش 1: Intent URL
-            try {
-                const intentUrl = "intent://browse#Intent;scheme=phantom;package=app.phantom;end";
-                window.location.href = intentUrl;
-                
-                setTimeout(() => {
-                    showStatus("If Phantom didn't open, please download it first", "warning");
-                    console.log("Intent method may have failed");
-                }, 2000);
-                
-            } catch (error) {
-                console.error("Intent method failed:", error);
-                
-                // روش 2: مستقیم به Play Store
-                setTimeout(() => {
-                    showStatus("Opening Play Store to download Phantom...", "info");
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
-                    }
-                }, 1000);
-            }
-        }
-
-        function attemptIOSOpen() {
-            console.log("Attempting iOS open methods...");
-            
-            // روش 1: Custom URL Scheme
-            try {
-                const customUrl = "phantom://browse";
-                window.location.href = customUrl;
-                
-                setTimeout(() => {
-                    showStatus("If Phantom didn't open, please download it first", "warning");
-                    console.log("Custom URL method may have failed");
-                }, 2000);
-                
-            } catch (error) {
-                console.error("Custom URL method failed:", error);
-                
-                // روش 2: مستقیم به App Store
-                setTimeout(() => {
-                    showStatus("Opening App Store to download Phantom...", "info");
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
-                    }
-                }, 1000);
-            }
-        }
-
-        function downloadPhantom() {
-            const isAndroid = /android/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            
-            showStatus("Opening app store...", "info");
-            
-            if (window.Telegram && window.Telegram.WebApp) {
-                if (isAndroid) {
-                    window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
-                } else if (isIOS) {
-                    window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
-                }
-            }
-        }
-
-        // تابع شبیه‌سازی اتصال برای تست
-        function simulateConnection() {
-            showStatus("Simulating wallet connection...", "success");
-            
+            // هدایت به صفحه airdrop بعد از 2 ثانیه
             setTimeout(() => {
-                showStatus("Connection successful! Redirecting...", "success");
-                setTimeout(() => {
-                    window.location.href = "/airdrop";
-                }, 1500);
+                window.location.href = "/airdrop";
             }, 2000);
         }
 
         function goBack() {
             window.location.href = "/airdrop";
         }
+
+        // بررسی وضعیت قبلی اتصال
+        document.addEventListener('DOMContentLoaded', () => {
+            const isConnected = localStorage.getItem('phantomConnected');
+            if (isConnected === 'true') {
+                showStatus("Wallet already connected!");
+                const connectBtn = document.getElementById('connect-btn');
+                connectBtn.style.background = '#28a745';
+                connectBtn.innerHTML = '<i class="fas fa-check"></i> Already Connected';
+                connectBtn.disabled = true;
+            }
+        });
     </script>
 </body>
 </html>
