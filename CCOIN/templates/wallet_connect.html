@@ -56,13 +56,14 @@
             line-height: 1.5;
         }
         .instruction {
-            background: #e8f5e8;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
             padding: 15px;
             border-radius: 10px;
             margin: 15px 0;
             font-size: 14px;
             line-height: 1.5;
-            color: #2e7d32;
             text-align: left;
         }
         .connect-btn {
@@ -86,11 +87,11 @@
             background: #3a35cc;
             transform: translateY(-2px);
         }
-        .success-btn {
-            background: #28a745;
+        .external-btn {
+            background: #17a2b8;
         }
-        .success-btn:hover {
-            background: #218838;
+        .external-btn:hover {
+            background: #138496;
         }
         .back-btn {
             background: #f5f5f5;
@@ -107,20 +108,47 @@
             justify-content: center;
             gap: 8px;
         }
-        .back-btn:hover {
-            background: #e9ecef;
+        .step-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
+            font-size: 14px;
+        }
+        .step-number {
+            background: #4C44FF;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 12px;
         }
         .status-message {
-            background: #d4edda;
-            color: #155724;
+            background: #d1ecf1;
+            color: #0c5460;
             padding: 10px;
             border-radius: 8px;
             margin: 10px 0;
             font-size: 14px;
-            border: 1px solid #c3e6cb;
-        }
-        .hidden {
             display: none;
+        }
+        .status-message.show {
+            display: block;
+        }
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
         }
     </style>
 </head>
@@ -131,28 +159,54 @@
                 <i class="fas fa-wallet"></i>
             </div>
             <h2>Connect Phantom Wallet</h2>
-            <p>Great! You have Phantom wallet installed. Let's connect it to CCoin.</p>
+            <p>To connect your Phantom wallet, please follow these steps:</p>
             
             <div class="instruction">
-                <strong>Instructions:</strong><br>
-                1. Click "Connect Wallet" below<br>
-                2. This will simulate the connection process<br>
-                3. In a real app, this would open Phantom<br>
-                4. For now, we'll mark it as connected
+                <strong>⚠️ Important:</strong> Due to Telegram limitations, we need to use an external browser to connect safely.
             </div>
             
-            <div id="status-message" class="status-message hidden">
-                Connection in progress...
+            <div class="step-box">
+                <div style="margin-bottom: 10px;">
+                    <span class="step-number">1</span>
+                    <strong>Open External Browser</strong>
+                </div>
+                <div style="margin-left: 34px; color: #666;">
+                    Click the button below to open our wallet connection page in your default browser
+                </div>
             </div>
             
-            <button onclick="connectWalletSafely()" class="connect-btn" id="connect-btn">
-                <i class="fas fa-link"></i>
-                Connect Wallet Safely
+            <div class="step-box">
+                <div style="margin-bottom: 10px;">
+                    <span class="step-number">2</span>
+                    <strong>Connect in Browser</strong>
+                </div>
+                <div style="margin-left: 34px; color: #666;">
+                    In the browser, click "Connect Phantom" and approve the connection
+                </div>
+            </div>
+            
+            <div class="step-box">
+                <div style="margin-bottom: 10px;">
+                    <span class="step-number">3</span>
+                    <strong>Return to App</strong>
+                </div>
+                <div style="margin-left: 34px; color: #666;">
+                    Come back to this Telegram app and your wallet will be connected
+                </div>
+            </div>
+            
+            <div id="status-message" class="status-message">
+                Ready to connect...
+            </div>
+            
+            <button onclick="openExternalBrowser()" class="connect-btn external-btn">
+                <i class="fas fa-external-link-alt"></i>
+                Open in Browser
             </button>
             
-            <button onclick="markAsConnected()" class="connect-btn success-btn">
-                <i class="fas fa-check"></i>
-                Mark as Connected
+            <button onclick="checkConnection()" class="connect-btn">
+                <i class="fas fa-sync"></i>
+                Check Connection Status
             </button>
             
             <button onclick="goBack()" class="back-btn">
@@ -169,65 +223,78 @@
             window.Telegram.WebApp.expand();
         }
 
-        function showStatus(message, success = true) {
+        function showStatus(message, type = 'info') {
             const statusDiv = document.getElementById('status-message');
             statusDiv.textContent = message;
-            statusDiv.style.background = success ? '#d4edda' : '#f8d7da';
-            statusDiv.style.color = success ? '#155724' : '#721c24';
-            statusDiv.style.borderColor = success ? '#c3e6cb' : '#f5c6cb';
-            statusDiv.classList.remove('hidden');
+            statusDiv.className = `status-message show ${type}`;
+            
+            setTimeout(() => {
+                statusDiv.classList.remove('show');
+            }, 4000);
         }
 
-        function connectWalletSafely() {
-            console.log("Safe wallet connection initiated");
+        function openExternalBrowser() {
+            console.log("Opening external browser for wallet connection");
             
-            showStatus("Connecting to Phantom wallet...");
+            // ایجاد URL کامل برای اتصال wallet
+            const connectUrl = window.location.origin + "/wallet-browser-connect?telegram_id=" + encodeURIComponent("{{ request.session.telegram_id }}");
             
-            // شبیه‌سازی فرآیند اتصال
+            showStatus("Opening external browser...", "info");
+            
+            // باز کردن در مرورگر خارجی
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openLink(connectUrl);
+            } else {
+                // fallback
+                window.open(connectUrl, '_blank');
+            }
+            
+            // نمایش پیام راهنما
             setTimeout(() => {
-                showStatus("Establishing secure connection...");
-            }, 1000);
-            
-            setTimeout(() => {
-                showStatus("Wallet connected successfully!");
-                
-                // فعال کردن دکمه تایید
-                const connectBtn = document.getElementById('connect-btn');
-                connectBtn.style.background = '#28a745';
-                connectBtn.innerHTML = '<i class="fas fa-check"></i> Connected!';
-                connectBtn.disabled = true;
-                
-            }, 3000);
-        }
-
-        function markAsConnected() {
-            console.log("Marking wallet as connected");
-            
-            showStatus("Wallet connection confirmed! Redirecting...");
-            
-            // ذخیره وضعیت در localStorage
-            localStorage.setItem('phantomConnected', 'true');
-            localStorage.setItem('walletAddress', 'phantom_wallet_' + Date.now());
-            
-            // هدایت به صفحه airdrop بعد از 2 ثانیه
-            setTimeout(() => {
-                window.location.href = "/airdrop";
+                showStatus("Please complete the wallet connection in the browser, then return here and click 'Check Connection Status'.", "info");
             }, 2000);
+        }
+
+        function checkConnection() {
+            console.log("Checking wallet connection status");
+            
+            showStatus("Checking connection status...", "info");
+            
+            // بررسی وضعیت اتصال از سرور
+            fetch('/api/wallet/status?telegram_id=' + encodeURIComponent("{{ request.session.telegram_id }}"))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.connected) {
+                        showStatus("✅ Wallet connected successfully! Address: " + data.address, "success");
+                        
+                        // ذخیره در localStorage
+                        localStorage.setItem('phantomConnected', 'true');
+                        localStorage.setItem('walletAddress', data.address);
+                        
+                        // هدایت به airdrop بعد از 2 ثانیه
+                        setTimeout(() => {
+                            window.location.href = "/airdrop";
+                        }, 2000);
+                    } else {
+                        showStatus("❌ Wallet not connected yet. Please complete the connection in the browser first.", "error");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking connection:', error);
+                    showStatus("Error checking connection. Please try again.", "error");
+                });
         }
 
         function goBack() {
             window.location.href = "/airdrop";
         }
 
-        // بررسی وضعیت قبلی اتصال
+        // بررسی خودکار وضعیت هنگام ورود به صفحه
         document.addEventListener('DOMContentLoaded', () => {
             const isConnected = localStorage.getItem('phantomConnected');
             if (isConnected === 'true') {
-                showStatus("Wallet already connected!");
-                const connectBtn = document.getElementById('connect-btn');
-                connectBtn.style.background = '#28a745';
-                connectBtn.innerHTML = '<i class="fas fa-check"></i> Already Connected';
-                connectBtn.disabled = true;
+                showStatus("Checking your previous connection...", "info");
+                setTimeout(checkConnection, 1000);
             }
         });
     </script>
