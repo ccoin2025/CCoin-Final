@@ -9,6 +9,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Urbanist', sans-serif;
+        }
         .wallet-connect-container {
             display: flex;
             flex-direction: column;
@@ -39,6 +44,27 @@
             font-size: 40px;
             color: white;
         }
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .instruction {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #333;
+            text-align: left;
+        }
         .connect-btn {
             background: #4C44FF;
             color: white;
@@ -51,10 +77,20 @@
             margin: 10px 0;
             cursor: pointer;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .connect-btn:hover {
             background: #3a35cc;
             transform: translateY(-2px);
+        }
+        .download-btn {
+            background: #28a745;
+        }
+        .download-btn:hover {
+            background: #218838;
         }
         .back-btn {
             background: #f5f5f5;
@@ -66,14 +102,13 @@
             margin-top: 15px;
             cursor: pointer;
             width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        .instruction {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-size: 14px;
-            line-height: 1.5;
+        .back-btn:hover {
+            background: #e9ecef;
         }
     </style>
 </head>
@@ -94,15 +129,18 @@
             </div>
             
             <button onclick="openPhantomDirect()" class="connect-btn">
-                <i class="fas fa-external-link-alt"></i> Open Phantom App
+                <i class="fas fa-external-link-alt"></i>
+                Open Phantom App
             </button>
             
-            <button onclick="downloadPhantom()" class="connect-btn" style="background: #28a745;">
-                <i class="fas fa-download"></i> Download Phantom First
+            <button onclick="downloadPhantom()" class="connect-btn download-btn">
+                <i class="fas fa-download"></i>
+                Download Phantom First
             </button>
             
             <button onclick="goBack()" class="back-btn">
-                <i class="fas fa-arrow-left"></i> Back to Airdrop
+                <i class="fas fa-arrow-left"></i>
+                Back to Airdrop
             </button>
         </div>
     </div>
@@ -118,18 +156,13 @@
             const isAndroid = /android/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
-            // ساده‌ترین روش: مستقیماً به صفحه دانلود هدایت کن
+            console.log("Opening Phantom app...");
+            
             if (window.Telegram && window.Telegram.WebApp) {
                 if (isAndroid) {
-                    // ابتدا سعی کن اپ را باز کنی، اگر نشد به Play Store برو
-                    setTimeout(() => {
-                        window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
-                    }, 100);
+                    window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
                 } else if (isIOS) {
-                    // ابتدا سعی کن اپ را باز کنی، اگر نشد به App Store برو  
-                    setTimeout(() => {
-                        window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
-                    }, 100);
+                    window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
                 }
             }
         }
@@ -137,6 +170,8 @@
         function downloadPhantom() {
             const isAndroid = /android/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            console.log("Downloading Phantom...");
             
             if (window.Telegram && window.Telegram.WebApp) {
                 if (isAndroid) {
