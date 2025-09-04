@@ -67,8 +67,13 @@
             cursor: pointer;
             width: 100%;
         }
-        .hidden-link {
-            display: none;
+        .instruction {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-size: 14px;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -81,12 +86,19 @@
             <h2>Connect Phantom Wallet</h2>
             <p>To continue with CCoin airdrop, you need to connect your Phantom wallet.</p>
             
-            <button onclick="openPhantomWallet()" class="connect-btn">
-                <i class="fas fa-external-link-alt"></i> Open Phantom Wallet
+            <div class="instruction">
+                <strong>Instructions:</strong><br>
+                1. Click "Open Phantom" below<br>
+                2. If you don't have Phantom, download it first<br>
+                3. Complete the connection in Phantom app
+            </div>
+            
+            <button onclick="openPhantomDirect()" class="connect-btn">
+                <i class="fas fa-external-link-alt"></i> Open Phantom App
             </button>
             
             <button onclick="downloadPhantom()" class="connect-btn" style="background: #28a745;">
-                <i class="fas fa-download"></i> Download Phantom
+                <i class="fas fa-download"></i> Download Phantom First
             </button>
             
             <button onclick="goBack()" class="back-btn">
@@ -95,9 +107,6 @@
         </div>
     </div>
 
-    <!-- Hidden iframe for testing app availability -->
-    <iframe id="test-frame" class="hidden-link"></iframe>
-
     <script>
         // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
@@ -105,61 +114,24 @@
             window.Telegram.WebApp.expand();
         }
 
-        function openPhantomWallet() {
+        function openPhantomDirect() {
             const isAndroid = /android/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
-            console.log("Attempting to open Phantom wallet", { isAndroid, isIOS });
-            
-            if (isAndroid) {
-                tryOpenApp(
-                    "intent://phantom.app#Intent;scheme=https;package=app.phantom;end",
-                    "https://play.google.com/store/apps/details?id=app.phantom"
-                );
-            } else if (isIOS) {
-                tryOpenApp(
-                    "phantom://", 
-                    "https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977"
-                );
-            } else {
-                alert("Please use this feature on your mobile device.");
-            }
-        }
-
-        function tryOpenApp(appUrl, fallbackUrl) {
-            console.log("Trying to open app:", appUrl);
-            
-            // Create a hidden iframe to test the deep link
-            const iframe = document.getElementById('test-frame');
-            const startTime = Date.now();
-            
-            // Set up blur event listener (indicates app was opened)
-            let appOpened = false;
-            
-            const blurHandler = () => {
-                appOpened = true;
-                console.log("App opened successfully");
-                window.removeEventListener('blur', blurHandler);
-            };
-            
-            window.addEventListener('blur', blurHandler);
-            
-            // Try to open the app
-            iframe.src = appUrl;
-            
-            // Fallback after delay
-            setTimeout(() => {
-                window.removeEventListener('blur', blurHandler);
-                
-                if (!appOpened && !document.hidden) {
-                    console.log("App not found, opening fallback:", fallbackUrl);
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.openLink(fallbackUrl);
-                    } else {
-                        window.open(fallbackUrl, '_blank');
-                    }
+            // ساده‌ترین روش: مستقیماً به صفحه دانلود هدایت کن
+            if (window.Telegram && window.Telegram.WebApp) {
+                if (isAndroid) {
+                    // ابتدا سعی کن اپ را باز کنی، اگر نشد به Play Store برو
+                    setTimeout(() => {
+                        window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
+                    }, 100);
+                } else if (isIOS) {
+                    // ابتدا سعی کن اپ را باز کنی، اگر نشد به App Store برو  
+                    setTimeout(() => {
+                        window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
+                    }, 100);
                 }
-            }, 2000);
+            }
         }
 
         function downloadPhantom() {
