@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Connect Phantom Wallet</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        .wallet-connect-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .wallet-box {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 350px;
+            width: 100%;
+        }
+        .phantom-logo {
+            width: 80px;
+            height: 80px;
+            background: #4C44FF;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            color: white;
+        }
+        .connect-btn {
+            background: #4C44FF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .connect-btn:hover {
+            background: #3a35cc;
+            transform: translateY(-2px);
+        }
+        .back-btn {
+            background: #f5f5f5;
+            color: #333;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-size: 14px;
+            margin-top: 15px;
+            cursor: pointer;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="wallet-connect-container">
+        <div class="wallet-box">
+            <div class="phantom-logo">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <h2>Connect Phantom Wallet</h2>
+            <p>To continue with CCoin airdrop, you need to connect your Phantom wallet.</p>
+            
+            <button onclick="openPhantomWallet()" class="connect-btn">
+                <i class="fas fa-external-link-alt"></i> Open Phantom Wallet
+            </button>
+            
+            <button onclick="downloadPhantom()" class="connect-btn" style="background: #28a745;">
+                <i class="fas fa-download"></i> Download Phantom
+            </button>
+            
+            <button onclick="goBack()" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Back to Airdrop
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+
+        function openPhantomWallet() {
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            if (isAndroid) {
+                // تلاش برای باز کردن اپ Phantom اگر نصب است
+                const phantomUrl = "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.origin + "/wallet-callback");
+                window.location.href = phantomUrl;
+            } else if (isIOS) {
+                // برای iOS
+                const phantomUrl = "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.origin + "/wallet-callback");
+                window.location.href = phantomUrl;
+            } else {
+                alert("Please use this feature on your mobile device.");
+            }
+        }
+
+        function downloadPhantom() {
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                if (isAndroid) {
+                    window.Telegram.WebApp.openLink("https://play.google.com/store/apps/details?id=app.phantom");
+                } else if (isIOS) {
+                    window.Telegram.WebApp.openLink("https://apps.apple.com/us/app/phantom-crypto-wallet/id1598432977");
+                }
+            }
+        }
+
+        function goBack() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.close();
+            } else {
+                window.history.back();
+            }
+        }
+    </script>
+</body>
+</html>
