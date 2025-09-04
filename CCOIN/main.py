@@ -267,7 +267,6 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         content={"detail": "Rate limit exceeded. Please try again later."}
     )
 
-app.include_router(wallet.router)
 app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
@@ -277,6 +276,8 @@ app.include_router(airdrop.router, prefix="/airdrop")
 app.include_router(about.router, prefix="/about")
 app.include_router(usertasks.router, prefix="/usertasks")
 app.include_router(users.router, prefix="/users")
+app.include_router(wallet.router)
+
 
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
 scheduler.add_job(check_social_tasks, "interval", hours=24)
