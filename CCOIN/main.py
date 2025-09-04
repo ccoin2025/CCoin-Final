@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
-from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users
+from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet
 from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
