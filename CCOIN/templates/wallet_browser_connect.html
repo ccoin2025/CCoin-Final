@@ -29,6 +29,17 @@
             cursor: pointer;
             margin: 10px;
         }
+        .deep-link-btn {
+            background: #9945FF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100%;
+        }
         .status {
             margin: 20px 0;
             padding: 15px;
@@ -43,41 +54,74 @@
 <body>
     <div class="container">
         <h1>🔗 Connect Phantom Wallet</h1>
-        <p>Click the button below to connect your Phantom wallet to CCoin:</p>
+        <p>Choose your connection method:</p>
         
         <div id="status" class="status info">
             Ready to connect...
         </div>
-        
-        <button onclick="connectPhantom()" class="connect-btn" id="connectBtn">
-            Connect Phantom Wallet
+
+        <!-- دکمه برای موبایل - Deep Link -->
+        <button onclick="connectPhantomMobile()" class="deep-link-btn" id="mobileConnectBtn">
+            📱 Connect with Phantom App (Mobile)
         </button>
-        
+
+        <!-- دکمه برای دسکتاپ - window.solana -->
+        <button onclick="connectPhantomDesktop()" class="connect-btn" id="desktopConnectBtn">
+            🖥️ Connect with Phantom Extension (Desktop)
+        </button>
+
         <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
     </div>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
+
+        // تشخیص موبایل
+        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
         
-        async function connectPhantom() {
+        if (isMobile) {
+            document.getElementById('desktopConnectBtn').style.display = 'none';
+        } else {
+            document.getElementById('mobileConnectBtn').style.display = 'none';
+        }
+
+        // اتصال از طریق Deep Link (موبایل)
+        async function connectPhantomMobile() {
             const statusDiv = document.getElementById('status');
-            const connectBtn = document.getElementById('connectBtn');
+            statusDiv.textContent = "Redirecting to Phantom App...";
+            statusDiv.className = "status info";
+
+            // آدرس callback برای دریافت نتیجه
+            const callbackUrl = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
+            const appUrl = encodeURIComponent(window.location.origin);
             
+            // Deep Link استاندارد Phantom
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&redirect_link=${callbackUrl}`;
+            
+            // هدایت به Phantom
+            window.location.href = phantomDeepLink;
+        }
+
+        // اتصال از طریق Extension (دسکتاپ)
+        async function connectPhantomDesktop() {
+            const statusDiv = document.getElementById('status');
+            const connectBtn = document.getElementById('desktopConnectBtn');
+
             statusDiv.textContent = "Connecting to Phantom...";
             statusDiv.className = "status info";
             connectBtn.disabled = true;
-            
+
             try {
                 // بررسی وجود Phantom
                 if (!window.solana || !window.solana.isPhantom) {
-                    throw new Error("Phantom wallet not found! Please install Phantom first.");
+                    throw new Error("Phantom wallet not found! Please install Phantom extension first.");
                 }
-                
+
                 // اتصال به Phantom
                 const response = await window.solana.connect();
                 const walletAddress = response.publicKey.toString();
-                
+
                 // ارسال اطلاعات به سرور
                 const saveResponse = await fetch('/api/wallet/save', {
                     method: 'POST',
@@ -89,9 +133,9 @@
                         wallet_address: walletAddress
                     })
                 });
-                
+
                 if (saveResponse.ok) {
-                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0, 8)}...${walletAddress.substring(-8)}`;
+                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
                     statusDiv.className = "status success";
                     connectBtn.textContent = "Connected ✅";
                     
@@ -101,8 +145,8 @@
                 } else {
                     throw new Error("Failed to save wallet address");
                 }
-                
-            } catch (error) {
+
+            } catch(error) {
                 console.error('Connection error:', error);
                 statusDiv.textContent = `❌ Error: ${error.message}`;
                 statusDiv.className = "status error";
