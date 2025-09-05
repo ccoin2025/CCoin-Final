@@ -25,7 +25,6 @@ async def phantom_callback(request: Request, db: Session = Depends(get_db)):
     phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
     
     if telegram_id and phantom_encryption_public_key:
-        # ذخیره آدرس کیف پول
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             user.wallet_address = phantom_encryption_public_key
