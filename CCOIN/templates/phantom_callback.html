@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wallet Connected Successfully</title>
+    <title>Phantom Connection Status</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,6 +28,11 @@
             color: #28a745;
             margin-bottom: 20px;
         }
+        .error-icon {
+            font-size: 4rem;
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
         .wallet-address {
             background: #f8f9fa;
             padding: 15px;
@@ -37,7 +42,7 @@
             margin: 20px 0;
             border: 1px solid #e9ecef;
         }
-        .return-btn {
+        .btn {
             background: #4C44FF;
             color: white;
             border: none;
@@ -49,33 +54,61 @@
             text-decoration: none;
             display: inline-block;
         }
+        .retry-btn {
+            background: #17a2b8;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="success-icon">✅</div>
-        <h1>Wallet Connected Successfully!</h1>
-        
-        {% if wallet_address %}
-        <p>Your Phantom wallet has been connected:</p>
-        <div class="wallet-address">{{ wallet_address }}</div>
-        <p><strong>You can now close this page and return to the Telegram app.</strong></p>
+        {% if wallet_address and wallet_address != '' and wallet_address != 'None' %}
+            <div class="success-icon">✅</div>
+            <h1>Wallet Connected Successfully!</h1>
+            <p>Your Phantom wallet has been connected:</p>
+            <div class="wallet-address">{{ wallet_address }}</div>
+            <p><strong>You can now close this page and return to the Telegram app.</strong></p>
+            <a href="https://t.me/CTG_COIN_BOT" class="btn">Return to Telegram Bot</a>
         {% else %}
-        <p>❌ Connection failed. Please try again.</p>
+            <div class="error-icon">❌</div>
+            <h1>Connection Not Completed</h1>
+            <p>It looks like you didn't complete the wallet connection in Phantom.</p>
+            <p>Please try again and make sure to:</p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>Open Phantom app</li>
+                <li>Review the connection request</li>
+                <li>Tap "Connect" to approve</li>
+            </ul>
+            <button onclick="retryConnection()" class="btn retry-btn">Try Again</button>
+            <a href="https://t.me/CTG_COIN_BOT" class="btn">Return to Telegram Bot</a>
         {% endif %}
-        
-        <a href="https://t.me/CTG_COIN_BOT" class="return-btn">Return to Telegram Bot</a>
     </div>
 
     <script>
+        function retryConnection() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const telegramId = urlParams.get('telegram_id');
+            
+            if (telegramId) {
+                const callbackUrl = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
+                const appUrl = encodeURIComponent(window.location.origin);
+                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&redirect_link=${callbackUrl}`;
+                
+                window.location.href = phantomDeepLink;
+            }
+        }
+
+        // خودکار بستن صفحه فقط در صورت موفقیت
+        {% if wallet_address and wallet_address != '' and wallet_address != 'None' %}
         setTimeout(() => {
             window.close();
         }, 5000);
+        {% endif %}
 
         if (window.parent !== window) {
             window.parent.postMessage({
                 type: 'wallet_connected',
-                wallet_address: '{{ wallet_address }}'
+                wallet_address: '{{ wallet_address }}',
+                success: {{ 'true' if wallet_address and wallet_address != '' and wallet_address != 'None' else 'false' }}
             }, '*');
         }
     </script>
