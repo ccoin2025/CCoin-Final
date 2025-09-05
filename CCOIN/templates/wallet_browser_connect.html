@@ -19,7 +19,7 @@
             text-align: center;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
-        .connect-btn {
+        .method-btn {
             background: #4C44FF;
             color: white;
             border: none;
@@ -30,27 +30,16 @@
             margin: 10px;
             width: 100%;
         }
-        .check-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 15px 30px;
+        .qr-btn { background: #28a745; }
+        .manual-btn { background: #17a2b8; }
+        .input-field {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
             border-radius: 10px;
             font-size: 16px;
-            cursor: pointer;
-            margin: 10px;
-            width: 100%;
-        }
-        .manual-btn {
-            background: #17a2b8;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px;
-            width: 100%;
+            margin: 10px 0;
+            font-family: monospace;
         }
         .status {
             margin: 20px 0;
@@ -61,29 +50,17 @@
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
-        .waiting { background: #fff3cd; color: #856404; }
-        .instructions {
-            background: #e9ecef;
+        .warning { background: #fff3cd; color: #856404; }
+        .method-section {
+            display: none;
+            margin: 20px 0;
+        }
+        .method-section.active { display: block; }
+        .qr-code {
+            background: #f8f9fa;
             padding: 20px;
             border-radius: 10px;
             margin: 15px 0;
-            text-align: left;
-        }
-        .step {
-            margin: 10px 0;
-            padding: 5px 0;
-        }
-        .step-number {
-            background: #4C44FF;
-            color: white;
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 10px;
-            font-weight: bold;
         }
     </style>
 </head>
@@ -92,122 +69,209 @@
         <h1>🔗 Connect Phantom Wallet</h1>
         
         <div id="status" class="status info">
-            Ready to connect...
+            Choose your connection method:
         </div>
 
-        <div id="connection-step" style="display: block;">
-            <p>Choose your connection method:</p>
-            
-            <button onclick="tryAutoConnect()" class="connect-btn" id="autoConnectBtn">
-                🚀 Try Auto Connect
+        <!-- انتخاب روش اتصال -->
+        <div id="method-selection">
+            <button onclick="showQRMethod()" class="method-btn qr-btn">
+                📱 QR Code Connection
             </button>
-
-            <button onclick="showManualInstructions()" class="manual-btn" id="manualBtn">
-                📋 Manual Connection Guide
+            <button onclick="showManualMethod()" class="method-btn manual-btn">
+                ✋ Manual Address Entry
+            </button>
+            <button onclick="tryBrowserConnect()" class="method-btn" id="browserBtn">
+                🖥️ Browser Extension
             </button>
         </div>
 
-        <div id="manual-instructions" style="display: none;">
-            <div class="instructions">
-                <h3>Manual Connection Steps:</h3>
-                <div class="step">
-                    <span class="step-number">1</span>
-                    Open Phantom app on your phone manually
+        <!-- روش QR Code -->
+        <div id="qr-method" class="method-section">
+            <h3>📱 QR Code Connection</h3>
+            <div class="qr-code">
+                <p><strong>Step 1:</strong> Open Phantom app on your phone</p>
+                <p><strong>Step 2:</strong> Tap the scan icon (📷)</p>
+                <p><strong>Step 3:</strong> Scan this QR code:</p>
+                <div id="qr-code-container" style="margin: 20px 0;">
+                    <canvas id="qr-canvas"></canvas>
                 </div>
-                <div class="step">
-                    <span class="step-number">2</span>
-                    Go to Settings → Connected Apps
-                </div>
-                <div class="step">
-                    <span class="step-number">3</span>
-                    Tap "+" to add new connection
-                </div>
-                <div class="step">
-                    <span class="step-number">4</span>
-                    Enter this URL: <strong>{{ request.url.scheme }}://{{ request.url.netloc }}</strong>
-                </div>
-                <div class="step">
-                    <span class="step-number">5</span>
-                    Approve the connection
-                </div>
-                <div class="step">
-                    <span class="step-number">6</span>
-                    Return here and click "Check Connection"
-                </div>
+                <p><strong>Step 4:</strong> Approve the connection in Phantom</p>
             </div>
-
-            <button onclick="checkConnection()" class="check-btn" id="checkBtn">
+            <button onclick="checkConnection()" class="method-btn qr-btn">
                 ✅ Check Connection Status
             </button>
-
-            <button onclick="showConnectionStep()" class="connect-btn">
-                ⬅️ Back to Auto Connect
+            <button onclick="showMethodSelection()" class="method-btn">
+                ⬅️ Back to Methods
             </button>
         </div>
 
-        <div id="waiting-step" style="display: none;">
-            <p>⏳ Connection attempt in progress...</p>
-            <p>Please check your Phantom app and approve the connection.</p>
-            
-            <button onclick="checkConnection()" class="check-btn">
-                ✅ I've approved, check status
+        <!-- روش Manual -->
+        <div id="manual-method" class="method-section">
+            <h3>✋ Manual Address Entry</h3>
+            <p>If you can't use QR code, enter your Phantom wallet address manually:</p>
+            <input type="text" id="wallet-address" class="input-field" placeholder="Enter your Phantom wallet address..." maxlength="44">
+            <button onclick="submitManualAddress()" class="method-btn manual-btn">
+                💾 Submit Wallet Address
             </button>
-
-            <button onclick="showConnectionStep()" class="connect-btn">
-                ⬅️ Try different method
+            <button onclick="showMethodSelection()" class="method-btn">
+                ⬅️ Back to Methods
             </button>
         </div>
 
         <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
     </div>
 
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
-        let checkInterval = null;
+        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
 
-        function showConnectionStep() {
-            document.getElementById('connection-step').style.display = 'block';
-            document.getElementById('manual-instructions').style.display = 'none';
-            document.getElementById('waiting-step').style.display = 'none';
+        // پنهان کردن دکمه browser extension در موبایل
+        if (isMobile) {
+            document.getElementById('browserBtn').style.display = 'none';
+        }
+
+        function showMethodSelection() {
+            document.querySelectorAll('.method-section').forEach(el => el.classList.remove('active'));
+            document.getElementById('method-selection').style.display = 'block';
             document.getElementById('status').textContent = 'Choose your connection method:';
             document.getElementById('status').className = 'status info';
         }
 
-        function showManualInstructions() {
-            document.getElementById('connection-step').style.display = 'none';
-            document.getElementById('manual-instructions').style.display = 'block';
-            document.getElementById('waiting-step').style.display = 'none';
-            document.getElementById('status').textContent = 'Follow these steps to connect manually:';
+        function showQRMethod() {
+            document.getElementById('method-selection').style.display = 'none';
+            document.getElementById('qr-method').classList.add('active');
+            generateQRCode();
+            document.getElementById('status').textContent = 'Scan the QR code with Phantom app:';
             document.getElementById('status').className = 'status info';
         }
 
-        function showWaitingStep() {
-            document.getElementById('connection-step').style.display = 'none';
-            document.getElementById('manual-instructions').style.display = 'none';
-            document.getElementById('waiting-step').style.display = 'block';
+        function showManualMethod() {
+            document.getElementById('method-selection').style.display = 'none';
+            document.getElementById('manual-method').classList.add('active');
+            document.getElementById('status').textContent = 'Enter your wallet address manually:';
+            document.getElementById('status').className = 'status info';
         }
 
-        async function tryAutoConnect() {
+        function generateQRCode() {
+            const connectData = {
+                method: 'connect',
+                params: {
+                    dapp: {
+                        name: 'CCoin',
+                        url: window.location.origin,
+                        icon: window.location.origin + '/static/images/logo.png'
+                    },
+                    redirect_link: `${window.location.origin}/phantom-callback?telegram_id=${telegramId}`
+                }
+            };
+
+            const qrData = `phantom://v1/connect?data=${encodeURIComponent(JSON.stringify(connectData))}`;
+            
+            QRCode.toCanvas(document.getElementById('qr-canvas'), qrData, {
+                width: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, function (error) {
+                if (error) {
+                    console.error(error);
+                    document.getElementById('qr-code-container').innerHTML = '<p>❌ Error generating QR code</p>';
+                }
+            });
+        }
+
+        async function submitManualAddress() {
+            const walletAddress = document.getElementById('wallet-address').value.trim();
             const statusDiv = document.getElementById('status');
-            statusDiv.textContent = "Attempting to open Phantom app...";
-            statusDiv.className = "status info";
+            
+            if (!walletAddress) {
+                statusDiv.textContent = '❌ Please enter a wallet address';
+                statusDiv.className = 'status error';
+                return;
+            }
 
-            // تلاش برای باز کردن اپ
-            const phantom_url = 'phantom://';
-            const link = document.createElement('a');
-            link.href = phantom_url;
-            link.click();
+            if (walletAddress.length < 32 || walletAddress.length > 44) {
+                statusDiv.textContent = '❌ Invalid wallet address format';
+                statusDiv.className = 'status error';
+                return;
+            }
 
-            // بعد از 2 ثانیه به مرحله انتظار برویم
-            setTimeout(() => {
-                showWaitingStep();
-                statusDiv.textContent = "If Phantom opened, please approve the connection, then check status.";
-                statusDiv.className = "status waiting";
-                
-                // شروع چک خودکار هر 3 ثانیه
-                checkInterval = setInterval(checkConnection, 3000);
-            }, 2000);
+            try {
+                statusDiv.textContent = 'Saving wallet address...';
+                statusDiv.className = 'status info';
+
+                const response = await fetch('/api/wallet/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: telegramId,
+                        wallet_address: walletAddress
+                    })
+                });
+
+                if (response.ok) {
+                    statusDiv.textContent = `✅ Wallet address saved successfully!\nAddress: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
+                    statusDiv.className = 'status success';
+                    
+                    setTimeout(() => {
+                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
+                        setTimeout(() => window.close(), 3000);
+                    }, 2000);
+                } else {
+                    throw new Error('Failed to save wallet address');
+                }
+            } catch (error) {
+                statusDiv.textContent = '❌ Error saving wallet address. Please try again.';
+                statusDiv.className = 'status error';
+            }
+        }
+
+        async function tryBrowserConnect() {
+            const statusDiv = document.getElementById('status');
+
+            try {
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error("Phantom extension not found! Please install it first.");
+                }
+
+                statusDiv.textContent = 'Connecting to Phantom extension...';
+                statusDiv.className = 'status info';
+
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+
+                const saveResponse = await fetch('/api/wallet/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: telegramId,
+                        wallet_address: walletAddress
+                    })
+                });
+
+                if (saveResponse.ok) {
+                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
+                    statusDiv.className = 'status success';
+                    
+                    setTimeout(() => {
+                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
+                        setTimeout(() => window.close(), 3000);
+                    }, 2000);
+                } else {
+                    throw new Error("Failed to save wallet address");
+                }
+
+            } catch(error) {
+                console.error('Browser connection error:', error);
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                statusDiv.className = 'status error';
+            }
         }
 
         async function checkConnection() {
@@ -224,43 +288,20 @@
                     statusDiv.textContent = `✅ Successfully connected!\nWallet: ${data.address.substring(0,8)}...${data.address.substring(-8)}`;
                     statusDiv.className = "status success";
                     
-                    // متوقف کردن چک خودکار
-                    if (checkInterval) {
-                        clearInterval(checkInterval);
-                        checkInterval = null;
-                    }
-                    
-                    // مخفی کردن همه دکمه‌ها
-                    document.getElementById('connection-step').style.display = 'none';
-                    document.getElementById('manual-instructions').style.display = 'none';
-                    document.getElementById('waiting-step').style.display = 'none';
-                    
                     setTimeout(() => {
                         statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
-                        
-                        // تلاش برای بستن خودکار صفحه
-                        setTimeout(() => {
-                            window.close();
-                        }, 3000);
+                        setTimeout(() => window.close(), 3000);
                     }, 2000);
                     
                 } else {
-                    statusDiv.textContent = "⏳ Wallet not connected yet. Please approve connection in Phantom app.";
-                    statusDiv.className = "status waiting";
+                    statusDiv.textContent = "⏳ Wallet not connected yet. Please complete the connection process.";
+                    statusDiv.className = "status warning";
                 }
             } catch (error) {
                 statusDiv.textContent = "❌ Error checking connection. Please try again.";
                 statusDiv.className = "status error";
-                console.error('Connection check error:', error);
             }
         }
-
-        // پاک کردن interval هنگام خروج
-        window.addEventListener('beforeunload', () => {
-            if (checkInterval) {
-                clearInterval(checkInterval);
-            }
-        });
     </script>
 </body>
 </html>
