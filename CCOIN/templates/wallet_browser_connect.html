@@ -30,6 +30,17 @@
             margin: 10px;
             width: 100%;
         }
+        .check-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100%;
+        }
         .status {
             margin: 20px 0;
             padding: 15px;
@@ -39,6 +50,7 @@
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
+        .waiting { background: #fff3cd; color: #856404; }
     </style>
 </head>
 <body>
@@ -54,6 +66,10 @@
             Connect Phantom Wallet
         </button>
 
+        <button onclick="checkConnection()" class="check-btn" id="checkBtn" style="display: none;">
+            Check Connection Status
+        </button>
+
         <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
     </div>
 
@@ -61,40 +77,41 @@
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
         const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
+        
+        let connectionCheckInterval = null;
 
         async function connectPhantom() {
             const statusDiv = document.getElementById('status');
             const connectBtn = document.getElementById('connectBtn');
+            const checkBtn = document.getElementById('checkBtn');
 
-            statusDiv.textContent = "Connecting to Phantom...";
+            statusDiv.textContent = "Opening Phantom App...";
             statusDiv.className = "status info";
             connectBtn.disabled = true;
 
             if (isMobile) {
-                // Deep Link صحیح برای موبایل
-                statusDiv.textContent = "Opening Phantom App...";
-                
+                // Deep Link برای موبایل
                 const dappUrl = encodeURIComponent(window.location.origin);
                 const redirectLink = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
-                
-                // Deep Link درست برای Phantom App
                 const phantomDeepLink = `phantom://v1/connect?dapp_url=${dappUrl}&redirect_link=${redirectLink}`;
                 
-                // اول سعی می‌کنیم اپ را باز کنیم
-                window.location.href = phantomDeepLink;
+                // باز کردن Phantom App
+                try {
+                    window.location.href = phantomDeepLink;
+                } catch (error) {
+                    console.log("Direct link failed, trying alternative");
+                }
                 
-                // اگر اپ نصب نبود، بعد از 3 ثانیه به Play Store/App Store هدایت می‌کنیم
+                // بعد از 3 ثانیه نمایش دکمه چک کردن
                 setTimeout(() => {
-                    const isAndroid = /android/i.test(navigator.userAgent);
-                    const storeUrl = isAndroid 
-                        ? 'https://play.google.com/store/apps/details?id=app.phantom'
-                        : 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
-                    
-                    statusDiv.textContent = "If Phantom app didn't open, please install it first:";
-                    statusDiv.className = "status error";
-                    connectBtn.textContent = "Install Phantom";
+                    statusDiv.textContent = "✋ Please complete the connection in Phantom app, then click 'Check Connection Status' to verify.";
+                    statusDiv.className = "status waiting";
                     connectBtn.disabled = false;
-                    connectBtn.onclick = () => window.open(storeUrl, '_blank');
+                    connectBtn.textContent = "Try Again";
+                    checkBtn.style.display = "block";
+                    
+                    // شروع چک خودکار هر 5 ثانیه
+                    connectionCheckInterval = setInterval(checkConnection, 5000);
                 }, 3000);
                 
             } else {
@@ -136,6 +153,46 @@
                 }
             }
         }
+
+        async function checkConnection() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
+                const data = await response.json();
+                
+                if (data.connected) {
+                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${data.address.substring(0,8)}...${data.address.substring(-8)}`;
+                    statusDiv.className = "status success";
+                    
+                    // متوقف کردن چک خودکار
+                    if (connectionCheckInterval) {
+                        clearInterval(connectionCheckInterval);
+                    }
+                    
+                    document.getElementById('connectBtn').style.display = 'none';
+                    document.getElementById('checkBtn').style.display = 'none';
+                    
+                    setTimeout(() => {
+                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
+                    }, 2000);
+                    
+                } else {
+                    statusDiv.textContent = "⏳ Wallet not connected yet. Please complete the connection in Phantom app.";
+                    statusDiv.className = "status waiting";
+                }
+            } catch (error) {
+                statusDiv.textContent = "❌ Error checking connection. Please try again.";
+                statusDiv.className = "status error";
+            }
+        }
+
+        // پاک کردن interval هنگام خروج از صفحه
+        window.addEventListener('beforeunload', () => {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+        });
     </script>
 </body>
 </html>
