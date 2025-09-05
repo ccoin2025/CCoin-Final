@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet Connected Successfully</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .success-icon {
+            font-size: 4rem;
+            color: #28a745;
+            margin-bottom: 20px;
+        }
+        .wallet-address {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
+        }
+        .return-btn {
+            background: #4C44FF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>Wallet Connected Successfully!</h1>
+        
+        {% if wallet_address %}
+        <p>Your Phantom wallet has been connected:</p>
+        <div class="wallet-address">{{ wallet_address }}</div>
+        <p><strong>You can now close this page and return to the Telegram app.</strong></p>
+        {% else %}
+        <p>❌ Connection failed. Please try again.</p>
+        {% endif %}
+        
+        <a href="https://t.me/CTG_COIN_BOT" class="return-btn">Return to Telegram Bot</a>
+    </div>
+
+    <script>
+        // خودکار بستن صفحه بعد از 5 ثانیه
+        setTimeout(() => {
+            window.close();
+        }, 5000);
+
+        // ارسال پیام به والدین (در صورت باالی! حالا که تمام فایل‌های مرتبط را بررسی کردم، می‌توانم فایل‌هایی که نیاز به اصلاح دارند را شناسایی کنم. بر اساس تحلیل، فایل‌های زیر نیاز به اصلاح دارند:
+
+## فایل‌های نیازمند اصلاح:
+
+### 1. **CCOIN/templates/wallet_browser_connect.html** (اصلاح اساسی نیاز دارد)
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Phantom Wallet</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .connect-btn {
+            background: #4C44FF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .deep-link-btn {
+            background: #9945FF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100%;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Connect Phantom Wallet</h1>
+        <p>Choose your connection method:</p>
+        
+        <div id="status" class="status info">
+            Ready to connect...
+        </div>
+
+        <!-- دکمه برای موبایل - Deep Link -->
+        <button onclick="connectPhantomMobile()" class="deep-link-btn" id="mobileConnectBtn">
+            📱 Connect with Phantom App (Mobile)
+        </button>
+
+        <!-- دکمه برای دسکتاپ - window.solana -->
+        <button onclick="connectPhantomDesktop()" class="connect-btn" id="desktopConnectBtn">
+            🖥️ Connect with Phantom Extension (Desktop)
+        </button>
+
+        <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const telegramId = urlParams.get('telegram_id');
+
+        // تشخیص موبایل
+        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
+        
+        if (isMobile) {
+            document.getElementById('desktopConnectBtn').style.display = 'none';
+        } else {
+            document.getElementById('mobileConnectBtn').style.display = 'none';
+        }
+
+        // اتصال از طریق Deep Link (موبایل)
+        async function connectPhantomMobile() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = "Redirecting to Phantom App...";
+            statusDiv.className = "status info";
+
+            // آدرس callback برای دریافت نتیجه
+            const callbackUrl = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
+            const appUrl = encodeURIComponent(window.location.origin);
+            
+            // Deep Link استاندارد Phantom
+            const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&redirect_link=${callbackUrl}`;
+            
+            // هدایت به Phantom
+            window.location.href = phantomDeepLink;
+        }
+
+        // اتصال از طریق Extension (دسکتاپ)
+        async function connectPhantomDesktop() {
+            const statusDiv = document.getElementById('status');
+            const connectBtn = document.getElementById('desktopConnectBtn');
+
+            statusDiv.textContent = "Connecting to Phantom...";
+            statusDiv.className = "status info";
+            connectBtn.disabled = true;
+
+            try {
+                // بررسی وجود Phantom
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error("Phantom wallet not found! Please install Phantom extension first.");
+                }
+
+                // اتصال به Phantom
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+
+                // ارسال اطلاعات به سرور
+                const saveResponse = await fetch('/api/wallet/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: telegramId,
+                        wallet_address: walletAddress
+                    })
+                });
+
+                if (saveResponse.ok) {
+                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
+                    statusDiv.className = "status success";
+                    connectBtn.textContent = "Connected ✅";
+                    
+                    setTimeout(() => {
+                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
+                    }, 2000);
+                } else {
+                    throw new Error("Failed to save wallet address");
+                }
+
+            } catch(error) {
+                console.error('Connection error:', error);
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                statusDiv.className = "status error";
+                connectBtn.disabled = false;
+                connectBtn.textContent = "Try Again";
+            }
+        }
+    </script>
+</body>
+</html>
