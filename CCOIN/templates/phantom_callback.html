@@ -89,9 +89,9 @@
             const telegramId = urlParams.get('telegram_id');
             
             if (telegramId) {
-                const callbackUrl = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
-                const appUrl = encodeURIComponent(window.location.origin);
-                const phantomDeepLink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&redirect_link=${callbackUrl}`;
+                const dappUrl = encodeURIComponent(window.location.origin);
+                const redirectLink = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
+                const phantomDeepLink = `phantom://v1/connect?dapp_url=${dappUrl}&redirect_link=${redirectLink}`;
                 
                 window.location.href = phantomDeepLink;
             }
@@ -103,14 +103,6 @@
             window.close();
         }, 5000);
         {% endif %}
-
-        if (window.parent !== window) {
-            window.parent.postMessage({
-                type: 'wallet_connected',
-                wallet_address: '{{ wallet_address }}',
-                success: {{ 'true' if wallet_address and wallet_address != '' and wallet_address != 'None' else 'false' }}
-            }, '*');
-        }
     </script>
 </body>
 </html>
