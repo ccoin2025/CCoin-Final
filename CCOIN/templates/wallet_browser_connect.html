@@ -41,6 +41,17 @@
             margin: 10px;
             width: 100%;
         }
+        .manual-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100%;
+        }
         .status {
             margin: 20px 0;
             padding: 15px;
@@ -51,24 +62,101 @@
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
         .waiting { background: #fff3cd; color: #856404; }
+        .instructions {
+            background: #e9ecef;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: left;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 5px 0;
+        }
+        .step-number {
+            background: #4C44FF;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🔗 Connect Phantom Wallet</h1>
-        <p>Click the button below to connect your Phantom wallet to CCoin:</p>
         
         <div id="status" class="status info">
             Ready to connect...
         </div>
 
-        <button onclick="connectPhantom()" class="connect-btn" id="connectBtn">
-            Connect Phantom Wallet
-        </button>
+        <div id="connection-step" style="display: block;">
+            <p>Choose your connection method:</p>
+            
+            <button onclick="tryAutoConnect()" class="connect-btn" id="autoConnectBtn">
+                🚀 Try Auto Connect
+            </button>
 
-        <button onclick="checkConnection()" class="check-btn" id="checkBtn" style="display: none;">
-            Check Connection Status
-        </button>
+            <button onclick="showManualInstructions()" class="manual-btn" id="manualBtn">
+                📋 Manual Connection Guide
+            </button>
+        </div>
+
+        <div id="manual-instructions" style="display: none;">
+            <div class="instructions">
+                <h3>Manual Connection Steps:</h3>
+                <div class="step">
+                    <span class="step-number">1</span>
+                    Open Phantom app on your phone manually
+                </div>
+                <div class="step">
+                    <span class="step-number">2</span>
+                    Go to Settings → Connected Apps
+                </div>
+                <div class="step">
+                    <span class="step-number">3</span>
+                    Tap "+" to add new connection
+                </div>
+                <div class="step">
+                    <span class="step-number">4</span>
+                    Enter this URL: <strong>{{ request.url.scheme }}://{{ request.url.netloc }}</strong>
+                </div>
+                <div class="step">
+                    <span class="step-number">5</span>
+                    Approve the connection
+                </div>
+                <div class="step">
+                    <span class="step-number">6</span>
+                    Return here and click "Check Connection"
+                </div>
+            </div>
+
+            <button onclick="checkConnection()" class="check-btn" id="checkBtn">
+                ✅ Check Connection Status
+            </button>
+
+            <button onclick="showConnectionStep()" class="connect-btn">
+                ⬅️ Back to Auto Connect
+            </button>
+        </div>
+
+        <div id="waiting-step" style="display: none;">
+            <p>⏳ Connection attempt in progress...</p>
+            <p>Please check your Phantom app and approve the connection.</p>
+            
+            <button onclick="checkConnection()" class="check-btn">
+                ✅ I've approved, check status
+            </button>
+
+            <button onclick="showConnectionStep()" class="connect-btn">
+                ⬅️ Try different method
+            </button>
+        </div>
 
         <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
     </div>
@@ -76,121 +164,101 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
-        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
-        
-        let connectionCheckInterval = null;
+        let checkInterval = null;
 
-        async function connectPhantom() {
+        function showConnectionStep() {
+            document.getElementById('connection-step').style.display = 'block';
+            document.getElementById('manual-instructions').style.display = 'none';
+            document.getElementById('waiting-step').style.display = 'none';
+            document.getElementById('status').textContent = 'Choose your connection method:';
+            document.getElementById('status').className = 'status info';
+        }
+
+        function showManualInstructions() {
+            document.getElementById('connection-step').style.display = 'none';
+            document.getElementById('manual-instructions').style.display = 'block';
+            document.getElementById('waiting-step').style.display = 'none';
+            document.getElementById('status').textContent = 'Follow these steps to connect manually:';
+            document.getElementById('status').className = 'status info';
+        }
+
+        function showWaitingStep() {
+            document.getElementById('connection-step').style.display = 'none';
+            document.getElementById('manual-instructions').style.display = 'none';
+            document.getElementById('waiting-step').style.display = 'block';
+        }
+
+        async function tryAutoConnect() {
             const statusDiv = document.getElementById('status');
-            const connectBtn = document.getElementById('connectBtn');
-            const checkBtn = document.getElementById('checkBtn');
-
-            statusDiv.textContent = "Opening Phantom App...";
+            statusDiv.textContent = "Attempting to open Phantom app...";
             statusDiv.className = "status info";
-            connectBtn.disabled = true;
 
-            if (isMobile) {
-                // Deep Link برای موبایل
-                const dappUrl = encodeURIComponent(window.location.origin);
-                const redirectLink = encodeURIComponent(`${window.location.origin}/phantom-callback?telegram_id=${telegramId}`);
-                const phantomDeepLink = `phantom://v1/connect?dapp_url=${dappUrl}&redirect_link=${redirectLink}`;
+            // تلاش برای باز کردن اپ
+            const phantom_url = 'phantom://';
+            const link = document.createElement('a');
+            link.href = phantom_url;
+            link.click();
+
+            // بعد از 2 ثانیه به مرحله انتظار برویم
+            setTimeout(() => {
+                showWaitingStep();
+                statusDiv.textContent = "If Phantom opened, please approve the connection, then check status.";
+                statusDiv.className = "status waiting";
                 
-                // باز کردن Phantom App
-                try {
-                    window.location.href = phantomDeepLink;
-                } catch (error) {
-                    console.log("Direct link failed, trying alternative");
-                }
-                
-                // بعد از 3 ثانیه نمایش دکمه چک کردن
-                setTimeout(() => {
-                    statusDiv.textContent = "✋ Please complete the connection in Phantom app, then click 'Check Connection Status' to verify.";
-                    statusDiv.className = "status waiting";
-                    connectBtn.disabled = false;
-                    connectBtn.textContent = "Try Again";
-                    checkBtn.style.display = "block";
-                    
-                    // شروع چک خودکار هر 5 ثانیه
-                    connectionCheckInterval = setInterval(checkConnection, 5000);
-                }, 3000);
-                
-            } else {
-                // Extension برای دسکتاپ
-                try {
-                    if (!window.solana || !window.solana.isPhantom) {
-                        throw new Error("Phantom wallet not found! Please install Phantom extension first.");
-                    }
-
-                    const response = await window.solana.connect();
-                    const walletAddress = response.publicKey.toString();
-
-                    const saveResponse = await fetch('/api/wallet/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            telegram_id: telegramId,
-                            wallet_address: walletAddress
-                        })
-                    });
-
-                    if (saveResponse.ok) {
-                        statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
-                        statusDiv.className = "status success";
-                        connectBtn.textContent = "Connected ✅";
-                        
-                        setTimeout(() => {
-                            statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
-                        }, 2000);
-                    } else {
-                        throw new Error("Failed to save wallet address");
-                    }
-                } catch(error) {
-                    console.error('Connection error:', error);
-                    statusDiv.textContent = `❌ Error: ${error.message}`;
-                    statusDiv.className = "status error";
-                    connectBtn.disabled = false;
-                    connectBtn.textContent = "Try Again";
-                }
-            }
+                // شروع چک خودکار هر 3 ثانیه
+                checkInterval = setInterval(checkConnection, 3000);
+            }, 2000);
         }
 
         async function checkConnection() {
             const statusDiv = document.getElementById('status');
             
             try {
+                statusDiv.textContent = "Checking connection status...";
+                statusDiv.className = "status info";
+
                 const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
                 const data = await response.json();
                 
-                if (data.connected) {
+                if (data.connected && data.address) {
                     statusDiv.textContent = `✅ Successfully connected!\nWallet: ${data.address.substring(0,8)}...${data.address.substring(-8)}`;
                     statusDiv.className = "status success";
                     
                     // متوقف کردن چک خودکار
-                    if (connectionCheckInterval) {
-                        clearInterval(connectionCheckInterval);
+                    if (checkInterval) {
+                        clearInterval(checkInterval);
+                        checkInterval = null;
                     }
                     
-                    document.getElementById('connectBtn').style.display = 'none';
-                    document.getElementById('checkBtn').style.display = 'none';
+                    // مخفی کردن همه دکمه‌ها
+                    document.getElementById('connection-step').style.display = 'none';
+                    document.getElementById('manual-instructions').style.display = 'none';
+                    document.getElementById('waiting-step').style.display = 'none';
                     
                     setTimeout(() => {
                         statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
+                        
+                        // تلاش برای بستن خودکار صفحه
+                        setTimeout(() => {
+                            window.close();
+                        }, 3000);
                     }, 2000);
                     
                 } else {
-                    statusDiv.textContent = "⏳ Wallet not connected yet. Please complete the connection in Phantom app.";
+                    statusDiv.textContent = "⏳ Wallet not connected yet. Please approve connection in Phantom app.";
                     statusDiv.className = "status waiting";
                 }
             } catch (error) {
                 statusDiv.textContent = "❌ Error checking connection. Please try again.";
                 statusDiv.className = "status error";
+                console.error('Connection check error:', error);
             }
         }
 
-        // پاک کردن interval هنگام خروج از صفحه
+        // پاک کردن interval هنگام خروج
         window.addEventListener('beforeunload', () => {
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
+            if (checkInterval) {
+                clearInterval(checkInterval);
             }
         });
     </script>
