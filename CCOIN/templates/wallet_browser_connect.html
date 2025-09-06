@@ -282,29 +282,63 @@
             autoBtn.disabled = true;
 
             if (isMobile) {
-                // تلاش برای باز کردن Phantom App
-                const phantomUrl = 'phantom://';
+                // Deep Link صحیح Phantom برای اتصال
+                const dappUrl = encodeURIComponent(window.location.origin);
+                const cluster = "mainnet-beta"; // یا "devnet" برای تست
+                
+                // Deep Link استاندارد Phantom برای connect
+                const phantomConnectUrl = `https://phantom.app/ul/v1/connect?dapp_url=${dappUrl}&redirect_link=${encodeURIComponent(window.location.href)}&cluster=${cluster}`;
+                
+                statusDiv.textContent = "Redirecting to Phantom for connection approval...";
+                
                 try {
-                    window.location.href = phantomUrl;
+                    // ابتدا سعی می‌کنیم اپ را مستقیماً باز کنیم
+                    window.location.href = phantomConnectUrl;
+                    
+                    // بعد از 2 ثانیه چک کنیم که آیا هنوز در همان صفحه هستیم
+                    setTimeout(() => {
+                        statusDiv.textContent = "Please approve the connection request in Phantom app, then return here.";
+                        statusDiv.className = "status warning";
+                        autoBtn.disabled = false;
+                        autoBtn.textContent = "🔄 Try Again";
+                        checkBtn.style.display = "block";
+                        
+                        // چک کردن خودکار هر 3 ثانیه
+                        const checkInterval = setInterval(async () => {
+                            try {
+                                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
+                                const data = await response.json();
+                                
+                                if (data.connected && data.address) {
+                                    clearInterval(checkInterval);
+                                    showConnectedWallet(data.address);
+                                }
+                            } catch (error) {
+                                console.log("Auto check failed:", error);
+                            }
+                        }, 3000);
+                        
+                        // متوقف کردن چک خودکار بعد از 60 ثانیه
+                        setTimeout(() => clearInterval(checkInterval), 60000);
+                        
+                    }, 2000);
+                    
                 } catch (error) {
-                    console.log("Direct phantom:// failed, trying alternative");
-                }
-
-                setTimeout(() => {
-                    statusDiv.textContent = "If Phantom opened, please approve the connection, then click 'Check Connection Status'.";
-                    statusDiv.className = "status warning";
+                    console.error("Phantom connection failed:", error);
+                    statusDiv.textContent = "❌ Failed to open Phantom. Please try manual connection.";
+                    statusDiv.className = "status error";
                     autoBtn.disabled = false;
                     autoBtn.textContent = "🔄 Try Again";
-                    checkBtn.style.display = "block";
-                }, 3000);
+                }
 
             } else {
-                // Browser Extension
+                // Browser Extension برای دسکتاپ
                 try {
                     if (!window.solana || !window.solana.isPhantom) {
                         throw new Error("Phantom extension not found! Please install it first.");
                     }
 
+                    statusDiv.textContent = "Requesting connection from Phantom extension...";
                     const response = await window.solana.connect();
                     const walletAddress = response.publicKey.toString();
 
