@@ -9,6 +9,41 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        .wallet-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 2px solid #28a745;
+            text-align: left;
+        }
+        .wallet-address {
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .wallet-actions {
+            margin-top: 10px;
+        }
+        .wallet-action-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        .disconnect-btn {
+            background: #dc3545;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -26,24 +61,37 @@
 
         <div class="airdrop-criteria">
             <h2>Airdrop Criteria</h2>
+            
             <div id="task-completion" class="task-box">
                 <button onclick="handleTaskCompletion()" class="task-button">
                     <span class="left-text">Tasks Completion</span>
                     <i class="fas fa-chevron-right right-icon"></i>
                 </button>
             </div>
+
             <div id="inviting-friends" class="task-box">
                 <button onclick="handleInviteCheck()" class="task-button">
                     <span class="left-text">Inviting Friends</span>
                     <i class="fas fa-chevron-right right-icon"></i>
                 </button>
             </div>
+
             <div id="connect-wallet" class="task-box">
                 <button onclick="connectWallet()" class="task-button">
                     <span class="left-text">Connect Wallet</span>
                     <i class="fas fa-chevron-right right-icon"></i>
                 </button>
+                <!-- نمایش اطلاعات کیف پول متصل شده -->
+                <div id="wallet-info" class="wallet-info" style="display: none;">
+                    <div><strong>✅ Connected Wallet:</strong></div>
+                    <div id="wallet-address" class="wallet-address"></div>
+                    <div class="wallet-actions">
+                        <button onclick="changeWallet()" class="wallet-action-btn">🔄 Change</button>
+                        <button onclick="disconnectWallet()" class="wallet-action-btn disconnect-btn">🚫 Disconnect</button>
+                    </div>
+                </div>
             </div>
+
             <div id="pay-commission" class="task-box">
                 <button onclick="payCommission()" class="task-button">
                     <span class="left-text">Pay for the Commission</span>
@@ -88,7 +136,35 @@
             box.classList.add("completed");
         }
 
-        let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
+        function markAsConnected(id, walletAddress) {
+            const box = document.getElementById(id);
+            const icon = box.querySelector(".right-icon");
+            const walletInfo = document.getElementById("wallet-info");
+            const walletAddressDiv = document.getElementById("wallet-address");
+            
+            icon.classList.remove("fa-chevron-right");
+            icon.classList.add("fa-check");
+            box.classList.add("completed");
+            
+            // نمایش اطلاعات کیف پول
+            walletInfo.style.display = "block";
+            walletAddressDiv.textContent = walletAddress;
+        }
+
+        function markAsDisconnected(id) {
+            const box = document.getElementById(id);
+            const icon = box.querySelector(".right-icon");
+            const walletInfo = document.getElementById("wallet-info");
+            
+            icon.classList.remove("fa-check");
+            icon.classList.add("fa-chevron-right");
+            box.classList.remove("completed");
+            
+            // مخفی کردن اطلاعات کیف پول
+            walletInfo.style.display = "none";
+        }
+
+        let tasksCompleted = {task: false, invite: false, wallet: false, pay: false};
 
         async function checkUserTasks() {
             try {
@@ -100,24 +176,68 @@
             }
         }
 
-        // تابع اصلی connectWallet - فقط هدایت به صفحه wallet-connect
-        async function connectWallet() {
-            // بررسی موبایل بودن
-            const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
-            if (!isMobile) {
-                alert("This app is designed for mobile devices only. Please use your smartphone.");
-                return;
+        async function checkWalletStatus() {
+            try {
+                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    markAsConnected("connect-wallet", data.address);
+                    tasksCompleted.wallet = true;
+                    localStorage.setItem('phantomConnected', 'true');
+                    localStorage.setItem('walletAddress', data.address);
+                } else {
+                    markAsDisconnected("connect-wallet");
+                    tasksCompleted.wallet = false;
+                    localStorage.removeItem('phantomConnected');
+                    localStorage.removeItem('walletAddress');
+                }
+            } catch (err) {
+                console.error("Error checking wallet status:", err);
             }
+        }
 
+        async function connectWallet() {
             if (tasksCompleted.wallet) {
                 console.log("Wallet already connected");
                 return;
             }
 
             console.log("Redirecting to wallet connect page");
-            
-            // هدایت به صفحه اتصال کیف پول
             window.location.href = "/wallet-connect";
+        }
+
+        async function changeWallet() {
+            console.log("Redirecting to change wallet");
+            window.location.href = "/wallet-browser-connect?telegram_id=" + USER_ID;
+        }
+
+        async function disconnectWallet() {
+            if (!confirm('Are you sure you want to disconnect your wallet?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/wallet/disconnect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: USER_ID })
+                });
+
+                if (response.ok) {
+                    markAsDisconnected("connect-wallet");
+                    tasksCompleted.wallet = false;
+                    localStorage.removeItem('phantomConnected');
+                    localStorage.removeItem('walletAddress');
+                    
+                    alert('✅ Wallet disconnected successfully!');
+                } else {
+                    alert('❌ Error disconnecting wallet');
+                }
+            } catch (error) {
+                console.error('Error disconnecting wallet:', error);
+                alert('❌ Error disconnecting wallet');
+            }
         }
 
         function handleTaskCompletion() {
@@ -140,17 +260,10 @@
             window.Telegram.WebApp.expand();
         }
 
-        // بررسی وضعیت اتصال wallet در صفحه airdrop
+        // بررسی وضعیت‌ها هنگام لود صفحه
         document.addEventListener('DOMContentLoaded', () => {
             checkUserTasks();
-            
-            // بررسی localStorage برای وضعیت wallet
-            const isWalletConnected = localStorage.getItem('phantomConnected');
-            if (isWalletConnected === 'true') {
-                markAsCompleted("connect-wallet");
-                tasksCompleted.wallet = true;
-                console.log("Wallet connection status loaded from localStorage");
-            }
+            checkWalletStatus();
         });
     </script>
 
