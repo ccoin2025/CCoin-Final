@@ -16,6 +16,22 @@ async def wallet_connect_page(request: Request):
 @router.get("/wallet-browser-connect")
 async def wallet_browser_connect(request: Request):
     """صفحه اتصال در مرورگر خارجی"""
+    # دریافت پارامترهای Phantom callback
+    phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
+    telegram_id = request.query_params.get("telegram_id")
+    
+    # اگر Phantom public key ارسال کرده، ذخیره کنیم
+    if phantom_encryption_public_key and telegram_id:
+        try:
+            db = next(get_db())
+            user = db.query(User).filter(User.telegram_id == telegram_id).first()
+            if user:
+                user.wallet_address = phantom_encryption_public_key
+                db.commit()
+            db.close()
+        except Exception as e:
+            print(f"Error saving wallet from callback: {e}")
+    
     return templates.TemplateResponse("wallet_browser_connect.html", {"request": request})
 
 @router.get("/phantom-callback")
