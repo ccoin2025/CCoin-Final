@@ -30,14 +30,14 @@
             margin: 10px;
             width: 100%;
         }
-        .qr-btn { background: #28a745; }
         .manual-btn { background: #17a2b8; }
+        .disconnect-btn { background: #dc3545; }
         .input-field {
-            width: 100%;
+            width: 90%;
             padding: 15px;
             border: 2px solid #ddd;
             border-radius: 10px;
-            font-size: 16px;
+            font-size: 14px;
             margin: 10px 0;
             font-family: monospace;
         }
@@ -51,142 +51,170 @@
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
         .warning { background: #fff3cd; color: #856404; }
-        .method-section {
-            display: none;
-            margin: 20px 0;
-        }
-        .method-section.active { display: block; }
-        .qr-code {
+        .wallet-info {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 10px;
             margin: 15px 0;
+            border: 2px solid #28a745;
+        }
+        .wallet-address {
+            font-family: monospace;
+            word-break: break-all;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔗 Connect Phantom Wallet</h1>
+        <h1>🔗 Phantom Wallet Manager</h1>
         
         <div id="status" class="status info">
-            Choose your connection method:
+            Loading wallet status...
         </div>
 
-        <!-- انتخاب روش اتصال -->
-        <div id="method-selection">
-            <button onclick="showQRMethod()" class="method-btn qr-btn">
-                📱 QR Code Connection
-            </button>
-            <button onclick="showManualMethod()" class="method-btn manual-btn">
-                ✋ Manual Address Entry
-            </button>
-            <button onclick="tryBrowserConnect()" class="method-btn" id="browserBtn">
-                🖥️ Browser Extension
-            </button>
-        </div>
-
-        <!-- روش QR Code -->
-        <div id="qr-method" class="method-section">
-            <h3>📱 QR Code Connection</h3>
-            <div class="qr-code">
-                <p><strong>Step 1:</strong> Open Phantom app on your phone</p>
-                <p><strong>Step 2:</strong> Tap the scan icon (📷)</p>
-                <p><strong>Step 3:</strong> Scan this QR code:</p>
-                <div id="qr-code-container" style="margin: 20px 0;">
-                    <canvas id="qr-canvas"></canvas>
-                </div>
-                <p><strong>Step 4:</strong> Approve the connection in Phantom</p>
+        <!-- نمایش اطلاعات کیف پول متصل شده -->
+        <div id="connected-wallet" style="display: none;">
+            <div class="wallet-info">
+                <h3>✅ Wallet Connected</h3>
+                <p><strong>Your Connected Wallet:</strong></p>
+                <div id="wallet-display" class="wallet-address"></div>
+                <p><small>Connected successfully to CCoin</small></p>
             </div>
-            <button onclick="checkConnection()" class="method-btn qr-btn">
-                ✅ Check Connection Status
+            
+            <button onclick="disconnectWallet()" class="method-btn disconnect-btn">
+                🚫 Disconnect Wallet
             </button>
-            <button onclick="showMethodSelection()" class="method-btn">
-                ⬅️ Back to Methods
-            </button>
-        </div>
-
-        <!-- روش Manual -->
-        <div id="manual-method" class="method-section">
-            <h3>✋ Manual Address Entry</h3>
-            <p>If you can't use QR code, enter your Phantom wallet address manually:</p>
-            <input type="text" id="wallet-address" class="input-field" placeholder="Enter your Phantom wallet address..." maxlength="44">
-            <button onclick="submitManualAddress()" class="method-btn manual-btn">
-                💾 Submit Wallet Address
-            </button>
-            <button onclick="showMethodSelection()" class="method-btn">
-                ⬅️ Back to Methods
+            
+            <button onclick="changeWallet()" class="method-btn manual-btn">
+                🔄 Change Wallet Address
             </button>
         </div>
 
-        <p><small>After connecting, you can close this browser and return to the Telegram app.</small></p>
+        <!-- فرم اتصال جدید -->
+        <div id="connection-form">
+            <h3>📝 Connect Your Wallet</h3>
+            <p>Enter your Phantom wallet address:</p>
+            <input type="text" id="wallet-address" class="input-field" placeholder="Enter your Phantom wallet address (44 characters)..." maxlength="44">
+            
+            <button onclick="submitWalletAddress()" class="method-btn manual-btn">
+                💾 Connect Wallet
+            </button>
+
+            <div style="margin: 20px 0; text-align: left; font-size: 14px; color: #666;">
+                <p><strong>How to find your Phantom wallet address:</strong></p>
+                <p>1. Open Phantom app</p>
+                <p>2. Tap on your wallet name at the top</p>
+                <p>3. Tap "Copy address" or the address itself</p>
+                <p>4. Paste it in the field above</p>
+            </div>
+        </div>
+
+        <p><small>After managing your wallet, you can return to the Telegram app.</small></p>
     </div>
-
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
-        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
 
-        // پنهان کردن دکمه browser extension در موبایل
-        if (isMobile) {
-            document.getElementById('browserBtn').style.display = 'none';
-        }
+        // بارگذاری وضعیت کیف پول هنگام ورود به صفحه
+        document.addEventListener('DOMContentLoaded', () => {
+            checkWalletStatus();
+        });
 
-        function showMethodSelection() {
-            document.querySelectorAll('.method-section').forEach(el => el.classList.remove('active'));
-            document.getElementById('method-selection').style.display = 'block';
-            document.getElementById('status').textContent = 'Choose your connection method:';
-            document.getElementById('status').className = 'status info';
-        }
-
-        function showQRMethod() {
-            document.getElementById('method-selection').style.display = 'none';
-            document.getElementById('qr-method').classList.add('active');
-            generateQRCode();
-            document.getElementById('status').textContent = 'Scan the QR code with Phantom app:';
-            document.getElementById('status').className = 'status info';
-        }
-
-        function showManualMethod() {
-            document.getElementById('method-selection').style.display = 'none';
-            document.getElementById('manual-method').classList.add('active');
-            document.getElementById('status').textContent = 'Enter your wallet address manually:';
-            document.getElementById('status').className = 'status info';
-        }
-
-        function generateQRCode() {
-            const connectData = {
-                method: 'connect',
-                params: {
-                    dapp: {
-                        name: 'CCoin',
-                        url: window.location.origin,
-                        icon: window.location.origin + '/static/images/logo.png'
-                    },
-                    redirect_link: `${window.location.origin}/phantom-callback?telegram_id=${telegramId}`
-                }
-            };
-
-            const qrData = `phantom://v1/connect?data=${encodeURIComponent(JSON.stringify(connectData))}`;
+        async function checkWalletStatus() {
+            const statusDiv = document.getElementById('status');
             
-            QRCode.toCanvas(document.getElementById('qr-canvas'), qrData, {
-                width: 200,
-                margin: 2,
-                color: {
-                    dark: '#000000',
-                    light: '#FFFFFF'
+            try {
+                statusDiv.textContent = "Checking wallet status...";
+                statusDiv.className = "status info";
+
+                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    // نمایش کیف پول متصل شده
+                    showConnectedWallet(data.address);
+                } else {
+                    // نمایش فرم اتصال
+                    showConnectionForm();
                 }
-            }, function (error) {
-                if (error) {
-                    console.error(error);
-                    document.getElementById('qr-code-container').innerHTML = '<p>❌ Error generating QR code</p>';
-                }
-            });
+            } catch (error) {
+                statusDiv.textContent = "❌ Error checking wallet status.";
+                statusDiv.className = "status error";
+                showConnectionForm();
+            }
         }
 
-        async function submitManualAddress() {
+        function showConnectedWallet(address) {
+            const statusDiv = document.getElementById('status');
+            const connectedDiv = document.getElementById('connected-wallet');
+            const formDiv = document.getElementById('connection-form');
+            const displayDiv = document.getElementById('wallet-display');
+            
+            statusDiv.textContent = "Wallet connected successfully!";
+            statusDiv.className = "status success";
+            
+            displayDiv.textContent = address;
+            connectedDiv.style.display = 'block';
+            formDiv.style.display = 'none';
+        }
+
+        function showConnectionForm() {
+            const statusDiv = document.getElementById('status');
+            const connectedDiv = document.getElementById('connected-wallet');
+            const formDiv = document.getElementById('connection-form');
+            
+            statusDiv.textContent = "No wallet connected. Please enter your wallet address:";
+            statusDiv.className = "status info";
+            
+            connectedDiv.style.display = 'none';
+            formDiv.style.display = 'block';
+        }
+
+        function changeWallet() {
+            showConnectionForm();
+        }
+
+        async function disconnectWallet() {
+            const statusDiv = document.getElementById('status');
+            
+            if (!confirm('Are you sure you want to disconnect your wallet?')) {
+                return;
+            }
+            
+            try {
+                statusDiv.textContent = 'Disconnecting wallet...';
+                statusDiv.className = 'status info';
+
+                const response = await fetch('/api/wallet/disconnect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: telegramId
+                    })
+                });
+
+                if (response.ok) {
+                    statusDiv.textContent = '✅ Wallet disconnected successfully!';
+                    statusDiv.className = 'status success';
+                    
+                    setTimeout(() => {
+                        showConnectionForm();
+                    }, 1500);
+                } else {
+                    throw new Error('Failed to disconnect wallet');
+                }
+            } catch (error) {
+                statusDiv.textContent = '❌ Error disconnecting wallet.';
+                statusDiv.className = 'status error';
+            }
+        }
+
+        async function submitWalletAddress() {
             const walletAddress = document.getElementById('wallet-address').value.trim();
             const statusDiv = document.getElementById('status');
             
@@ -196,14 +224,22 @@
                 return;
             }
 
+            // بررسی فرمت آدرس Solana
             if (walletAddress.length < 32 || walletAddress.length > 44) {
-                statusDiv.textContent = '❌ Invalid wallet address format';
+                statusDiv.textContent = '❌ Invalid wallet address format (should be 32-44 characters)';
+                statusDiv.className = 'status error';
+                return;
+            }
+
+            // بررسی کاراکترهای مجاز
+            if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(walletAddress)) {
+                statusDiv.textContent = '❌ Invalid wallet address characters';
                 statusDiv.className = 'status error';
                 return;
             }
 
             try {
-                statusDiv.textContent = 'Saving wallet address...';
+                statusDiv.textContent = 'Connecting wallet...';
                 statusDiv.className = 'status info';
 
                 const response = await fetch('/api/wallet/save', {
@@ -216,90 +252,19 @@
                 });
 
                 if (response.ok) {
-                    statusDiv.textContent = `✅ Wallet address saved successfully!\nAddress: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
+                    statusDiv.textContent = `✅ Wallet connected successfully!`;
                     statusDiv.className = 'status success';
                     
+                    // نمایش کیف پول متصل شده
                     setTimeout(() => {
-                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
-                        setTimeout(() => window.close(), 3000);
-                    }, 2000);
+                        showConnectedWallet(walletAddress);
+                    }, 1500);
                 } else {
                     throw new Error('Failed to save wallet address');
                 }
             } catch (error) {
-                statusDiv.textContent = '❌ Error saving wallet address. Please try again.';
+                statusDiv.textContent = '❌ Error connecting wallet. Please try again.';
                 statusDiv.className = 'status error';
-            }
-        }
-
-        async function tryBrowserConnect() {
-            const statusDiv = document.getElementById('status');
-
-            try {
-                if (!window.solana || !window.solana.isPhantom) {
-                    throw new Error("Phantom extension not found! Please install it first.");
-                }
-
-                statusDiv.textContent = 'Connecting to Phantom extension...';
-                statusDiv.className = 'status info';
-
-                const response = await window.solana.connect();
-                const walletAddress = response.publicKey.toString();
-
-                const saveResponse = await fetch('/api/wallet/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        wallet_address: walletAddress
-                    })
-                });
-
-                if (saveResponse.ok) {
-                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${walletAddress.substring(0,8)}...${walletAddress.substring(-8)}`;
-                    statusDiv.className = 'status success';
-                    
-                    setTimeout(() => {
-                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
-                        setTimeout(() => window.close(), 3000);
-                    }, 2000);
-                } else {
-                    throw new Error("Failed to save wallet address");
-                }
-
-            } catch(error) {
-                console.error('Browser connection error:', error);
-                statusDiv.textContent = `❌ Error: ${error.message}`;
-                statusDiv.className = 'status error';
-            }
-        }
-
-        async function checkConnection() {
-            const statusDiv = document.getElementById('status');
-            
-            try {
-                statusDiv.textContent = "Checking connection status...";
-                statusDiv.className = "status info";
-
-                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
-                const data = await response.json();
-                
-                if (data.connected && data.address) {
-                    statusDiv.textContent = `✅ Successfully connected!\nWallet: ${data.address.substring(0,8)}...${data.address.substring(-8)}`;
-                    statusDiv.className = "status success";
-                    
-                    setTimeout(() => {
-                        statusDiv.textContent += "\n\nYou can now close this browser and return to the Telegram app.";
-                        setTimeout(() => window.close(), 3000);
-                    }, 2000);
-                    
-                } else {
-                    statusDiv.textContent = "⏳ Wallet not connected yet. Please complete the connection process.";
-                    statusDiv.className = "status warning";
-                }
-            } catch (error) {
-                statusDiv.textContent = "❌ Error checking connection. Please try again.";
-                statusDiv.className = "status error";
             }
         }
     </script>
