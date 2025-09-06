@@ -65,3 +65,17 @@ async def save_wallet(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"success": True})
     
     return JSONResponse({"success": False, "error": "User not found"})
+
+@router.post("/api/wallet/disconnect")
+async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
+    """قطع اتصال wallet"""
+    data = await request.json()
+    telegram_id = data.get("telegram_id")
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if user:
+        user.wallet_address = None
+        db.commit()
+        return JSONResponse({"success": True, "message": "Wallet disconnected successfully"})
+    
+    return JSONResponse({"success": False, "error": "User not found"})
