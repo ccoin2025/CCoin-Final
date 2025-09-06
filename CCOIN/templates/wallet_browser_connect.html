@@ -1,479 +1,94 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect Phantom Wallet</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #000;
-            color: #fff;
-        }
-        .container {
-            background: #111;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(255,255,255,0.1);
-            border: 1px solid #333;
-        }
-        .method-btn {
-            background: #fff;
-            color: #000;
-            border: 2px solid #fff;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px;
-            width: 100%;
-            font-weight: bold;
-        }
-        .method-btn:hover {
-            background: #000;
-            color: #fff;
-        }
-        .auto-btn { 
-            background: #000; 
-            color: #fff; 
-            border: 2px solid #fff;
-        }
-        .auto-btn:hover {
-            background: #fff;
-            color: #000;
-        }
-        .disconnect-btn { 
-            background: #333;
-            color: #fff;
-            border: 2px solid #666;
-        }
-        .disconnect-btn:hover {
-            background: #666;
-        }
-        .input-field {
-            width: 90%;
-            padding: 15px;
-            border: 2px solid #333;
-            border-radius: 10px;
-            font-size: 14px;
-            margin: 10px 0;
-            font-family: monospace;
-            background: #222;
-            color: #fff;
-        }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 8px;
-            font-weight: bold;
-        }
-        .success { background: #333; color: #fff; border: 1px solid #666; }
-        .error { background: #222; color: #fff; border: 1px solid #666; }
-        .info { background: #111; color: #fff; border: 1px solid #333; }
-        .warning { background: #222; color: #fff; border: 1px solid #444; }
-        .wallet-info {
-            background: #222;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 15px 0;
-            border: 2px solid #fff;
-        }
-        .wallet-address {
-            font-family: monospace;
-            word-break: break-all;
-            background: #333;
-            color: #fff;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            border: 1px solid #666;
-        }
-        .method-section {
-            display: none;
-            margin: 20px 0;
-        }
-        .method-section.active { display: block; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔗 Phantom Wallet Manager</h1>
+async function tryAutoConnect() {
+    const statusDiv = document.getElementById('status');
+    const autoBtn = document.getElementById('autoConnectBtn');
+    const checkBtn = document.getElementById('checkAutoBtn');
+
+    statusDiv.textContent = "Opening Phantom app...";
+    statusDiv.className = "status info";
+    autoBtn.disabled = true;
+
+    if (isMobile) {
+        // Deep Link صحیح Phantom برای اتصال
+        const dappUrl = encodeURIComponent(window.location.origin);
+        const cluster = "mainnet-beta"; // یا "devnet" برای تست
         
-        <div id="status" class="status info">
-            Loading wallet status...
-        </div>
-
-        <!-- نمایش اطلاعات کیف پول متصل شده -->
-        <div id="connected-wallet" style="display: none;">
-            <div class="wallet-info">
-                <h3>✅ Wallet Connected</h3>
-                <p><strong>Your Connected Wallet:</strong></p>
-                <div id="wallet-display" class="wallet-address"></div>
-                <p><small>Connected successfully to CCoin</small></p>
-            </div>
+        // Deep Link استاندارد Phantom برای connect
+        const phantomConnectUrl = `https://phantom.app/ul/v1/connect?dapp_url=${dappUrl}&redirect_link=${encodeURIComponent(window.location.href)}&cluster=${cluster}`;
+        
+        statusDiv.textContent = "Redirecting to Phantom for connection approval...";
+        
+        try {
+            // ابتدا سعی می‌کنیم اپ را مستقیماً باز کنیم
+            window.location.href = phantomConnectUrl;
             
-            <button onclick="disconnectWallet()" class="method-btn disconnect-btn">
-                🚫 Disconnect Wallet
-            </button>
-            
-            <button onclick="changeWallet()" class="method-btn">
-                🔄 Change Wallet Address
-            </button>
-        </div>
-
-        <!-- انتخاب روش اتصال -->
-        <div id="method-selection" style="display: none;">
-            <h3>📝 Choose Connection Method</h3>
-            
-            <button onclick="showAutoConnect()" class="method-btn auto-btn">
-                🚀 Auto Connect to Phantom
-            </button>
-            
-            <button onclick="showManualMethod()" class="method-btn">
-                ✋ Manual Address Entry
-            </button>
-        </div>
-
-        <!-- روش اتصال اتوماتیک -->
-        <div id="auto-connect" class="method-section">
-            <h3>🚀 Auto Connect to Phantom</h3>
-            <p>This will try to connect automatically to your Phantom wallet:</p>
-            
-            <button onclick="tryAutoConnect()" class="method-btn auto-btn" id="autoConnectBtn">
-                📱 Connect to Phantom App
-            </button>
-            
-            <div style="margin: 20px 0; font-size: 14px; color: #ccc;">
-                <p><strong>Instructions:</strong></p>
-                <p>1. Click the button above</p>
-                <p>2. Phantom app will open automatically</p>
-                <p>3. Approve the connection request</p>
-                <p>4. Return here and check status</p>
-            </div>
-            
-            <button onclick="checkConnection()" class="method-btn" id="checkAutoBtn" style="display: none;">
-                ✅ Check Connection Status
-            </button>
-            
-            <button onclick="showMethodSelection()" class="method-btn">
-                ⬅️ Back to Methods
-            </button>
-        </div>
-
-        <!-- روش دستی -->
-        <div id="manual-method" class="method-section">
-            <h3>✋ Manual Address Entry</h3>
-            <p>Enter your Phantom wallet address manually:</p>
-            <input type="text" id="wallet-address" class="input-field" placeholder="Enter your Phantom wallet address (44 characters)..." maxlength="44">
-            
-            <button onclick="submitWalletAddress()" class="method-btn">
-                💾 Connect Wallet
-            </button>
-
-            <div style="margin: 20px 0; text-align: left; font-size: 14px; color: #ccc;">
-                <p><strong>How to find your Phantom wallet address:</strong></p>
-                <p>1. Open Phantom app</p>
-                <p>2. Tap on your wallet name at the top</p>
-                <p>3. Tap "Copy address" or the address itself</p>
-                <p>4. Paste it in the field above</p>
-            </div>
-            
-            <button onclick="showMethodSelection()" class="method-btn">
-                ⬅️ Back to Methods
-            </button>
-        </div>
-
-        <p><small>After managing your wallet, you can return to the Telegram app.</small></p>
-    </div>
-
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const telegramId = urlParams.get('telegram_id');
-        const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|operamini/i.test(navigator.userAgent.toLowerCase());
-
-        // بارگذاری وضعیت کیف پول هنگام ورود به صفحه
-        document.addEventListener('DOMContentLoaded', () => {
-            checkWalletStatus();
-        });
-
-        async function checkWalletStatus() {
-            const statusDiv = document.getElementById('status');
-            
-            try {
-                statusDiv.textContent = "Checking wallet status...";
-                statusDiv.className = "status info";
-
-                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
-                const data = await response.json();
+            // بعد از 2 ثانیه چک کنیم که آیا هنوز در همان صفحه هستیم
+            setTimeout(() => {
+                statusDiv.textContent = "Please approve the connection request in Phantom app, then return here.";
+                statusDiv.className = "status warning";
+                autoBtn.disabled = false;
+                autoBtn.textContent = "🔄 Try Again";
+                checkBtn.style.display = "block";
                 
-                if (data.connected && data.address) {
-                    showConnectedWallet(data.address);
-                } else {
-                    showMethodSelection();
-                }
-            } catch (error) {
-                statusDiv.textContent = "❌ Error checking wallet status.";
-                statusDiv.className = "status error";
-                showMethodSelection();
+                // چک کردن خودکار هر 3 ثانیه
+                const checkInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
+                        const data = await response.json();
+                        
+                        if (data.connected && data.address) {
+                            clearInterval(checkInterval);
+                            showConnectedWallet(data.address);
+                        }
+                    } catch (error) {
+                        console.log("Auto check failed:", error);
+                    }
+                }, 3000);
+                
+                // متوقف کردن چک خودکار بعد از 60 ثانیه
+                setTimeout(() => clearInterval(checkInterval), 60000);
+                
+            }, 2000);
+            
+        } catch (error) {
+            console.error("Phantom connection failed:", error);
+            statusDiv.textContent = "❌ Failed to open Phantom. Please try manual connection.";
+            statusDiv.className = "status error";
+            autoBtn.disabled = false;
+            autoBtn.textContent = "🔄 Try Again";
+        }
+
+    } else {
+        // Browser Extension برای دسکتاپ
+        try {
+            if (!window.solana || !window.solana.isPhantom) {
+                throw new Error("Phantom extension not found! Please install it first.");
             }
-        }
 
-        function showConnectedWallet(address) {
-            const statusDiv = document.getElementById('status');
-            const connectedDiv = document.getElementById('connected-wallet');
-            const methodDiv = document.getElementById('method-selection');
-            const displayDiv = document.getElementById('wallet-display');
-            
-            statusDiv.textContent = "Wallet connected successfully!";
-            statusDiv.className = "status success";
-            
-            displayDiv.textContent = address;
-            connectedDiv.style.display = 'block';
-            methodDiv.style.display = 'none';
-            hideAllMethods();
-        }
+            statusDiv.textContent = "Requesting connection from Phantom extension...";
+            const response = await window.solana.connect();
+            const walletAddress = response.publicKey.toString();
 
-        function showMethodSelection() {
-            const statusDiv = document.getElementById('status');
-            const connectedDiv = document.getElementById('connected-wallet');
-            const methodDiv = document.getElementById('method-selection');
-            
-            statusDiv.textContent = "Choose your connection method:";
-            statusDiv.className = "status info";
-            
-            connectedDiv.style.display = 'none';
-            methodDiv.style.display = 'block';
-            hideAllMethods();
-        }
+            const saveResponse = await fetch('/api/wallet/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    telegram_id: telegramId,
+                    wallet_address: walletAddress
+                })
+            });
 
-        function hideAllMethods() {
-            document.querySelectorAll('.method-section').forEach(el => el.classList.remove('active'));
-        }
-
-        function showAutoConnect() {
-            document.getElementById('method-selection').style.display = 'none';
-            document.getElementById('auto-connect').classList.add('active');
-            document.getElementById('status').textContent = 'Try automatic connection to Phantom:';
-            document.getElementById('status').className = 'status info';
-        }
-
-        function showManualMethod() {
-            document.getElementById('method-selection').style.display = 'none';
-            document.getElementById('manual-method').classList.add('active');
-            document.getElementById('status').textContent = 'Enter your wallet address manually:';
-            document.getElementById('status').className = 'status info';
-        }
-
-        function changeWallet() {
-            showMethodSelection();
-        }
-
-        async function tryAutoConnect() {
-            const statusDiv = document.getElementById('status');
-            const autoBtn = document.getElementById('autoConnectBtn');
-            const checkBtn = document.getElementById('checkAutoBtn');
-
-            statusDiv.textContent = "Opening Phantom app...";
-            statusDiv.className = "status info";
-            autoBtn.disabled = true;
-
-            if (isMobile) {
-                // Deep Link صحیح Phantom برای اتصال
-                const dappUrl = encodeURIComponent(window.location.origin);
-                const cluster = "mainnet-beta"; // یا "devnet" برای تست
-                
-                // Deep Link استاندارد Phantom برای connect
-                const phantomConnectUrl = `https://phantom.app/ul/v1/connect?dapp_url=${dappUrl}&redirect_link=${encodeURIComponent(window.location.href)}&cluster=${cluster}`;
-                
-                statusDiv.textContent = "Redirecting to Phantom for connection approval...";
-                
-                try {
-                    // ابتدا سعی می‌کنیم اپ را مستقیماً باز کنیم
-                    window.location.href = phantomConnectUrl;
-                    
-                    // بعد از 2 ثانیه چک کنیم که آیا هنوز در همان صفحه هستیم
-                    setTimeout(() => {
-                        statusDiv.textContent = "Please approve the connection request in Phantom app, then return here.";
-                        statusDiv.className = "status warning";
-                        autoBtn.disabled = false;
-                        autoBtn.textContent = "🔄 Try Again";
-                        checkBtn.style.display = "block";
-                        
-                        // چک کردن خودکار هر 3 ثانیه
-                        const checkInterval = setInterval(async () => {
-                            try {
-                                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
-                                const data = await response.json();
-                                
-                                if (data.connected && data.address) {
-                                    clearInterval(checkInterval);
-                                    showConnectedWallet(data.address);
-                                }
-                            } catch (error) {
-                                console.log("Auto check failed:", error);
-                            }
-                        }, 3000);
-                        
-                        // متوقف کردن چک خودکار بعد از 60 ثانیه
-                        setTimeout(() => clearInterval(checkInterval), 60000);
-                        
-                    }, 2000);
-                    
-                } catch (error) {
-                    console.error("Phantom connection failed:", error);
-                    statusDiv.textContent = "❌ Failed to open Phantom. Please try manual connection.";
-                    statusDiv.className = "status error";
-                    autoBtn.disabled = false;
-                    autoBtn.textContent = "🔄 Try Again";
-                }
-
+            if (saveResponse.ok) {
+                showConnectedWallet(walletAddress);
             } else {
-                // Browser Extension برای دسکتاپ
-                try {
-                    if (!window.solana || !window.solana.isPhantom) {
-                        throw new Error("Phantom extension not found! Please install it first.");
-                    }
-
-                    statusDiv.textContent = "Requesting connection from Phantom extension...";
-                    const response = await window.solana.connect();
-                    const walletAddress = response.publicKey.toString();
-
-                    const saveResponse = await fetch('/api/wallet/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            telegram_id: telegramId,
-                            wallet_address: walletAddress
-                        })
-                    });
-
-                    if (saveResponse.ok) {
-                        showConnectedWallet(walletAddress);
-                    } else {
-                        throw new Error("Failed to save wallet address");
-                    }
-
-                } catch(error) {
-                    console.error('Browser connection error:', error);
-                    statusDiv.textContent = `❌ Error: ${error.message}`;
-                    statusDiv.className = "status error";
-                    autoBtn.disabled = false;
-                    autoBtn.textContent = "🔄 Try Again";
-                }
+                throw new Error("Failed to save wallet address");
             }
+
+        } catch(error) {
+            console.error('Browser connection error:', error);
+            statusDiv.textContent = `❌ Error: ${error.message}`;
+            statusDiv.className = "status error";
+            autoBtn.disabled = false;
+            autoBtn.textContent = "🔄 Try Again";
         }
-
-        async function checkConnection() {
-            const statusDiv = document.getElementById('status');
-            
-            try {
-                statusDiv.textContent = "Checking connection status...";
-                statusDiv.className = "status info";
-
-                const response = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
-                const data = await response.json();
-                
-                if (data.connected && data.address) {
-                    showConnectedWallet(data.address);
-                } else {
-                    statusDiv.textContent = "⏳ Wallet not connected yet. Please complete the connection process.";
-                    statusDiv.className = "status warning";
-                }
-            } catch (error) {
-                statusDiv.textContent = "❌ Error checking connection. Please try again.";
-                statusDiv.className = "status error";
-            }
-        }
-
-        async function disconnectWallet() {
-            const statusDiv = document.getElementById('status');
-            
-            if (!confirm('Are you sure you want to disconnect your wallet?')) {
-                return;
-            }
-            
-            try {
-                statusDiv.textContent = 'Disconnecting wallet...';
-                statusDiv.className = 'status info';
-
-                const response = await fetch('/api/wallet/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: telegramId
-                    })
-                });
-
-                if (response.ok) {
-                    statusDiv.textContent = '✅ Wallet disconnected successfully!';
-                    statusDiv.className = 'status success';
-                    
-                    setTimeout(() => {
-                        showMethodSelection();
-                    }, 1500);
-                } else {
-                    throw new Error('Failed to disconnect wallet');
-                }
-            } catch (error) {
-                statusDiv.textContent = '❌ Error disconnecting wallet.';
-                statusDiv.className = 'status error';
-            }
-        }
-
-        async function submitWalletAddress() {
-            const walletAddress = document.getElementById('wallet-address').value.trim();
-            const statusDiv = document.getElementById('status');
-            
-            if (!walletAddress) {
-                statusDiv.textContent = '❌ Please enter a wallet address';
-                statusDiv.className = 'status error';
-                return;
-            }
-
-            if (walletAddress.length < 32 || walletAddress.length > 44) {
-                statusDiv.textContent = '❌ Invalid wallet address format (should be 32-44 characters)';
-                statusDiv.className = 'status error';
-                return;
-            }
-
-            if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(walletAddress)) {
-                statusDiv.textContent = '❌ Invalid wallet address characters';
-                statusDiv.className = 'status error';
-                return;
-            }
-
-            try {
-                statusDiv.textContent = 'Connecting wallet...';
-                statusDiv.className = 'status info';
-
-                const response = await fetch('/api/wallet/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        wallet_address: walletAddress
-                    })
-                });
-
-                if (response.ok) {
-                    statusDiv.textContent = `✅ Wallet connected successfully!`;
-                    statusDiv.className = 'status success';
-                    
-                    setTimeout(() => {
-                        showConnectedWallet(walletAddress);
-                    }, 1500);
-                } else {
-                    throw new Error('Failed to save wallet address');
-                }
-            } catch (error) {
-                statusDiv.textContent = '❌ Error connecting wallet. Please try again.';
-                statusDiv.className = 'status error';
-            }
-        }
-    </script>
-</body>
-</html>
+    }
+}
