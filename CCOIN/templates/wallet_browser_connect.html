@@ -31,7 +31,7 @@
   <script>
     function connectPhantom() {
       const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "guest";
-      const callbackUrl = encodeURIComponent(`https://yourdomain.com/phantom-callback?userId=${userId}`);
+      const callbackUrl = encodeURIComponent(`https://ccoin-final.onrender.com/phantom-callback?userId=${userId}`);
 
       // لینک‌های اتصال
       const deepLink = `phantom://ul/v1/connect?redirect_link=${callbackUrl}`;
