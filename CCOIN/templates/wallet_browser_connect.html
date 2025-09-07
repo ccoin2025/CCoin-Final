@@ -215,29 +215,19 @@
         <!-- انتخاب روش اتصال -->
         <div id="method-selection">
             <div class="option-box">
-                <div class="option-title">🚀 If you have Phantom App installed:</div>
+                <div class="option-title">🚀 Connect with Phantom App</div>
                 <div class="option-description">
-                    Click this button to try opening Phantom app directly
+                    Open Phantom app and connect automatically using deep link
                 </div>
-                <button class="method-btn phantom-btn" onclick="openPhantomApp()">
-                    🚀 Open Phantom App
+                <button class="method-btn phantom-btn" onclick="connectWithPhantomDeepLink()">
+                    🚀 Connect Phantom App
                 </button>
             </div>
 
             <div class="option-box">
-                <div class="option-title">📱 If you don't have Phantom App:</div>
+                <div class="option-title">✍️ Manual Connection (Most Reliable)</div>
                 <div class="option-description">
-                    Install Phantom first, then come back here
-                </div>
-                <button class="method-btn secondary-btn" onclick="installPhantom()">
-                    📱 Install Phantom App
-                </button>
-            </div>
-
-            <div class="option-box">
-                <div class="option-title">✍️ Manual Connection (Recommended):</div>
-                <div class="option-description">
-                    Enter your wallet address manually - Most reliable method
+                    Enter your wallet address manually - Works 100% of the time
                 </div>
                 <button class="method-btn primary-btn" onclick="showManualMethod()">
                     ✍️ Manual Address Entry
@@ -245,7 +235,7 @@
             </div>
 
             <button class="method-btn secondary-btn" onclick="showInstructions()">
-                📋 Detailed Instructions
+                📋 Connection Instructions
             </button>
             
             <a href="/airdrop" class="back-btn">⬅️ Back to Airdrop</a>
@@ -253,26 +243,21 @@
 
         <!-- دستورالعمل اتصال -->
         <div id="instructions" class="method-section">
-            <h3>📋 Complete Connection Guide</h3>
+            <h3>📋 How to Connect Your Wallet</h3>
             <div class="instruction-box">
                 <div class="step">
-                    <strong>Option 1: If Phantom is installed</strong>
-                    <br>• Click "Open Phantom App" button
-                    <br>• If it opens Phantom, great! Follow the prompts
-                    <br>• If not, use manual method below
+                    <strong>Method 1: Phantom App Connection</strong>
+                    <br>• Click "Connect Phantom App" button
+                    <br>• Phantom app will open automatically
+                    <br>• Approve the connection in Phantom
+                    <br>• You'll be redirected back here
                 </div>
                 <div class="step">
-                    <strong>Option 2: Manual Connection (Recommended)</strong>
+                    <strong>Method 2: Manual Entry (Recommended)</strong>
                     <br>• Open Phantom app on your phone
                     <br>• Tap Settings (⚙️) → Copy Address
-                    <br>• Return here and use "Manual Address Entry"
+                    <br>• Use "Manual Address Entry" button
                     <br>• Paste your address and connect
-                </div>
-                <div class="step">
-                    <strong>Option 3: Install Phantom first</strong>
-                    <br>• Click "Install Phantom App"
-                    <br>• Download and setup your wallet
-                    <br>• Return here and use manual method
                 </div>
             </div>
             <button class="method-btn primary-btn" onclick="showManualMethod()">
@@ -287,12 +272,12 @@
         <div id="manual-method" class="method-section">
             <h3>✍️ Manual Wallet Connection</h3>
             <div class="instruction-box">
-                <strong>📝 Step by step:</strong>
+                <strong>📝 How to get your wallet address:</strong>
                 <ol style="text-align: left; margin: 10px 0; color: #ccc;">
                     <li>Open your Phantom app</li>
-                    <li>Tap the settings icon (⚙️) at the top</li>
-                    <li>Find and tap "Copy Address"</li>
-                    <li>Come back here and paste it below</li>
+                    <li>Tap the settings icon (⚙️)</li>
+                    <li>Tap "Copy Address"</li>
+                    <li>Return here and paste it below</li>
                     <li>Click "Connect Wallet"</li>
                 </ol>
             </div>
@@ -349,7 +334,7 @@
             document.getElementById('instructions').classList.add('active');
             document.getElementById('manual-method').classList.remove('active');
             document.getElementById('connected-wallet').classList.remove('active');
-            showStatus('Follow the complete guide below', 'info');
+            showStatus('Follow the guide below to connect your wallet', 'info');
         }
 
         function showManualMethod() {
@@ -373,49 +358,72 @@
             showMethodSelection();
         }
 
-        // باز کردن Phantom App (ساده و بدون تشخیص پیچیده)
-        function openPhantomApp() {
-            showStatus('🚀 Attempting to open Phantom app...', 'info');
+        // پیاده‌سازی استاندارد Deep Link برای Phantom (بر اساس مستندات)
+        function connectWithPhantomDeepLink() {
+            showStatus('🚀 Connecting to Phantom app...', 'info');
             
             try {
-                // تلاش ساده برای باز کردن Phantom
-                const phantomUrl = 'phantom://';
-                window.location.href = phantomUrl;
+                // تشخیص دستگاه موبایل
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                 
-                // پیام راهنما
-                setTimeout(() => {
-                    showStatus('📱 If Phantom opened, follow the prompts. Otherwise, use manual method.', 'warning');
-                }, 2000);
+                if (!isMobile) {
+                    showStatus('📱 This method works best on mobile devices. Please use manual entry.', 'warning');
+                    setTimeout(() => {
+                        showManualMethod();
+                    }, 3000);
+                    return;
+                }
+
+                // ساخت callback URL برای بازگشت
+                const currentUrl = window.location.origin + window.location.pathname;
+                const callbackUrl = `${currentUrl}?telegram_id=${telegramId}&phantom_callback=true`;
                 
-                // هدایت به manual method بعد از 5 ثانیه
-                setTimeout(() => {
-                    showStatus('💡 For best results, please use manual address entry method.', 'info');
-                }, 5000);
+                // ساخت Universal Link مطابق مستندات Phantom
+                const phantomUniversalLink = `https://phantom.app/ul/v1/connect?redirect_link=${encodeURIComponent(callbackUrl)}`;
+                
+                showStatus('📱 Opening Phantom app...', 'info');
+                
+                // هدایت به Phantom با Universal Link
+                window.location.href = phantomUniversalLink;
                 
             } catch (error) {
-                console.error('Error opening Phantom:', error);
-                showStatus('❌ Could not open Phantom. Please use manual entry method.', 'error');
+                console.error('Error in Phantom deep link:', error);
+                showStatus('❌ Could not connect to Phantom. Please use manual entry method.', 'error');
                 setTimeout(() => {
                     showManualMethod();
                 }, 2000);
             }
         }
 
-        // نصب Phantom
-        function installPhantom() {
-            showStatus('📱 Opening Phantom installation page...', 'info');
+        // پردازش callback از Phantom
+        function handlePhantomCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const phantomCallback = urlParams.get('phantom_callback');
             
-            const phantomInstallUrl = 'https://phantom.app/download';
-            
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-                window.Telegram.WebApp.openLink(phantomInstallUrl);
-            } else {
-                window.open(phantomInstallUrl, '_blank');
+            if (phantomCallback === 'true') {
+                // پارامترهای ممکن از Phantom
+                const publicKey = urlParams.get('phantom_encryption_public_key') || urlParams.get('publicKey');
+                const errorCode = urlParams.get('errorCode');
+                const errorMessage = urlParams.get('errorMessage');
+                
+                if (errorCode && errorMessage) {
+                    showStatus(`❌ Phantom error: ${decodeURIComponent(errorMessage)}`, 'error');
+                    setTimeout(() => {
+                        showMethodSelection();
+                    }, 3000);
+                    return;
+                }
+                
+                if (publicKey) {
+                    showStatus('✅ Connected via Phantom! Saving wallet...', 'success');
+                    saveWalletAddress(publicKey);
+                } else {
+                    showStatus('⚠️ Phantom opened but no wallet address received. Please use manual entry.', 'warning');
+                    setTimeout(() => {
+                        showManualMethod();
+                    }, 3000);
+                }
             }
-            
-            setTimeout(() => {
-                showStatus('📋 After installing Phantom, come back and use manual entry method.', 'warning');
-            }, 2000);
         }
 
         async function saveWalletAddress(walletAddress) {
@@ -435,6 +443,10 @@
                     showConnectedWallet(walletAddress);
                     localStorage.setItem('phantomConnected', 'true');
                     localStorage.setItem('walletAddress', walletAddress);
+                    
+                    // پاک کردن پارامترهای URL
+                    const cleanUrl = window.location.origin + window.location.pathname + `?telegram_id=${telegramId}`;
+                    window.history.replaceState({}, document.title, cleanUrl);
                 } else {
                     const errorData = await response.json();
                     throw new Error(errorData.error || 'Failed to save wallet address');
@@ -543,22 +555,18 @@
 
         // اجرای اولیه
         document.addEventListener('DOMContentLoaded', async () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const errorCode = urlParams.get('errorCode');
-            const errorMessage = urlParams.get('errorMessage');
-            
-            if (errorCode && errorMessage) {
-                showStatus(`❌ Previous error: ${decodeURIComponent(errorMessage)}`, 'error');
-                setTimeout(showMethodSelection, 3000);
-                return;
-            }
-
             setupAddressInput();
-
-            // بررسی اتصال موجود
-            const isConnected = await checkExistingConnection();
-            if (!isConnected) {
-                showMethodSelection();
+            
+            // بررسی callback از Phantom
+            handlePhantomCallback();
+            
+            // اگر callback نبود، بررسی اتصال موجود
+            const urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.get('phantom_callback')) {
+                const isConnected = await checkExistingConnection();
+                if (!isConnected) {
+                    showMethodSelection();
+                }
             }
         });
     </script>
