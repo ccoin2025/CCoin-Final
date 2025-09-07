@@ -197,7 +197,7 @@
         
         <!-- انتخاب روش اتصال -->
         <div id="method-selection">
-            <button class="method-btn primary-btn" onclick="openPhantomApp()">
+            <button class="method-btn primary-btn" onclick="safeOpenPhantom()">
                 🚀 Open Phantom App
             </button>
             <button class="method-btn secondary-btn" onclick="showInstructions()">
@@ -225,6 +225,8 @@
                 </div>
                 <div class="step">
                     <strong>Step 3:</strong> Copy your wallet address from Phantom app
+                    <br>
+                    <small style="color: #ccc;">Go to Settings → Copy Address</small>
                 </div>
                 <div class="step">
                     <strong>Step 4:</strong> Return here and use "Manual Address Entry"
@@ -242,11 +244,11 @@
         <div id="manual-method" class="method-section">
             <h3>✍️ Enter Wallet Address Manually</h3>
             <div class="instruction-box">
-                <strong>📝 Instructions:</strong>
+                <strong>📝 How to get your address:</strong>
                 <ul style="text-align: left; margin: 10px 0;">
                     <li>Open your Phantom wallet app</li>
                     <li>Tap on your wallet name at the top</li>
-                    <li>Copy your wallet address</li>
+                    <li>Tap "Copy Address" or the copy icon</li>
                     <li>Paste it in the field below</li>
                 </ul>
             </div>
@@ -327,32 +329,49 @@
             showMethodSelection();
         }
 
-        function openPhantomApp() {
-            showStatus('🔄 Attempting to open Phantom app...', 'info');
-            
-            // تلاش برای باز کردن Phantom app
-            const phantomDeepLink = `phantom://browse/${encodeURIComponent(window.location.href)}`;
-            const phantomUniversalLink = `https://phantom.app/ul/browse/${encodeURIComponent(window.location.href)}`;
+        // تابع امن برای باز کردن Phantom (بدون کرش)
+        function safeOpenPhantom() {
+            showStatus('🔄 Preparing to open Phantom...', 'info');
             
             try {
-                // تلاش اول: Deep Link
-                window.location.href = phantomDeepLink;
+                // روش ساده و امن
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
-                // تلاش دوم: Universal Link (بعد از 2 ثانیه)
-                setTimeout(() => {
-                    showStatus('📱 Opening Phantom in browser...', 'info');
-                    window.open(phantomUniversalLink, '_blank');
-                }, 2000);
+                if (isMobile) {
+                    // برای موبایل - تلاش برای باز کردن اپ
+                    const phantomAppStore = 'https://phantom.app/download';
+                    
+                    showStatus('📱 Opening Phantom download page...', 'info');
+                    
+                    // باز کردن صفحه دانلود Phantom
+                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+                        window.Telegram.WebApp.openLink(phantomAppStore);
+                    } else {
+                        window.open(phantomAppStore, '_blank');
+                    }
+                    
+                    // نمایش پیام راهنما
+                    setTimeout(() => {
+                        showStatus('📋 After installing Phantom, please use "Manual Address Entry" method.', 'warning');
+                    }, 3000);
+                    
+                } else {
+                    // برای دسکتاپ
+                    showStatus('💻 For desktop, please install Phantom browser extension.', 'info');
+                    window.open('https://phantom.app/', '_blank');
+                }
                 
-                // راهنمایی کاربر
+                // هدایت به دستورالعمل بعد از 5 ثانیه
                 setTimeout(() => {
-                    showStatus('⚠️ If Phantom didn\'t open, please use manual address entry.', 'warning');
+                    showInstructions();
                 }, 5000);
                 
             } catch (error) {
-                console.error('Error opening Phantom:', error);
-                showStatus('❌ Could not open Phantom app. Please use manual entry.', 'error');
-                setTimeout(showInstructions, 2000);
+                console.error('Error in safeOpenPhantom:', error);
+                showStatus('❌ Could not open Phantom. Please use manual entry method.', 'error');
+                setTimeout(() => {
+                    showInstructions();
+                }, 2000);
             }
         }
 
@@ -458,6 +477,31 @@
             await saveWalletAddress(walletAddress);
         }
 
+        // مدیریت clipboard برای mobile
+        function setupAddressInput() {
+            const addressInput = document.getElementById('wallet-address');
+            if (addressInput) {
+                addressInput.addEventListener('paste', function(e) {
+                    setTimeout(() => {
+                        const pastedValue = this.value.trim();
+                        if (pastedValue.length > 30) {
+                            showStatus('✅ Address pasted! Click "Connect Wallet" to continue.', 'success');
+                        }
+                    }, 100);
+                });
+
+                // مدیریت input تایپ کردن
+                addressInput.addEventListener('input', function(e) {
+                    const value = this.value.trim();
+                    if (value.length >= 32 && value.length <= 50) {
+                        showStatus('✅ Valid address format detected!', 'success');
+                    } else if (value.length > 0) {
+                        showStatus('ℹ️ Continue typing or paste your address...', 'info');
+                    }
+                });
+            }
+        }
+
         // بررسی خطاهای URL و اتصال موجود
         document.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -470,21 +514,14 @@
                 return;
             }
 
+            // تنظیم event listeners
+            setupAddressInput();
+
             // بررسی اتصال موجود
             const isConnected = await checkExistingConnection();
             if (!isConnected) {
                 showMethodSelection();
             }
-        });
-
-        // مدیریت clipboard برای mobile
-        document.getElementById('wallet-address').addEventListener('paste', function(e) {
-            setTimeout(() => {
-                const pastedValue = this.value;
-                if (pastedValue.length > 30) {
-                    showStatus('✅ Address pasted! Click "Connect Wallet" to continue.', 'success');
-                }
-            }, 100);
         });
     </script>
 </body>
