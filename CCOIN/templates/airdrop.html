@@ -10,38 +10,110 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        .wallet-info {
+        /* استایل منوی کشویی کیف پول */
+        .wallet-dropdown {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .wallet-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 100%;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1000;
+            border-radius: 10px;
+            border: 2px solid #28a745;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+        }
+
+        .wallet-dropdown-content.show {
+            display: block;
+        }
+
+        .wallet-info-dropdown {
             background: #f8f9fa;
             padding: 15px;
-            border-radius: 10px;
-            margin: 10px 0;
-            border: 2px solid #28a745;
+            border-radius: 8px;
             text-align: left;
         }
-        .wallet-address {
+
+        .wallet-address-dropdown {
             font-family: monospace;
-            font-size: 12px;
+            font-size: 11px;
             word-break: break-all;
             background: #e9ecef;
             padding: 8px;
             border-radius: 5px;
-            margin: 5px 0;
+            margin: 8px 0;
+            color: #333;
         }
-        .wallet-actions {
+
+        .wallet-actions-dropdown {
+            display: flex;
+            gap: 8px;
             margin-top: 10px;
         }
+
         .wallet-action-btn {
             background: #17a2b8;
             color: white;
             border: none;
-            padding: 8px 15px;
+            padding: 8px 12px;
             border-radius: 5px;
-            font-size: 12px;
+            font-size: 11px;
             cursor: pointer;
-            margin-right: 5px;
+            flex: 1;
+            text-align: center;
         }
+
+        .wallet-action-btn:hover {
+            opacity: 0.8;
+        }
+
         .disconnect-btn {
             background: #dc3545;
+        }
+
+        .change-btn {
+            background: #ffc107;
+            color: #333;
+        }
+
+        /* استایل دکمه کانکت ولت */
+        .wallet-connect-button {
+            position: relative;
+        }
+
+        .wallet-status-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            background: #28a745;
+            border-radius: 50%;
+            display: none;
+        }
+
+        .wallet-status-indicator.connected {
+            display: block;
+        }
+
+        /* انیمیشن برای dropdown */
+        .wallet-dropdown-content {
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .wallet-dropdown-content.show {
+            opacity: 1;
+            transform: translateY(0);
         }
     </style>
 </head>
@@ -76,18 +148,29 @@
                 </button>
             </div>
 
+            <!-- کیف پول با منوی کشویی -->
             <div id="connect-wallet" class="task-box">
-                <button onclick="connectWallet()" class="task-button">
-                    <span class="left-text">Connect Wallet</span>
-                    <i class="fas fa-chevron-right right-icon"></i>
-                </button>
-                <!-- نمایش اطلاعات کیف پول متصل شده -->
-                <div id="wallet-info" class="wallet-info" style="display: none;">
-                    <div><strong>✅ Connected Wallet:</strong></div>
-                    <div id="wallet-address" class="wallet-address"></div>
-                    <div class="wallet-actions">
-                        <button onclick="changeWallet()" class="wallet-action-btn">🔄 Change</button>
-                        <button onclick="disconnectWallet()" class="wallet-action-btn disconnect-btn">🚫 Disconnect</button>
+                <div class="wallet-dropdown">
+                    <button onclick="toggleWalletDropdown()" class="task-button wallet-connect-button">
+                        <span class="left-text" id="wallet-button-text">Connect Wallet</span>
+                        <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
+                        <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
+                    </button>
+                    
+                    <!-- منوی کشویی -->
+                    <div id="wallet-dropdown-content" class="wallet-dropdown-content">
+                        <div class="wallet-info-dropdown">
+                            <div><strong>✅ Connected Wallet:</strong></div>
+                            <div id="wallet-address-dropdown" class="wallet-address-dropdown"></div>
+                            <div class="wallet-actions-dropdown">
+                                <button onclick="changeWallet()" class="wallet-action-btn change-btn">
+                                    🔄 Change
+                                </button>
+                                <button onclick="disconnectWallet()" class="wallet-action-btn disconnect-btn">
+                                    🚫 Disconnect
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -128,6 +211,10 @@
         const USER_ID = "{{ request.session.telegram_id }}";
         console.log("airdrop.js loaded");
 
+        let tasksCompleted = {task: false, invite: false, wallet: false, pay: false};
+        let isWalletConnected = false;
+        let walletDropdownOpen = false;
+
         function markAsCompleted(id) {
             const box = document.getElementById(id);
             const icon = box.querySelector(".right-icon");
@@ -138,33 +225,48 @@
 
         function markAsConnected(id, walletAddress) {
             const box = document.getElementById(id);
-            const icon = box.querySelector(".right-icon");
-            const walletInfo = document.getElementById("wallet-info");
-            const walletAddressDiv = document.getElementById("wallet-address");
-            
+            const icon = document.getElementById("wallet-icon");
+            const buttonText = document.getElementById("wallet-button-text");
+            const statusIndicator = document.getElementById("wallet-status-indicator");
+            const addressDropdown = document.getElementById("wallet-address-dropdown");
+
+            // تغییر آیکون و متن
             icon.classList.remove("fa-chevron-right");
-            icon.classList.add("fa-check");
+            icon.classList.add("fa-chevron-down");
+            buttonText.textContent = "Wallet Connected";
             box.classList.add("completed");
             
-            // نمایش اطلاعات کیف پول
-            walletInfo.style.display = "block";
-            walletAddressDiv.textContent = walletAddress;
+            // نمایش نشانگر اتصال
+            statusIndicator.classList.add("connected");
+            
+            // قرار دادن آدرس در dropdown
+            addressDropdown.textContent = walletAddress;
+            
+            isWalletConnected = true;
         }
 
         function markAsDisconnected(id) {
             const box = document.getElementById(id);
-            const icon = box.querySelector(".right-icon");
-            const walletInfo = document.getElementById("wallet-info");
-            
-            icon.classList.remove("fa-check");
+            const icon = document.getElementById("wallet-icon");
+            const buttonText = document.getElementById("wallet-button-text");
+            const statusIndicator = document.getElementById("wallet-status-indicator");
+            const dropdownContent = document.getElementById("wallet-dropdown-content");
+
+            // برگردان به حالت اولیه
+            icon.classList.remove("fa-check", "fa-chevron-down");
             icon.classList.add("fa-chevron-right");
+            buttonText.textContent = "Connect Wallet";
             box.classList.remove("completed");
             
-            // مخفی کردن اطلاعات کیف پول
-            walletInfo.style.display = "none";
+            // مخفی کردن نشانگر اتصال
+            statusIndicator.classList.remove("connected");
+            
+            // بستن dropdown
+            dropdownContent.classList.remove("show");
+            walletDropdownOpen = false;
+            
+            isWalletConnected = false;
         }
-
-        let tasksCompleted = {task: false, invite: false, wallet: false, pay: false};
 
         async function checkUserTasks() {
             try {
@@ -197,31 +299,64 @@
             }
         }
 
+        function toggleWalletDropdown() {
+            if (!isWalletConnected) {
+                // اگر کیف پول متصل نیست، برو به صفحه اتصال
+                connectWallet();
+                return;
+            }
+
+            // تغییر وضعیت dropdown
+            const dropdownContent = document.getElementById("wallet-dropdown-content");
+            const icon = document.getElementById("wallet-icon");
+            
+            walletDropdownOpen = !walletDropdownOpen;
+            
+            if (walletDropdownOpen) {
+                dropdownContent.classList.add("show");
+                icon.classList.remove("fa-chevron-down");
+                icon.classList.add("fa-chevron-up");
+            } else {
+                dropdownContent.classList.remove("show");
+                icon.classList.remove("fa-chevron-up");
+                icon.classList.add("fa-chevron-down");
+            }
+        }
+
+        // بستن dropdown وقتی کاربر جای دیگه کلیک میکنه
+        document.addEventListener('click', function(event) {
+            const walletDropdown = document.querySelector('.wallet-dropdown');
+            if (!walletDropdown.contains(event.target) && walletDropdownOpen) {
+                toggleWalletDropdown();
+            }
+        });
+
         async function connectWallet() {
             if (tasksCompleted.wallet) {
                 console.log("Wallet already connected");
                 return;
             }
 
-            console.log("Redirecting to wallet connect page");
-            window.location.href = "/wallet-connect";
+            console.log("Redirecting to wallet browser connect");
+            // اتصال مستقیم به wallet-browser-connect
+            window.location.href = `/wallet-browser-connect?telegram_id=${USER_ID}`;
         }
 
         async function changeWallet() {
             console.log("Redirecting to change wallet");
-            window.location.href = "/wallet-browser-connect?telegram_id=" + USER_ID;
+            window.location.href = `/wallet-browser-connect?telegram_id=${USER_ID}`;
         }
 
         async function disconnectWallet() {
             if (!confirm('Are you sure you want to disconnect your wallet?')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/wallet/disconnect', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: USER_ID })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({telegram_id: USER_ID})
                 });
 
                 if (response.ok) {
@@ -229,7 +364,6 @@
                     tasksCompleted.wallet = false;
                     localStorage.removeItem('phantomConnected');
                     localStorage.removeItem('walletAddress');
-                    
                     alert('✅ Wallet disconnected successfully!');
                 } else {
                     alert('❌ Error disconnecting wallet');
