@@ -1,32 +1,273 @@
-<button onclick="connectPhantom()">Connect Phantom</button>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Phantom Wallet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #fff;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: #000;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            color: #999;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .connect-btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .connect-btn:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        
+        .connect-btn:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #1a5f1a;
+            color: #90ee90;
+            border: 1px solid #228b22;
+        }
+        
+        .status.error {
+            background: #5f1a1a;
+            color: #ffb3b3;
+            border: 1px solid #dc3545;
+        }
+        
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #333;
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .wallet-address {
+            background: #222;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">👛</div>
+        <h1>Connect Phantom Wallet</h1>
+        <p class="subtitle">Connect your wallet to continue with airdrop</p>
+        
+        <button id="connectBtn" class="connect-btn" onclick="connectPhantom()">
+            Connect Phantom Wallet
+        </button>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">Connecting to Phantom...</p>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
 
-<script>
-async function connectPhantom() {
-  try {
-    // اگر از داخل تلگرام هستیم → userId بگیر
-    const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "guest";
+    <script>
+        const USER_ID = new URLSearchParams(window.location.search).get('telegram_id') || 
+                       window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 
+                       'guest';
 
-    // آدرس callback روی سرور خودت
-    const callbackUrl = encodeURIComponent(
-      `https://ccoin-final.onrender.com/wallet/callback?userId=${userId}`
-    );
+        let isConnecting = false;
 
-    // deep link برای اپ Phantom (موبایل)
-    const deepLink = `phantom://ul/v1/connect?redirect_link=${callbackUrl}`;
+        async function connectPhantom() {
+            if (isConnecting) return;
+            
+            const connectBtn = document.getElementById('connectBtn');
+            const loading = document.getElementById('loading');
+            const status = document.getElementById('status');
+            
+            try {
+                isConnecting = true;
+                connectBtn.disabled = true;
+                connectBtn.textContent = 'Connecting...';
+                loading.style.display = 'block';
+                status.style.display = 'none';
 
-    // universal link (اگر اپ نصب نبود → سایت Phantom)
-    const universalLink = `https://phantom.app/ul/v1/connect?redirect_link=${callbackUrl}`;
+                // بررسی وجود Phantom
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error('Phantom wallet not found. Please install Phantom wallet.');
+                }
 
-    // اول تلاش کن Phantom app باز بشه
-    window.location.href = deepLink;
+                // درخواست اتصال
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
 
-    // اگر کاربر Phantom نصب نداشت → بعد 1 ثانیه به universal link هدایت بشه
-    setTimeout(() => {
-      window.location.href = universalLink;
-    }, 1000);
-  } catch (err) {
-    console.error("Phantom connect error:", err);
-    alert("خطا در اتصال به Phantom Wallet");
-  }
-}
-</script>
+                // ذخیره در سرور
+                const saveResponse = await fetch('/api/wallet/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: USER_ID,
+                        wallet_address: walletAddress
+                    })
+                });
+
+                const saveResult = await saveResponse.json();
+
+                if (saveResult.success) {
+                    showStatus('success', `✅ Wallet connected successfully!`, walletAddress);
+                    
+                    // بازگشت به صفحه airdrop بعد از 2 ثانیه
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        } else {
+                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(saveResult.error || 'Failed to save wallet address');
+                }
+
+            } catch (error) {
+                console.error('Phantom connection error:', error);
+                let errorMessage = error.message;
+                
+                if (error.message.includes('User rejected')) {
+                    errorMessage = 'Connection cancelled by user';
+                } else if (error.message.includes('not found')) {
+                    errorMessage = 'Phantom wallet not installed. Please install from phantom.app';
+                }
+                
+                showStatus('error', `❌ ${errorMessage}`);
+                
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect Phantom Wallet';
+            } finally {
+                isConnecting = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        function showStatus(type, message, walletAddress = null) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.innerHTML = message;
+            
+            if (walletAddress) {
+                status.innerHTML += `<div class="wallet-address">${walletAddress}</div>`;
+            }
+            
+            status.style.display = 'block';
+        }
+
+        // بررسی وضعیت اتصال قبلی
+        async function checkExistingConnection() {
+            try {
+                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    showStatus('success', '✅ Wallet already connected!', data.address);
+                    document.getElementById('connectBtn').textContent = 'Change Wallet';
+                }
+            } catch (error) {
+                console.error('Error checking wallet status:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExistingConnection();
+            
+            // اگر از Telegram WebApp آمده، تنظیمات را اعمال کن
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+                window.Telegram.WebApp.BackButton.show();
+                window.Telegram.WebApp.BackButton.onClick(() => {
+                    window.Telegram.WebApp.close();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
