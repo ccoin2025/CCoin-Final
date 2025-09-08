@@ -132,3 +132,59 @@ def is_valid_solana_address(address: str) -> bool:
     # آدرس Solana باید 32-44 کاراکتر باشد و فقط حروف و اعداد base58
     pattern = r'^[1-9A-HJ-NP-Za-km-z]{32,44}$'
     return bool(re.match(pattern, address))
+
+@router.get("/callback")
+async def wallet_callback(request: Request, db: Session = Depends(get_db)):
+    """Callback handler برای Deep Link Phantom"""
+    try:
+        # دریافت پارامترهای بازگشتی از Phantom
+        telegram_id = request.query_params.get("telegram_id")
+        phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
+        nonce = request.query_params.get("nonce")
+        data = request.query_params.get("data")
+        
+        # بررسی خطا
+        error_code = request.query_params.get("errorCode")
+        error_message = request.query_params.get("errorMessage")
+        
+        if error_code:
+            return templates.TemplateResponse("wallet_callback.html", {
+                "request": request,
+                "success": False,
+                "error": f"Connection failed: {error_message} (Code: {error_code})",
+                "telegram_id": telegram_id
+            })
+        
+        # در صورت موفقیت
+        if telegram_id and phantom_encryption_public_key:
+            user = db.query(User).filter(User.telegram_id == telegram_id).first()
+            
+            if user:
+                # اگر data رمزگذاری شده باشد، باید decrypt کنید
+                # برای سادگی فعلاً فقط public key را ذخیره می‌کنیم
+                user.wallet_address = phantom_encryption_public_key
+                db.commit()
+                
+                return templates.TemplateResponse("wallet_callback.html", {
+                    "request": request,
+                    "success": True,
+                    "wallet_address": phantom_encryption_public_key,
+                    "telegram_id": telegram_id
+                })
+        
+        # در غیر این صورت خطا
+        return templates.TemplateResponse("wallet_callback.html", {
+            "request": request,
+            "success": False,
+            "error": "Missing required parameters",
+            "telegram_id": telegram_id
+        })
+        
+    except Exception as e:
+        print(f"Callback error: {e}")
+        return templates.TemplateResponse("wallet_callback.html", {
+            "request": request,
+            "success": False,
+            "error": f"Server error: {str(e)}",
+            "telegram_id": request.query_params.get("telegram_id")
+        })
