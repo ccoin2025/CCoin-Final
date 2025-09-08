@@ -110,12 +110,6 @@
             border: 1px solid #dc3545;
         }
         
-        .status.info {
-            background: #1a4f5f;
-            color: #90d7ee;
-            border: 1px solid #17a2b8;
-        }
-        
         .loading {
             display: none;
             margin-top: 20px;
@@ -147,41 +141,20 @@
             border: 1px solid #444;
         }
         
-        .detection-info {
+        .debug-info {
             background: #1a1a1a;
             border: 1px solid #333;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
-            font-size: 12px;
             text-align: left;
+            font-size: 12px;
         }
         
-        .detection-item {
-            margin: 5px 0;
+        .debug-item {
+            margin: 3px 0;
             display: flex;
             justify-content: space-between;
-        }
-        
-        .manual-connect {
-            margin-top: 20px;
-            padding: 15px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            text-align: left;
-        }
-        
-        .manual-input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            background: #222;
-            border: 1px solid #444;
-            border-radius: 5px;
-            color: #fff;
-            font-family: monospace;
-            font-size: 12px;
         }
     </style>
 </head>
@@ -191,23 +164,23 @@
         <h1>Connect Phantom Wallet</h1>
         <p class="subtitle">Connect your wallet to continue with airdrop</p>
         
-        <!-- نمایش اطلاعات تشخیص -->
-        <div id="detectionInfo" class="detection-info">
-            <div class="detection-item">
-                <span>Phantom Detected:</span>
-                <span id="phantomDetected">❌ No</span>
+        <!-- Debug Info -->
+        <div id="debugInfo" class="debug-info">
+            <div class="debug-item">
+                <span>Phantom Object:</span>
+                <span id="phantomObj">❌</span>
             </div>
-            <div class="detection-item">
-                <span>Solana Object:</span>
-                <span id="solanaObject">❌ No</span>
+            <div class="debug-item">
+                <span>Solana Provider:</span>
+                <span id="solanaProvider">❌</span>
             </div>
-            <div class="detection-item">
+            <div class="debug-item">
+                <span>isPhantom Flag:</span>
+                <span id="isPhantom">❌</span>
+            </div>
+            <div class="debug-item">
                 <span>Environment:</span>
                 <span id="environment">-</span>
-            </div>
-            <div class="detection-item">
-                <span>User Agent:</span>
-                <span id="userAgent" style="font-size: 10px;">-</span>
             </div>
         </div>
         
@@ -221,18 +194,10 @@
         
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <p style="margin-top: 10px;">Waiting for Phantom...</p>
+            <p style="margin-top: 10px;">Connecting to Phantom...</p>
         </div>
         
         <div id="status" class="status"></div>
-        
-        <!-- اتصال دستی -->
-        <div id="manualConnect" class="manual-connect" style="display: none;">
-            <h3>Manual Connection</h3>
-            <p>If automatic detection fails, paste your Phantom wallet address:</p>
-            <input type="text" id="manualAddress" class="manual-input" placeholder="Enter your Solana wallet address...">
-            <button onclick="saveManualAddress()" class="connect-btn">Save Address</button>
-        </div>
     </div>
 
     <script>
@@ -241,65 +206,66 @@
                        'guest';
 
         let isConnecting = false;
-        let retryCount = 0;
-        const maxRetries = 5;
+        let provider = null;
 
-        // تشخیص محیط
-        function detectEnvironment() {
-            const ua = navigator.userAgent;
-            const isTelegram = window.Telegram?.WebApp;
-            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-            const isIOS = /iPad|iPhone|iPod/.test(ua);
-            const isAndroid = /Android/.test(ua);
+        // تابع اصلی تشخیص Phantom (طبق استاندارد رسمی)
+        function getProvider() {
+            if ('phantom' in window) {
+                const anyWindow = window;
+                const phantomProvider = anyWindow.phantom?.solana;
+
+                if (phantomProvider?.isPhantom) {
+                    return phantomProvider;
+                }
+            }
+            return null;
+        }
+
+        // به‌روزرسانی اطلاعات debug
+        function updateDebugInfo() {
+            const hasPhantom = 'phantom' in window;
+            const hasSolana = window.phantom?.solana;
+            const hasIsPhantom = window.phantom?.solana?.isPhantom;
             
-            document.getElementById('userAgent').textContent = ua.substring(0, 50) + '...';
+            document.getElementById('phantomObj').textContent = hasPhantom ? '✅ Yes' : '❌ No';
+            document.getElementById('solanaProvider').textContent = hasSolana ? '✅ Yes' : '❌ No';
+            document.getElementById('isPhantom').textContent = hasIsPhantom ? '✅ Yes' : '❌ No';
             
+            // تشخیص محیط
             let env = 'Desktop';
-            if (isTelegram) env = 'Telegram WebApp';
-            else if (isIOS) env = 'iOS';
-            else if (isAndroid) env = 'Android';
-            else if (isMobile) env = 'Mobile';
+            if (window.Telegram?.WebApp) env = 'Telegram WebApp';
+            else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) env = 'iOS';
+            else if (/Android/.test(navigator.userAgent)) env = 'Android';
             
             document.getElementById('environment').textContent = env;
-            return { isTelegram, isMobile, isIOS, isAndroid };
         }
 
-        // تشخیص Phantom با روش‌های متعدد
-        async function detectPhantom() {
-            const detection = {
-                window_solana: !!window.solana,
-                phantom_solana: !!(window.solana && window.solana.isPhantom),
-                phantom_provider: !!window.phantom?.solana,
-                ethereum_phantom: !!(window.ethereum && window.ethereum.isPhantom)
-            };
-            
-            // بروزرسانی UI
-            if (detection.phantom_solana || detection.phantom_provider) {
-                document.getElementById('phantomDetected').innerHTML = '✅ Yes';
-                document.getElementById('solanaObject').innerHTML = '✅ Available';
-                return true;
-            } else {
-                document.getElementById('phantomDetected').innerHTML = '❌ No';
-                document.getElementById('solanaObject').innerHTML = window.solana ? '⚠️ Non-Phantom' : '❌ None';
-                return false;
-            }
-        }
-
-        // تشخیص با تاخیر (برای بارگذاری کامل)
+        // انتظار برای بارگذاری Phantom
         async function waitForPhantom() {
             return new Promise((resolve) => {
                 let attempts = 0;
-                const checkInterval = setInterval(() => {
+                const maxAttempts = 50; // 10 ثانیه انتظار
+                
+                const checkProvider = () => {
                     attempts++;
+                    updateDebugInfo();
                     
-                    if (detectPhantom()) {
-                        clearInterval(checkInterval);
+                    const phantomProvider = getProvider();
+                    if (phantomProvider) {
+                        provider = phantomProvider;
                         resolve(true);
-                    } else if (attempts >= 20) { // 4 ثانیه انتظار
-                        clearInterval(checkInterval);
-                        resolve(false);
+                        return;
                     }
-                }, 200);
+                    
+                    if (attempts >= maxAttempts) {
+                        resolve(false);
+                        return;
+                    }
+                    
+                    setTimeout(checkProvider, 200);
+                };
+                
+                checkProvider();
             });
         }
 
@@ -318,27 +284,19 @@
                 status.style.display = 'none';
 
                 // انتظار برای تشخیص Phantom
-                const phantomDetected = await waitForPhantom();
+                const phantomFound = await waitForPhantom();
                 
-                if (!phantomDetected) {
-                    throw new Error('Phantom wallet not detected. Please install Phantom wallet or use manual connection.');
+                if (!phantomFound || !provider) {
+                    throw new Error('Phantom wallet not detected. Please install Phantom wallet.');
                 }
 
-                connectBtn.textContent = 'Connecting...';
+                connectBtn.textContent = 'Requesting Connection...';
 
-                // انتخاب provider صحیح
-                let provider = null;
-                if (window.solana && window.solana.isPhantom) {
-                    provider = window.solana;
-                } else if (window.phantom?.solana) {
-                    provider = window.phantom.solana;
-                } else {
-                    throw new Error('Phantom provider not found');
-                }
-
-                // درخواست اتصال
-                const response = await provider.connect({ onlyIfTrusted: false });
+                // درخواست اتصال (طبق استاندارد رسمی)
+                const response = await provider.connect();
                 const walletAddress = response.publicKey.toString();
+
+                connectBtn.textContent = 'Saving Wallet...';
 
                 // ذخیره در سرور
                 const saveResponse = await fetch('/api/wallet/save', {
@@ -375,14 +333,12 @@
                 
                 if (error.message.includes('User rejected')) {
                     errorMessage = 'Connection cancelled by user';
-                } else if (error.message.includes('not detected') || error.message.includes('not found')) {
-                    errorMessage = 'Phantom wallet not found';
+                } else if (error.message.includes('not detected')) {
+                    errorMessage = 'Phantom wallet not found. Please install Phantom.';
                     document.getElementById('installBtn').style.display = 'block';
-                    document.getElementById('manualConnect').style.display = 'block';
                 }
                 
                 showStatus('error', `❌ ${errorMessage}`);
-                
                 connectBtn.disabled = false;
                 connectBtn.textContent = 'Retry Connection';
             } finally {
@@ -392,59 +348,14 @@
         }
 
         function installPhantom() {
-            const env = detectEnvironment();
+            const userAgent = navigator.userAgent;
             
-            if (env.isIOS) {
+            if (/iPhone|iPad|iPod/.test(userAgent)) {
                 window.open('https://apps.apple.com/app/phantom-solana-wallet/id1598432977', '_blank');
-            } else if (env.isAndroid) {
+            } else if (/Android/.test(userAgent)) {
                 window.open('https://play.google.com/store/apps/details?id=app.phantom', '_blank');
             } else {
                 window.open('https://phantom.app/download', '_blank');
-            }
-        }
-
-        async function saveManualAddress() {
-            const manualAddress = document.getElementById('manualAddress').value.trim();
-            
-            if (!manualAddress) {
-                alert('Please enter a wallet address');
-                return;
-            }
-            
-            if (manualAddress.length < 32 || manualAddress.length > 44) {
-                alert('Invalid wallet address format');
-                return;
-            }
-            
-            try {
-                const saveResponse = await fetch('/api/wallet/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: USER_ID,
-                        wallet_address: manualAddress
-                    })
-                });
-
-                const saveResult = await saveResponse.json();
-
-                if (saveResult.success) {
-                    showStatus('success', `✅ Wallet address saved successfully!`, manualAddress);
-                    
-                    setTimeout(() => {
-                        if (window.Telegram?.WebApp) {
-                            window.Telegram.WebApp.close();
-                        } else {
-                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
-                        }
-                    }, 2000);
-                } else {
-                    throw new Error(saveResult.error || 'Failed to save wallet address');
-                }
-            } catch (error) {
-                showStatus('error', `❌ ${error.message}`);
             }
         }
 
@@ -476,14 +387,9 @@
         }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            // تشخیص محیط
-            detectEnvironment();
-            
-            // تشخیص اولیه Phantom
-            await detectPhantom();
-            
-            // بررسی اتصال قبلی
+        document.addEventListener('DOMContentLoaded', () => {
+            // بررسی اولیه
+            updateDebugInfo();
             checkExistingConnection();
             
             // اگر از Telegram WebApp آمده، تنظیمات را اعمال کن
@@ -495,6 +401,15 @@
                     window.Telegram.WebApp.close();
                 });
             }
+            
+            // بررسی مکرر برای Phantom (بعضی موارد تأخیر دارد)
+            setTimeout(() => {
+                updateDebugInfo();
+            }, 1000);
+            
+            setTimeout(() => {
+                updateDebugInfo();
+            }, 3000);
         });
     </script>
 </body>
