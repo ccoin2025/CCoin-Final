@@ -135,48 +135,76 @@ def is_valid_solana_address(address: str) -> bool:
 
 @router.get("/callback")
 async def wallet_callback(request: Request, db: Session = Depends(get_db)):
-    """Callback handler برای Deep Link Phantom"""
+    """Callback handler برای Deep Link Phantom - بهبود یافته"""
     try:
         # دریافت پارامترهای بازگشتی از Phantom
         telegram_id = request.query_params.get("telegram_id")
+        
+        # پارامترهای موفقیت
         phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
         nonce = request.query_params.get("nonce")
         data = request.query_params.get("data")
+        session = request.query_params.get("session")
         
-        # بررسی خطا
+        # پارامترهای خطا
         error_code = request.query_params.get("errorCode")
         error_message = request.query_params.get("errorMessage")
+        
+        print(f"Callback received - telegram_id: {telegram_id}, phantom_key: {phantom_encryption_public_key}, error: {error_code}")
         
         if error_code:
             return templates.TemplateResponse("wallet_callback.html", {
                 "request": request,
                 "success": False,
-                "error": f"Connection failed: {error_message} (Code: {error_code})",
+                "error": f"Connection rejected: {error_message}",
                 "telegram_id": telegram_id
             })
         
-        # در صورت موفقیت
+        # موفقیت - ذخیره اطلاعات
         if telegram_id and phantom_encryption_public_key:
             user = db.query(User).filter(User.telegram_id == telegram_id).first()
             
             if user:
-                # اگر data رمزگذاری شده باشد، باید decrypt کنید
-                # برای سادگی فعلاً فقط public key را ذخیره می‌کنیم
-                user.wallet_address = phantom_encryption_public_key
-                db.commit()
-                
-                return templates.TemplateResponse("wallet_callback.html", {
-                    "request": request,
-                    "success": True,
-                    "wallet_address": phantom_encryption_public_key,
-                    "telegram_id": telegram_id
-                })
+                # اگر data رمزگذاری شده باشد، public key را decode کنید
+                try:
+                    # Phantom public key معمولاً در phantom_encryption_public_key یا data قرار دارد
+                    wallet_address = phantom_encryption_public_key
+                    
+                    # اگر data موجود است، سعی کنید decode کنید
+                    if data and nonce:
+                        # برای پیاده‌سازی کامل، باید data را decrypt کنید
+                        # فعلاً از phantom_encryption_public_key استفاده می‌کنیم
+                        print(f"Encrypted data received: {data}")
+                    
+                    user.wallet_address = wallet_address
+                    
+                    # اگر session موجود است، آن را هم ذخیره کنید
+                    if session:
+                        user.phantom_session = session
+                    
+                    db.commit()
+                    
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": True,
+                        "wallet_address": wallet_address,
+                        "telegram_id": telegram_id
+                    })
+                    
+                except Exception as decode_error:
+                    print(f"Decode error: {decode_error}")
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": False,
+                        "error": f"Failed to process wallet data: {str(decode_error)}",
+                        "telegram_id": telegram_id
+                    })
         
-        # در غیر این صورت خطا
+        # پارامترهای ناقص
         return templates.TemplateResponse("wallet_callback.html", {
             "request": request,
             "success": False,
-            "error": "Missing required parameters",
+            "error": "Incomplete connection data received",
             "telegram_id": telegram_id
         })
         
