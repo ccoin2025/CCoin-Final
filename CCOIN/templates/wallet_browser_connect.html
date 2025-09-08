@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect Phantom Wallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
             margin: 0;
@@ -77,18 +78,6 @@
             color: #666;
             cursor: not-allowed;
             transform: none;
-        }
-        
-        .install-btn {
-            background: #8b5cf6;
-            color: #fff;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            width: 100%;
-            margin-bottom: 15px;
         }
         
         .status {
@@ -167,20 +156,16 @@
         <!-- Debug Info -->
         <div id="debugInfo" class="debug-info">
             <div class="debug-item">
-                <span>Phantom Object:</span>
-                <span id="phantomObj">❌</span>
-            </div>
-            <div class="debug-item">
-                <span>Solana Provider:</span>
-                <span id="solanaProvider">❌</span>
-            </div>
-            <div class="debug-item">
-                <span>isPhantom Flag:</span>
-                <span id="isPhantom">❌</span>
-            </div>
-            <div class="debug-item">
                 <span>Environment:</span>
                 <span id="environment">-</span>
+            </div>
+            <div class="debug-item">
+                <span>Method:</span>
+                <span id="method">Deep Link (Telegram Mini App)</span>
+            </div>
+            <div class="debug-item">
+                <span>User ID:</span>
+                <span id="userId">-</span>
             </div>
         </div>
         
@@ -188,13 +173,9 @@
             Connect Phantom Wallet
         </button>
         
-        <button id="installBtn" class="install-btn" onclick="installPhantom()" style="display: none;">
-            📱 Install Phantom Wallet
-        </button>
-        
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <p style="margin-top: 10px;">Connecting to Phantom...</p>
+            <p style="margin-top: 10px;">Opening Phantom App...</p>
         </div>
         
         <div id="status" class="status"></div>
@@ -206,67 +187,28 @@
                        'guest';
 
         let isConnecting = false;
-        let provider = null;
 
-        // تابع اصلی تشخیص Phantom (طبق استاندارد رسمی)
-        function getProvider() {
-            if ('phantom' in window) {
-                const anyWindow = window;
-                const phantomProvider = anyWindow.phantom?.solana;
-
-                if (phantomProvider?.isPhantom) {
-                    return phantomProvider;
-                }
-            }
-            return null;
-        }
-
-        // به‌روزرسانی اطلاعات debug
+        // تشخیص محیط
         function updateDebugInfo() {
-            const hasPhantom = 'phantom' in window;
-            const hasSolana = window.phantom?.solana;
-            const hasIsPhantom = window.phantom?.solana?.isPhantom;
+            const isTelegram = window.Telegram?.WebApp;
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
-            document.getElementById('phantomObj').textContent = hasPhantom ? '✅ Yes' : '❌ No';
-            document.getElementById('solanaProvider').textContent = hasSolana ? '✅ Yes' : '❌ No';
-            document.getElementById('isPhantom').textContent = hasIsPhantom ? '✅ Yes' : '❌ No';
-            
-            // تشخیص محیط
-            let env = 'Desktop';
-            if (window.Telegram?.WebApp) env = 'Telegram WebApp';
-            else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) env = 'iOS';
-            else if (/Android/.test(navigator.userAgent)) env = 'Android';
+            let env = 'Unknown';
+            if (isTelegram) env = 'Telegram Mini App';
+            else if (isMobile) env = 'Mobile Browser';
+            else env = 'Desktop Browser';
             
             document.getElementById('environment').textContent = env;
+            document.getElementById('userId').textContent = USER_ID;
         }
 
-        // انتظار برای بارگذاری Phantom
-        async function waitForPhantom() {
-            return new Promise((resolve) => {
-                let attempts = 0;
-                const maxAttempts = 50; // 10 ثانیه انتظار
-                
-                const checkProvider = () => {
-                    attempts++;
-                    updateDebugInfo();
-                    
-                    const phantomProvider = getProvider();
-                    if (phantomProvider) {
-                        provider = phantomProvider;
-                        resolve(true);
-                        return;
-                    }
-                    
-                    if (attempts >= maxAttempts) {
-                        resolve(false);
-                        return;
-                    }
-                    
-                    setTimeout(checkProvider, 200);
-                };
-                
-                checkProvider();
-            });
+        // تولید کلید عمومی encryption (ضروری برای Phantom Deep Link)
+        function generateEncryptionKeys() {
+            // برای سادگی از crypto.getRandomValues استفاده می‌کنیم
+            // در پروژه واقعی باید از کتابخانه مناسب استفاده کنید
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return btoa(String.fromCharCode.apply(null, array));
         }
 
         async function connectPhantom() {
@@ -279,83 +221,44 @@
             try {
                 isConnecting = true;
                 connectBtn.disabled = true;
-                connectBtn.textContent = 'Detecting Phantom...';
+                connectBtn.textContent = 'Preparing Connection...';
                 loading.style.display = 'block';
                 status.style.display = 'none';
 
-                // انتظار برای تشخیص Phantom
-                const phantomFound = await waitForPhantom();
-                
-                if (!phantomFound || !provider) {
-                    throw new Error('Phantom wallet not detected. Please install Phantom wallet.');
-                }
+                // آماده‌سازی پارامترهای Deep Link
+                const appUrl = encodeURIComponent(window.location.origin);
+                const redirectLink = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`);
+                const dappEncryptionPublicKey = encodeURIComponent(generateEncryptionKeys());
+                const cluster = 'mainnet-beta'; // یا devnet برای تست
 
-                connectBtn.textContent = 'Requesting Connection...';
+                // ساخت URL Deep Link طبق مستندات رسمی Phantom
+                const deepLinkUrl = `https://phantom.app/ul/v1/connect?` +
+                    `app_url=${appUrl}&` +
+                    `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
+                    `redirect_link=${redirectLink}&` +
+                    `cluster=${cluster}`;
 
-                // درخواست اتصال (طبق استاندارد رسمی)
-                const response = await provider.connect();
-                const walletAddress = response.publicKey.toString();
+                connectBtn.textContent = 'Opening Phantom...';
 
-                connectBtn.textContent = 'Saving Wallet...';
-
-                // ذخیره در سرور
-                const saveResponse = await fetch('/api/wallet/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: USER_ID,
-                        wallet_address: walletAddress
-                    })
-                });
-
-                const saveResult = await saveResponse.json();
-
-                if (saveResult.success) {
-                    showStatus('success', `✅ Wallet connected successfully!`, walletAddress);
-                    
-                    // بازگشت به صفحه airdrop بعد از 2 ثانیه
-                    setTimeout(() => {
-                        if (window.Telegram?.WebApp) {
-                            window.Telegram.WebApp.close();
-                        } else {
-                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
-                        }
-                    }, 2000);
+                // هدایت به Phantom با Deep Link
+                if (window.Telegram?.WebApp) {
+                    // در محیط Telegram Mini App از openLink استفاده کنید
+                    window.Telegram.WebApp.openLink(deepLinkUrl);
                 } else {
-                    throw new Error(saveResult.error || 'Failed to save wallet address');
+                    // در مرورگر عادی
+                    window.location.href = deepLinkUrl;
                 }
+
+                showStatus('success', '✅ Phantom app opened! Please approve the connection in Phantom and return to complete setup.');
 
             } catch (error) {
-                console.error('Phantom connection error:', error);
-                let errorMessage = error.message;
-                
-                if (error.message.includes('User rejected')) {
-                    errorMessage = 'Connection cancelled by user';
-                } else if (error.message.includes('not detected')) {
-                    errorMessage = 'Phantom wallet not found. Please install Phantom.';
-                    document.getElementById('installBtn').style.display = 'block';
-                }
-                
-                showStatus('error', `❌ ${errorMessage}`);
+                console.error('Deep Link error:', error);
+                showStatus('error', `❌ Failed to open Phantom: ${error.message}`);
                 connectBtn.disabled = false;
                 connectBtn.textContent = 'Retry Connection';
             } finally {
                 isConnecting = false;
                 loading.style.display = 'none';
-            }
-        }
-
-        function installPhantom() {
-            const userAgent = navigator.userAgent;
-            
-            if (/iPhone|iPad|iPod/.test(userAgent)) {
-                window.open('https://apps.apple.com/app/phantom-solana-wallet/id1598432977', '_blank');
-            } else if (/Android/.test(userAgent)) {
-                window.open('https://play.google.com/store/apps/details?id=app.phantom', '_blank');
-            } else {
-                window.open('https://phantom.app/download', '_blank');
             }
         }
 
@@ -388,11 +291,10 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // بررسی اولیه
             updateDebugInfo();
             checkExistingConnection();
             
-            // اگر از Telegram WebApp آمده، تنظیمات را اعمال کن
+            // تنظیمات Telegram WebApp
             if (window.Telegram?.WebApp) {
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
@@ -401,15 +303,6 @@
                     window.Telegram.WebApp.close();
                 });
             }
-            
-            // بررسی مکرر برای Phantom (بعضی موارد تأخیر دارد)
-            setTimeout(() => {
-                updateDebugInfo();
-            }, 1000);
-            
-            setTimeout(() => {
-                updateDebugInfo();
-            }, 3000);
         });
     </script>
 </body>
