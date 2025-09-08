@@ -26,65 +26,161 @@
             background: #fff; color: #000; border: none; padding: 15px 30px;
             border-radius: 10px; font-size: 16px; font-weight: 600;
             cursor: pointer; width: 100%; margin-top: 20px;
+            transition: all 0.3s ease;
         }
         .return-btn:hover { background: #f0f0f0; }
+        .return-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         {% if success %}
-        <div class="result-icon success">✅</div>
-        <h1>Wallet Connected!</h1>
-        <p class="message">Your Phantom wallet has been successfully connected to your account.</p>
-        {% if wallet_address %}
-        <div class="wallet-info">
-            <strong>Connected Wallet:</strong><br>
-            <code>{{ wallet_address }}</code>
-        </div>
-        {% endif %}
+            <div class="result-icon success">✅</div>
+            <h1>Wallet Connected!</h1>
+            <p class="message">Your Phantom wallet has been successfully connected to your account.</p>
+            {% if wallet_address %}
+                <div class="wallet-info">
+                    <strong>Connected Wallet:</strong><br>
+                    <code>{{ wallet_address }}</code>
+                </div>
+            {% endif %}
         {% else %}
-        <div class="result-icon error">❌</div>
-        <h1>Connection Failed</h1>
-        <p class="message">{{ error or "Failed to connect wallet. Please try again." }}</p>
+            <div class="result-icon error">❌</div>
+            <h1>Connection Failed</h1>
+            <p class="message">{{ error or "Failed to connect wallet. Please try again." }}</p>
         {% endif %}
         
-        <button class="return-btn" onclick="returnToApp()">
+        <button class="return-btn" id="returnBtn" onclick="returnToApp()">
             Return to App
         </button>
+        
+        <div class="loading" id="loadingMsg">
+            Returning to app...
+        </div>
     </div>
 
     <script>
+        const telegram_id = '{{ telegram_id }}';
+        let isReturning = false;
+
         function returnToApp() {
-            const telegram_id = '{{ telegram_id }}';
+            if (isReturning) return;
+            isReturning = true;
             
-            if (window.Telegram?.WebApp) {
-                // بستن صفحه و برگشت به Mini App
-                window.Telegram.WebApp.close();
-            } else {
-                // برگشت به صفحه airdrop
-                window.location.href = `/airdrop?telegram_id=${telegram_id}`;
+            const returnBtn = document.getElementById('returnBtn');
+            const loadingMsg = document.getElementById('loadingMsg');
+            
+            returnBtn.disabled = true;
+            loadingMsg.style.display = 'block';
+            
+            console.log('Attempting to return to app with telegram_id:', telegram_id);
+            
+            try {
+                // اولویت اول: Telegram WebApp
+                if (window.Telegram && window.Telegram.WebApp) {
+                    console.log('Using Telegram WebApp close method');
+                    
+                    // تنظیم callback برای بازگشت
+                    window.Telegram.WebApp.onEvent('viewportChanged', function() {
+                        console.log('Viewport changed, app might be closing');
+                    });
+                    
+                    // بستن WebApp و بازگشت
+                    setTimeout(() => {
+                        window.Telegram.WebApp.close();
+                    }, 100);
+                    
+                    // اگر close کار نکرد، از openTelegramLink استفاده کن
+                    setTimeout(() => {
+                        if (!window.closed) {
+                            const botUrl = `https://t.me/CTG_COIN_BOT/ccoin?startapp=airdrop_${telegram_id}`;
+                            window.Telegram.WebApp.openTelegramLink(botUrl);
+                        }
+                    }, 1000);
+                    
+                } else {
+                    console.log('Not in Telegram WebApp, using regular redirect');
+                    // در مرورگر عادی
+                    if (telegram_id) {
+                        window.location.href = `/airdrop?telegram_id=${telegram_id}&wallet_updated=1`;
+                    } else {
+                        window.location.href = '/airdrop?wallet_updated=1';
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error in returnToApp:', error);
+                
+                // fallback: redirect معمولی
+                setTimeout(() => {
+                    if (telegram_id) {
+                        window.location.href = `/airdrop?telegram_id=${telegram_id}&wallet_updated=1`;
+                    } else {
+                        window.location.href = '/airdrop?wallet_updated=1';
+                    }
+                }, 500);
             }
         }
 
-        // تنظیمات Telegram WebApp
+        // تنظیمات اولیه Telegram WebApp
         document.addEventListener('DOMContentLoaded', () => {
-            if (window.Telegram?.WebApp) {
+            console.log('Callback page loaded');
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                console.log('Telegram WebApp detected');
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
                 
                 // تنظیم دکمه Back
                 window.Telegram.WebApp.BackButton.show();
                 window.Telegram.WebApp.BackButton.onClick(() => {
+                    console.log('Back button clicked');
                     returnToApp();
                 });
+                
+                // تنظیم دکمه Main
+                window.Telegram.WebApp.MainButton.setText('Return to App');
+                window.Telegram.WebApp.MainButton.show();
+                window.Telegram.WebApp.MainButton.onClick(() => {
+                    console.log('Main button clicked');
+                    returnToApp();
+                });
+                
+            } else {
+                console.log('Not in Telegram WebApp environment');
             }
-
-            // بازگشت خودکار بعد از 3 ثانیه (فقط در صورت موفقیت)
+            
+            // بازگشت خودکار بعد از موفقیت (فقط در صورت موفقیت)
             {% if success %}
             setTimeout(() => {
-                returnToApp();
-            }, 5000);
+                if (!isReturning) {
+                    console.log('Auto-returning after success');
+                    returnToApp();
+                }
+            }, 3000);
             {% endif %}
+        });
+
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Page became hidden');
+            } else {
+                console.log('Page became visible');
+            }
+        });
+
+        // Handle beforeunload
+        window.addEventListener('beforeunload', () => {
+            console.log('Page is about to unload');
         });
     </script>
 </body>
