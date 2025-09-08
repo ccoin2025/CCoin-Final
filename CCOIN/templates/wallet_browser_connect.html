@@ -231,7 +231,6 @@
                 crypto.getRandomValues(privateKey);
                 
                 // برای سادگی، public key را همین private key در نظر می‌گیریم
-                // در پروژه واقعی باید از Ed25519 استفاده کنید
                 const publicKey = privateKey; // Simplified
                 
                 const publicKeyBase58 = btoa(String.fromCharCode.apply(null, publicKey))
@@ -280,8 +279,8 @@
                     timestamp: Date.now()
                 }));
 
-                // آماده‌سازی پارامترهای Deep Link - استفاده از app_url معتبر
-                const appUrl = encodeURIComponent("https://phantom.app"); // ← این مهم است!
+                // ⚠️ اصلاح اصلی: redirect_link به /wallet/callback تغییر یافت
+                const appUrl = encodeURIComponent("https://phantom.app"); // استفاده از app_url معتبر
                 const redirectLink = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`);
                 const cluster = 'devnet'; // برای تست
 
