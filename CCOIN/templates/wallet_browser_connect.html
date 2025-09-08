@@ -223,36 +223,38 @@
         let countdownInterval = null;
         let countdownValue = 60;
 
-        // تولید کلید encryption برای Phantom
-        async function generateEncryptionKeyPair() {
+        // تولید کلید encryption برای Phantom (ساده شده)
+        function generateDappKeyPair() {
             try {
-                // استفاده از Web Crypto API برای تولید کلید
-                const keyPair = await crypto.subtle.generateKey(
-                    {
-                        name: "ECDH",
-                        namedCurve: "P-256",
-                    },
-                    true,
-                    ["deriveKey"]
-                );
-
-                const publicKeyBuffer = await crypto.subtle.exportKey("raw", keyPair.publicKey);
-                const publicKeyBase58 = btoa(String.fromCharCode.apply(null, new Uint8Array(publicKeyBuffer)));
-
-                // ذخیره کلید خصوصی برای بعد
-                localStorage.setItem('dappPrivateKey', JSON.stringify({
-                    publicKey: publicKeyBase58,
-                    // کلید خصوصی را برای decrypt کردن نگه می‌داریم
-                    keyPair: await crypto.subtle.exportKey("jwk", keyPair.privateKey)
-                }));
-
-                return publicKeyBase58;
+                // تولید کلید 32 بایتی تصادفی
+                const privateKey = new Uint8Array(32);
+                crypto.getRandomValues(privateKey);
+                
+                // برای سادگی، public key را همین private key در نظر می‌گیریم
+                // در پروژه واقعی باید از Ed25519 استفاده کنید
+                const publicKey = privateKey; // Simplified
+                
+                const publicKeyBase58 = btoa(String.fromCharCode.apply(null, publicKey))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=/g, '');
+                
+                return {
+                    privateKey: privateKey,
+                    publicKey: publicKey,
+                    publicKeyBase58: publicKeyBase58
+                };
             } catch (error) {
                 console.error('Key generation error:', error);
-                // fallback به روش ساده
+                // fallback
                 const array = new Uint8Array(32);
                 crypto.getRandomValues(array);
-                return btoa(String.fromCharCode.apply(null, array));
+                const base58 = btoa(String.fromCharCode.apply(null, array));
+                return {
+                    privateKey: array,
+                    publicKey: array,
+                    publicKeyBase58: base58
+                };
             }
         }
 
@@ -270,17 +272,23 @@
                 status.style.display = 'none';
 
                 // تولید کلید encryption
-                const dappEncryptionPublicKey = await generateEncryptionKeyPair();
+                const dappKeyPair = generateDappKeyPair();
+                
+                // ذخیره کلید برای بعد
+                localStorage.setItem('dappKeyPair', JSON.stringify({
+                    publicKeyBase58: dappKeyPair.publicKeyBase58,
+                    timestamp: Date.now()
+                }));
 
-                // آماده‌سازی پارامترهای Deep Link
-                const appUrl = encodeURIComponent(window.location.origin);
+                // آماده‌سازی پارامترهای Deep Link - استفاده از app_url معتبر
+                const appUrl = encodeURIComponent("https://phantom.app"); // ← این مهم است!
                 const redirectLink = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`);
-                const cluster = 'devnet'; // برای تست از devnet استفاده کنید
+                const cluster = 'devnet'; // برای تست
 
-                // ساخت URL Deep Link طبق مستندات رسمی Phantom
+                // ساخت URL Deep Link طبق کد رسمی Phantom
                 const deepLinkUrl = `https://phantom.app/ul/v1/connect?` +
                     `app_url=${appUrl}&` +
-                    `dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&` +
+                    `dapp_encryption_public_key=${encodeURIComponent(dappKeyPair.publicKeyBase58)}&` +
                     `redirect_link=${redirectLink}&` +
                     `cluster=${cluster}`;
 
@@ -293,8 +301,10 @@
 
                 // هدایت به Phantom با Deep Link
                 if (window.Telegram?.WebApp) {
+                    console.log('Using Telegram WebApp openLink');
                     window.Telegram.WebApp.openLink(deepLinkUrl);
                 } else {
+                    console.log('Using window.location.href');
                     window.location.href = deepLinkUrl;
                 }
 
