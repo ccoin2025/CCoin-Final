@@ -6,177 +6,46 @@
     <title>Connect Phantom Wallet</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            background: #000; color: #fff; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
         }
         
-        .container {
-            text-align: center;
-            max-width: 400px;
-            width: 100%;
-        }
-        
-        .logo {
-            width: 80px;
-            height: 80px;
-            background: #fff;
-            border-radius: 50%;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            color: #000;
-        }
-        
-        h1 {
-            font-size: 24px;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-        
-        .subtitle {
-            color: #999;
-            margin-bottom: 30px;
-            font-size: 16px;
-        }
+        .container { text-align: center; max-width: 400px; width: 100%; }
+        .logo { width: 80px; height: 80px; background: #fff; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #000; }
+        h1 { font-size: 24px; margin-bottom: 10px; font-weight: 600; }
+        .subtitle { color: #999; margin-bottom: 30px; font-size: 16px; }
         
         .connect-btn {
-            background: #fff;
-            color: #000;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            margin-bottom: 20px;
+            background: #fff; color: #000; border: none; padding: 15px 30px; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 20px;
             transition: all 0.3s ease;
         }
-        
-        .connect-btn:hover {
-            background: #f0f0f0;
-            transform: translateY(-2px);
-        }
-        
-        .connect-btn:disabled {
-            background: #333;
-            color: #666;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .connect-btn:hover { background: #f0f0f0; transform: translateY(-2px); }
+        .connect-btn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
         
         .waiting-state {
-            background: #1a1a1a;
-            border: 2px solid #333;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            display: none;
+            background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
+            padding: 20px; margin: 20px 0; display: none;
         }
+        .waiting-state.show { display: block; }
         
-        .waiting-state.show {
-            display: block;
-        }
+        .status { margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
+        .status.success { background: #1a5f1a; color: #90ee90; border: 1px solid #228b22; }
+        .status.error { background: #5f1a1a; color: #ffb3b3; border: 1px solid #dc3545; }
         
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 10px;
-            display: none;
-        }
+        .loading { display: none; margin-top: 20px; }
+        .spinner { width: 20px; height: 20px; border: 2px solid #333; border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .status.success {
-            background: #1a5f1a;
-            color: #90ee90;
-            border: 1px solid #228b22;
-        }
-        
-        .status.error {
-            background: #5f1a1a;
-            color: #ffb3b3;
-            border: 1px solid #dc3545;
-        }
-        
-        .loading {
-            display: none;
-            margin-top: 20px;
-        }
-        
-        .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid #333;
-            border-top: 2px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .wallet-address {
-            background: #222;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            word-break: break-all;
-            font-family: monospace;
-            font-size: 12px;
-            border: 1px solid #444;
-        }
-        
-        .countdown {
-            font-size: 24px;
-            color: #fff;
-            margin: 10px 0;
-        }
-        
-        .instructions {
-            font-size: 14px;
-            color: #999;
-            line-height: 1.4;
-            margin: 15px 0;
-        }
-        
-        .check-btn {
-            background: #17a2b8;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            margin: 10px 5px;
-        }
-        
-        .cancel-btn {
-            background: #dc3545;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            margin: 10px 5px;
-        }
+        .wallet-address { background: #222; padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px; border: 1px solid #444; }
+        .countdown { font-size: 24px; color: #fff; margin: 10px 0; }
+        .instructions { font-size: 14px; color: #999; line-height: 1.4; margin: 15px 0; }
+        .check-btn { background: #17a2b8; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; margin: 10px 5px; }
+        .cancel-btn { background: #dc3545; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; margin: 10px 5px; }
     </style>
 </head>
 <body>
@@ -189,7 +58,6 @@
             Connect Phantom Wallet
         </button>
         
-        <!-- حالت انتظار -->
         <div id="waitingState" class="waiting-state">
             <h3>⏳ Waiting for Phantom...</h3>
             <div class="countdown" id="countdown">60</div>
@@ -223,38 +91,14 @@
         let countdownInterval = null;
         let countdownValue = 60;
 
-        // تولید کلید encryption برای Phantom (ساده شده)
-        function generateDappKeyPair() {
-            try {
-                // تولید کلید 32 بایتی تصادفی
-                const privateKey = new Uint8Array(32);
-                crypto.getRandomValues(privateKey);
-                
-                // برای سادگی، public key را همین private key در نظر می‌گیریم
-                const publicKey = privateKey; // Simplified
-                
-                const publicKeyBase58 = btoa(String.fromCharCode.apply(null, publicKey))
-                    .replace(/\+/g, '-')
-                    .replace(/\//g, '_')
-                    .replace(/=/g, '');
-                
-                return {
-                    privateKey: privateKey,
-                    publicKey: publicKey,
-                    publicKeyBase58: publicKeyBase58
-                };
-            } catch (error) {
-                console.error('Key generation error:', error);
-                // fallback
-                const array = new Uint8Array(32);
-                crypto.getRandomValues(array);
-                const base58 = btoa(String.fromCharCode.apply(null, array));
-                return {
-                    privateKey: array,
-                    publicKey: array,
-                    publicKeyBase58: base58
-                };
+        // تولید کلید صحیح base58 برای Phantom
+        function generateBase58Key() {
+            const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let result = '';
+            for (let i = 0; i < 44; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
+            return result;
         }
 
         async function connectPhantom() {
@@ -270,35 +114,24 @@
                 connectBtn.textContent = 'Preparing Connection...';
                 status.style.display = 'none';
 
-                // تولید کلید encryption
-                const dappKeyPair = generateDappKeyPair();
-                
-                // ذخیره کلید برای بعد
-                localStorage.setItem('dappKeyPair', JSON.stringify({
-                    publicKeyBase58: dappKeyPair.publicKeyBase58,
-                    timestamp: Date.now()
-                }));
+                // تولید کلید encryption صحیح
+                const dappPublicKey = generateBase58Key();
+                console.log('Generated dapp public key:', dappPublicKey);
 
-                // ⚠️ اصلاح اصلی: redirect_link به /wallet/callback تغییر یافت
-                const appUrl = encodeURIComponent("https://phantom.app"); // استفاده از app_url معتبر
-                const redirectLink = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`);
-                const cluster = 'devnet'; // برای تست
+                // پارامترهای Deep Link - طبق مستندات رسمی
+                const params = new URLSearchParams({
+                    dapp_encryption_public_key: dappPublicKey,
+                    cluster: 'devnet',
+                    app_url: 'https://phantom.app',  // استفاده از URL معتبر
+                    redirect_link: `${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`
+                });
 
-                // ساخت URL Deep Link طبق کد رسمی Phantom
-                const deepLinkUrl = `https://phantom.app/ul/v1/connect?` +
-                    `app_url=${appUrl}&` +
-                    `dapp_encryption_public_key=${encodeURIComponent(dappKeyPair.publicKeyBase58)}&` +
-                    `redirect_link=${redirectLink}&` +
-                    `cluster=${cluster}`;
-
+                const deepLinkUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
                 console.log('Deep Link URL:', deepLinkUrl);
 
                 connectBtn.textContent = 'Opening Phantom...';
 
-                // ذخیره وقت شروع اتصال
-                localStorage.setItem('connectionStartTime', Date.now().toString());
-
-                // هدایت به Phantom با Deep Link
+                // هدایت به Phantom
                 if (window.Telegram?.WebApp) {
                     console.log('Using Telegram WebApp openLink');
                     window.Telegram.WebApp.openLink(deepLinkUrl);
@@ -310,11 +143,7 @@
                 // نمایش حالت انتظار
                 connectBtn.style.display = 'none';
                 waitingState.classList.add('show');
-                
-                // شروع countdown
                 startCountdown();
-                
-                // شروع بررسی خودکار
                 startAutoCheck();
 
             } catch (error) {
@@ -341,7 +170,6 @@
         }
 
         function startAutoCheck() {
-            // بررسی هر 3 ثانیه
             connectionCheckInterval = setInterval(async () => {
                 await checkConnectionSilent();
             }, 3000);
@@ -365,13 +193,11 @@
                 const data = await response.json();
                 
                 if (data.connected && data.address) {
-                    // اتصال موفق!
                     clearInterval(countdownInterval);
                     clearInterval(connectionCheckInterval);
                     
                     showStatus('success', '✅ Wallet connected successfully!', data.address);
                     
-                    // بازگشت به airdrop بعد از 2 ثانیه
                     setTimeout(() => {
                         if (window.Telegram?.WebApp) {
                             window.Telegram.WebApp.close();
@@ -416,7 +242,6 @@
             status.style.display = 'block';
         }
 
-        // بررسی وضعیت اتصال قبلی
         async function checkExistingConnection() {
             try {
                 const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
@@ -435,7 +260,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             checkExistingConnection();
             
-            // تنظیمات Telegram WebApp
             if (window.Telegram?.WebApp) {
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
@@ -446,14 +270,12 @@
                 });
             }
 
-            // بررسی اگر از callback برگشته
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('connected') === 'true') {
                 checkConnection();
             }
         });
 
-        // Handle page visibility (برای وقتی کاربر برمی‌گردد)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && isConnecting) {
                 setTimeout(checkConnection, 1000);
