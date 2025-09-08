@@ -80,6 +80,19 @@
             transform: none;
         }
         
+        .waiting-state {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .waiting-state.show {
+            display: block;
+        }
+        
         .status {
             margin-top: 20px;
             padding: 15px;
@@ -130,20 +143,39 @@
             border: 1px solid #444;
         }
         
-        .debug-info {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            text-align: left;
-            font-size: 12px;
+        .countdown {
+            font-size: 24px;
+            color: #fff;
+            margin: 10px 0;
         }
         
-        .debug-item {
-            margin: 3px 0;
-            display: flex;
-            justify-content: space-between;
+        .instructions {
+            font-size: 14px;
+            color: #999;
+            line-height: 1.4;
+            margin: 15px 0;
+        }
+        
+        .check-btn {
+            background: #17a2b8;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        
+        .cancel-btn {
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 10px 5px;
         }
     </style>
 </head>
@@ -153,29 +185,29 @@
         <h1>Connect Phantom Wallet</h1>
         <p class="subtitle">Connect your wallet to continue with airdrop</p>
         
-        <!-- Debug Info -->
-        <div id="debugInfo" class="debug-info">
-            <div class="debug-item">
-                <span>Environment:</span>
-                <span id="environment">-</span>
-            </div>
-            <div class="debug-item">
-                <span>Method:</span>
-                <span id="method">Deep Link (Telegram Mini App)</span>
-            </div>
-            <div class="debug-item">
-                <span>User ID:</span>
-                <span id="userId">-</span>
-            </div>
-        </div>
-        
         <button id="connectBtn" class="connect-btn" onclick="connectPhantom()">
             Connect Phantom Wallet
         </button>
         
+        <!-- حالت انتظار -->
+        <div id="waitingState" class="waiting-state">
+            <h3>⏳ Waiting for Phantom...</h3>
+            <div class="countdown" id="countdown">60</div>
+            <div class="instructions">
+                Please complete the connection in Phantom app and return here.
+                <br><br>
+                <strong>Steps:</strong><br>
+                1. Approve the connection in Phantom<br>
+                2. Return to this page<br>
+                3. Click "Check Connection" below
+            </div>
+            <button class="check-btn" onclick="checkConnection()">🔄 Check Connection</button>
+            <button class="cancel-btn" onclick="cancelConnection()">❌ Cancel</button>
+        </div>
+        
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <p style="margin-top: 10px;">Opening Phantom App...</p>
+            <p style="margin-top: 10px;">Checking connection...</p>
         </div>
         
         <div id="status" class="status"></div>
@@ -187,79 +219,180 @@
                        'guest';
 
         let isConnecting = false;
+        let connectionCheckInterval = null;
+        let countdownInterval = null;
+        let countdownValue = 60;
 
-        // تشخیص محیط
-        function updateDebugInfo() {
-            const isTelegram = window.Telegram?.WebApp;
-            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            let env = 'Unknown';
-            if (isTelegram) env = 'Telegram Mini App';
-            else if (isMobile) env = 'Mobile Browser';
-            else env = 'Desktop Browser';
-            
-            document.getElementById('environment').textContent = env;
-            document.getElementById('userId').textContent = USER_ID;
-        }
+        // تولید کلید encryption برای Phantom
+        async function generateEncryptionKeyPair() {
+            try {
+                // استفاده از Web Crypto API برای تولید کلید
+                const keyPair = await crypto.subtle.generateKey(
+                    {
+                        name: "ECDH",
+                        namedCurve: "P-256",
+                    },
+                    true,
+                    ["deriveKey"]
+                );
 
-        // تولید کلید عمومی encryption (ضروری برای Phantom Deep Link)
-        function generateEncryptionKeys() {
-            // برای سادگی از crypto.getRandomValues استفاده می‌کنیم
-            // در پروژه واقعی باید از کتابخانه مناسب استفاده کنید
-            const array = new Uint8Array(32);
-            crypto.getRandomValues(array);
-            return btoa(String.fromCharCode.apply(null, array));
+                const publicKeyBuffer = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+                const publicKeyBase58 = btoa(String.fromCharCode.apply(null, new Uint8Array(publicKeyBuffer)));
+
+                // ذخیره کلید خصوصی برای بعد
+                localStorage.setItem('dappPrivateKey', JSON.stringify({
+                    publicKey: publicKeyBase58,
+                    // کلید خصوصی را برای decrypt کردن نگه می‌داریم
+                    keyPair: await crypto.subtle.exportKey("jwk", keyPair.privateKey)
+                }));
+
+                return publicKeyBase58;
+            } catch (error) {
+                console.error('Key generation error:', error);
+                // fallback به روش ساده
+                const array = new Uint8Array(32);
+                crypto.getRandomValues(array);
+                return btoa(String.fromCharCode.apply(null, array));
+            }
         }
 
         async function connectPhantom() {
             if (isConnecting) return;
             
             const connectBtn = document.getElementById('connectBtn');
-            const loading = document.getElementById('loading');
+            const waitingState = document.getElementById('waitingState');
             const status = document.getElementById('status');
             
             try {
                 isConnecting = true;
                 connectBtn.disabled = true;
                 connectBtn.textContent = 'Preparing Connection...';
-                loading.style.display = 'block';
                 status.style.display = 'none';
+
+                // تولید کلید encryption
+                const dappEncryptionPublicKey = await generateEncryptionKeyPair();
 
                 // آماده‌سازی پارامترهای Deep Link
                 const appUrl = encodeURIComponent(window.location.origin);
                 const redirectLink = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`);
-                const dappEncryptionPublicKey = encodeURIComponent(generateEncryptionKeys());
-                const cluster = 'mainnet-beta'; // یا devnet برای تست
+                const cluster = 'devnet'; // برای تست از devnet استفاده کنید
 
                 // ساخت URL Deep Link طبق مستندات رسمی Phantom
                 const deepLinkUrl = `https://phantom.app/ul/v1/connect?` +
                     `app_url=${appUrl}&` +
-                    `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
+                    `dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&` +
                     `redirect_link=${redirectLink}&` +
                     `cluster=${cluster}`;
 
+                console.log('Deep Link URL:', deepLinkUrl);
+
                 connectBtn.textContent = 'Opening Phantom...';
+
+                // ذخیره وقت شروع اتصال
+                localStorage.setItem('connectionStartTime', Date.now().toString());
 
                 // هدایت به Phantom با Deep Link
                 if (window.Telegram?.WebApp) {
-                    // در محیط Telegram Mini App از openLink استفاده کنید
                     window.Telegram.WebApp.openLink(deepLinkUrl);
                 } else {
-                    // در مرورگر عادی
                     window.location.href = deepLinkUrl;
                 }
 
-                showStatus('success', '✅ Phantom app opened! Please approve the connection in Phantom and return to complete setup.');
+                // نمایش حالت انتظار
+                connectBtn.style.display = 'none';
+                waitingState.classList.add('show');
+                
+                // شروع countdown
+                startCountdown();
+                
+                // شروع بررسی خودکار
+                startAutoCheck();
 
             } catch (error) {
                 console.error('Deep Link error:', error);
                 showStatus('error', `❌ Failed to open Phantom: ${error.message}`);
-                connectBtn.disabled = false;
-                connectBtn.textContent = 'Retry Connection';
-            } finally {
-                isConnecting = false;
-                loading.style.display = 'none';
+                resetConnection();
             }
+        }
+
+        function startCountdown() {
+            countdownValue = 60;
+            const countdownElement = document.getElementById('countdown');
+            
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                countdownElement.textContent = countdownValue;
+                
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    showStatus('error', '⏰ Connection timed out. Please try again.');
+                    resetConnection();
+                }
+            }, 1000);
+        }
+
+        function startAutoCheck() {
+            // بررسی هر 3 ثانیه
+            connectionCheckInterval = setInterval(async () => {
+                await checkConnectionSilent();
+            }, 3000);
+        }
+
+        async function checkConnection() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            
+            const result = await checkConnectionSilent();
+            loading.style.display = 'none';
+            
+            if (!result) {
+                showStatus('error', '🔍 Connection not found yet. Please make sure you approved the connection in Phantom.');
+            }
+        }
+
+        async function checkConnectionSilent() {
+            try {
+                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}&t=${Date.now()}`);
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    // اتصال موفق!
+                    clearInterval(countdownInterval);
+                    clearInterval(connectionCheckInterval);
+                    
+                    showStatus('success', '✅ Wallet connected successfully!', data.address);
+                    
+                    // بازگشت به airdrop بعد از 2 ثانیه
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        } else {
+                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
+                        }
+                    }, 2000);
+                    
+                    return true;
+                }
+                
+                return false;
+            } catch (error) {
+                console.error('Check connection error:', error);
+                return false;
+            }
+        }
+
+        function cancelConnection() {
+            clearInterval(countdownInterval);
+            clearInterval(connectionCheckInterval);
+            resetConnection();
+        }
+
+        function resetConnection() {
+            isConnecting = false;
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('connectBtn').textContent = 'Connect Phantom Wallet';
+            document.getElementById('connectBtn').style.display = 'block';
+            document.getElementById('waitingState').classList.remove('show');
         }
 
         function showStatus(type, message, walletAddress = null) {
@@ -291,7 +424,6 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            updateDebugInfo();
             checkExistingConnection();
             
             // تنظیمات Telegram WebApp
@@ -300,8 +432,22 @@
                 window.Telegram.WebApp.expand();
                 window.Telegram.WebApp.BackButton.show();
                 window.Telegram.WebApp.BackButton.onClick(() => {
+                    cancelConnection();
                     window.Telegram.WebApp.close();
                 });
+            }
+
+            // بررسی اگر از callback برگشته
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('connected') === 'true') {
+                checkConnection();
+            }
+        });
+
+        // Handle page visibility (برای وقتی کاربر برمی‌گردد)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isConnecting) {
+                setTimeout(checkConnection, 1000);
             }
         });
     </script>
