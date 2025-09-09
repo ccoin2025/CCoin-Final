@@ -98,19 +98,15 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
                 "error": "Commission already paid"
             })
 
-        # ایجاد URL پرداخت Phantom
         # مبلغ کمیسیون (مثلاً 0.01 SOL)
         commission_amount = 0.01  # SOL
-        recipient_address = os.getenv("ADMIN_WALLET", "Your_Admin_Wallet_Address_Here")
+        recipient_address = os.getenv("ADMIN_WALLET", "So11111111111111111111111111111111111111112")
         
-        # استفاده از Solana Pay protocol
-        solana_pay_url = f"solana:{recipient_address}?amount={commission_amount}&reference={telegram_id}&label=CCoin%20Commission&message=Pay%20commission%20for%20CCoin%20airdrop"
-
         return JSONResponse({
             "success": True,
-            "payment_url": solana_pay_url,
             "amount": commission_amount,
-            "recipient": recipient_address
+            "recipient": recipient_address,
+            "reference": telegram_id
         })
 
     except Exception as e:
