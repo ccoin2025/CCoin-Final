@@ -4,7 +4,9 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from CCOIN.database import get_db
 from CCOIN.models.user import User
+from datetime import datetime
 import re
+import os
 
 router = APIRouter()
 templates = Jinja2Templates(directory="CCOIN/templates")
@@ -40,6 +42,138 @@ async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
             "error": str(e)
         })
 
+@router.get("/api/commission/status")
+async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت پرداخت کمیسیون"""
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if user and user.commission_paid:
+            return JSONResponse({
+                "paid": True,
+                "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
+                "transaction_hash": user.commission_transaction_hash,
+                "success": True
+            })
+        else:
+            return JSONResponse({
+                "paid": False,
+                "payment_date": None,
+                "transaction_hash": None,
+                "success": True
+            })
+    except Exception as e:
+        print(f"Error checking commission status: {e}")
+        return JSONResponse({
+            "paid": False,
+            "payment_date": None,
+            "transaction_hash": None,
+            "success": False,
+            "error": str(e)
+        })
+
+@router.post("/api/commission/pay")
+async def pay_commission(request: Request, db: Session = Depends(get_db)):
+    """ایجاد درخواست پرداخت کمیسیون"""
+    try:
+        data = await request.json()
+        telegram_id = data.get("telegram_id")
+        wallet_address = data.get("wallet_address")
+        
+        if not telegram_id or not wallet_address:
+            return JSONResponse({
+                "success": False,
+                "error": "Missing telegram_id or wallet_address"
+            })
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            })
+
+        if user.commission_paid:
+            return JSONResponse({
+                "success": False,
+                "error": "Commission already paid"
+            })
+
+        # ایجاد URL پرداخت Phantom
+        # مبلغ کمیسیون (مثلاً 0.01 SOL)
+        commission_amount = 0.01  # SOL
+        recipient_address = os.getenv("ADMIN_WALLET", "Your_Admin_Wallet_Address_Here")
+        
+        # استفاده از Solana Pay protocol
+        solana_pay_url = f"solana:{recipient_address}?amount={commission_amount}&reference={telegram_id}&label=CCoin%20Commission&message=Pay%20commission%20for%20CCoin%20airdrop"
+
+        return JSONResponse({
+            "success": True,
+            "payment_url": solana_pay_url,
+            "amount": commission_amount,
+            "recipient": recipient_address
+        })
+
+    except Exception as e:
+        print(f"Error initiating commission payment: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        })
+
+@router.get("/commission/callback")
+async def commission_callback(request: Request, db: Session = Depends(get_db)):
+    """Callback برای تایید پرداخت کمیسیون"""
+    try:
+        telegram_id = request.query_params.get("telegram_id")
+        signature = request.query_params.get("signature")
+        
+        if not telegram_id:
+            return templates.TemplateResponse("commission_callback.html", {
+                "request": request,
+                "success": False,
+                "error": "Missing telegram_id",
+                "telegram_id": telegram_id
+            })
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return templates.TemplateResponse("commission_callback.html", {
+                "request": request,
+                "success": False,
+                "error": "User not found",
+                "telegram_id": telegram_id
+            })
+
+        # در صورت وجود signature، پرداخت را تایید کن
+        if signature:
+            user.commission_paid = True
+            user.commission_payment_date = datetime.utcnow()
+            user.commission_transaction_hash = signature
+            db.commit()
+            
+            return templates.TemplateResponse("commission_callback.html", {
+                "request": request,
+                "success": True,
+                "signature": signature,
+                "telegram_id": telegram_id
+            })
+        else:
+            return templates.TemplateResponse("commission_callback.html", {
+                "request": request,
+                "success": False,
+                "error": "Payment not confirmed",
+                "telegram_id": telegram_id
+            })
+
+    except Exception as e:
+        print(f"Commission callback error: {e}")
+        return templates.TemplateResponse("commission_callback.html", {
+            "request": request,
+            "success": False,
+            "error": f"Server error: {str(e)}",
+            "telegram_id": request.query_params.get("telegram_id")
+        })
+
 @router.post("/api/wallet/save")
 async def save_wallet(request: Request, db: Session = Depends(get_db)):
     """ذخیره آدرس wallet - بهبود یافته"""
@@ -53,14 +187,14 @@ async def save_wallet(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": "Missing telegram_id or wallet_address"
             })
-        
+
         # اعتبارسنجی آدرس کیف پول Solana
         if not is_valid_solana_address(wallet_address):
             return JSONResponse({
                 "success": False,
                 "error": "Invalid Solana wallet address format"
             })
-        
+
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             user.wallet_address = wallet_address
@@ -75,6 +209,7 @@ async def save_wallet(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": "User not found"
             })
+
     except Exception as e:
         print(f"Error saving wallet: {e}")
         db.rollback()
@@ -95,7 +230,7 @@ async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": "Missing telegram_id"
             })
-        
+
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
             user.wallet_address = None
@@ -109,6 +244,7 @@ async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
                 "success": False,
                 "error": "User not found"
             })
+
     except Exception as e:
         print(f"Error disconnecting wallet: {e}")
         db.rollback()
@@ -125,7 +261,6 @@ def is_valid_solana_address(address: str) -> bool:
     pattern = r'^[1-9A-HJ-NP-Za-km-z]{32,44}$'
     return bool(re.match(pattern, address))
 
-# ⚠️ اصلاح اصلی: تغییر route از "/callback" به "/wallet/callback"
 @router.get("/wallet/callback")
 async def wallet_callback(request: Request, db: Session = Depends(get_db)):
     """Callback handler برای Deep Link Phantom - بهبود یافته"""
@@ -142,12 +277,12 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
         # پارامترهای خطا
         error_code = request.query_params.get("errorCode")
         error_message = request.query_params.get("errorMessage")
-        
+
         print(f"[PHANTOM CALLBACK] telegram_id: {telegram_id}")
         print(f"[PHANTOM CALLBACK] error_code: {error_code}")
         print(f"[PHANTOM CALLBACK] error_message: {error_message}")
         print(f"[PHANTOM CALLBACK] phantom_key: {phantom_encryption_public_key}")
-        
+
         if error_code:
             return templates.TemplateResponse("wallet_callback.html", {
                 "request": request,
@@ -155,7 +290,7 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
                 "error": f"Phantom Error {error_code}: {error_message}",
                 "telegram_id": telegram_id
             })
-        
+
         # موفقیت - ذخیره اطلاعات
         if telegram_id and phantom_encryption_public_key:
             user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -171,11 +306,6 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
                         print(f"Encrypted data received: {data}")
                     
                     user.wallet_address = wallet_address
-                    
-                    # اگر session موجود است، آن را هم ذخیره کنید
-                    if session:
-                        user.phantom_session = session
-                    
                     db.commit()
                     
                     return templates.TemplateResponse("wallet_callback.html", {
@@ -209,124 +339,4 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
             "success": False,
             "error": f"Server error: {str(e)}",
             "telegram_id": request.query_params.get("telegram_id")
-        })
-
-
-
-@router.get("/api/commission/status")
-async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
-    """بررسی وضعیت پرداخت کمیسیون"""
-    try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        
-        if user and user.commission_paid:
-            return JSONResponse({
-                "success": True,
-                "paid": True,
-                "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None
-            })
-        else:
-            return JSONResponse({
-                "success": True,
-                "paid": False
-            })
-            
-    except Exception as e:
-        print(f"Error checking commission status: {e}")
-        return JSONResponse({
-            "success": False,
-            "paid": False,
-            "error": str(e)
-        })
-
-@router.post("/api/commission/pay")
-async def pay_commission(request: Request, db: Session = Depends(get_db)):
-    """شروع فرآیند پرداخت کمیسیون"""
-    try:
-        data = await request.json()
-        telegram_id = data.get("telegram_id")
-        wallet_address = data.get("wallet_address")
-        
-        if not telegram_id or not wallet_address:
-            return JSONResponse({
-                "success": False,
-                "error": "Missing telegram_id or wallet_address"
-            })
-        
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            return JSONResponse({
-                "success": False,
-                "error": "User not found"
-            })
-        
-        if user.commission_paid:
-            return JSONResponse({
-                "success": False,
-                "error": "Commission already paid"
-            })
-        
-        # مقدار کمیسیون (مثلاً 0.01 SOL)
-        commission_amount = 0.01
-        admin_wallet = "YOUR_ADMIN_WALLET_ADDRESS"  # آدرس wallet admin
-        
-        # ایجاد URL پرداخت برای Phantom
-        payment_url = f"https://phantom.app/ul/v1/transfer?recipient={admin_wallet}&amount={commission_amount}&spl-token=none&reference={telegram_id}"
-        
-        return JSONResponse({
-            "success": True,
-            "payment_url": payment_url,
-            "commission_amount": commission_amount,
-            "recipient": admin_wallet
-        })
-        
-    except Exception as e:
-        print(f"Error initiating commission payment: {e}")
-        return JSONResponse({
-            "success": False,
-            "error": f"Server error: {str(e)}"
-        })
-
-@router.post("/api/commission/verify")
-async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
-    """تایید پرداخت کمیسیون (webhook یا manual verification)"""
-    try:
-        data = await request.json()
-        telegram_id = data.get("telegram_id")
-        transaction_hash = data.get("transaction_hash")
-        
-        if not telegram_id:
-            return JSONResponse({
-                "success": False,
-                "error": "Missing telegram_id"
-            })
-        
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            return JSONResponse({
-                "success": False,
-                "error": "User not found"
-            })
-        
-        # اینجا می‌توانید transaction را verify کنید
-        # فعلاً برای تست، فقط mark می‌کنیم
-        
-        user.commission_paid = True
-        user.commission_payment_date = datetime.utcnow()
-        if transaction_hash:
-            user.commission_transaction_hash = transaction_hash
-        
-        db.commit()
-        
-        return JSONResponse({
-            "success": True,
-            "message": "Commission payment verified successfully"
-        })
-        
-    except Exception as e:
-        print(f"Error verifying commission payment: {e}")
-        db.rollback()
-        return JSONResponse({
-            "success": False,
-            "error": f"Server error: {str(e)}"
         })
