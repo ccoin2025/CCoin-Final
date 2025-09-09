@@ -21,3 +21,6 @@ class User(Base):
     tasks = relationship("UserTask", back_populates="user")
     airdrop = relationship("Airdrop", back_populates="user", uselist=False)
     referrals = relationship("User", foreign_keys=[referred_by])
+    commission_paid = Column(Boolean, default=False)
+    commission_payment_date = Column(DateTime, nullable=True)
+    commission_transaction_hash = Column(String, nullable=True)
