@@ -367,6 +367,7 @@
 
     <script>
         const USER_ID = "{{ request.session.telegram_id }}";
+        const SOLANA_RPC_URL = "{{ config.SOLANA_RPC }}";
         console.log("airdrop.js loaded");
 
         let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
@@ -467,10 +468,15 @@
                 });
 
                 if (connectResponse.ok) {
-                    isWalletConnected = true;
-                    connectedWalletAddress = walletAddress;
-                    updateWalletUI();
-                    showToast('Wallet connected successfully!', 'success');
+                    const responseData = await connectResponse.json();
+                    if (responseData.success) {
+                        isWalletConnected = true;
+                        connectedWalletAddress = walletAddress;
+                        updateWalletUI();
+                        showToast('Wallet connected successfully!', 'success');
+                    } else {
+                        throw new Error(responseData.message || 'Failed to connect wallet');
+                    }
                 } else {
                     const errorData = await connectResponse.json();
                     throw new Error(errorData.detail || 'Failed to connect wallet');
@@ -498,7 +504,6 @@
                 connectWalletBox.classList.add("completed");
                 
                 tasksCompleted.wallet = true;
-                markAsCompleted("connect-wallet");
             } else {
                 walletButtonText.textContent = "Connect Wallet";
                 walletIcon.classList.remove("fa-check");
@@ -594,7 +599,7 @@
                 transaction.feePayer = window.solana.publicKey;
                 
                 // دریافت recent blockhash
-                const connection = new solanaWeb3.Connection('{{ config.SOLANA_RPC }}', 'confirmed');
+                const connection = new solanaWeb3.Connection(SOLANA_RPC_URL, 'confirmed');
                 const { blockhash } = await connection.getRecentBlockhash();
                 transaction.recentBlockhash = blockhash;
 
@@ -679,19 +684,7 @@
 
         // بررسی وضعیت wallet
         async function checkWalletStatus() {
-            try {
-                const response = await fetch('/airdrop/', {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-                
-                if (response.ok) {
-                    // وضعیت از backend دریافت شود و UI آپدیت شود
-                    // این قسمت باید بر اساس response backend تنظیم شود
-                }
-            } catch (error) {
-                console.error('Error checking wallet status:', error);
-            }
+            // این function در آینده می‌تواند وضعیت wallet را از backend چک کند
         }
 
         // شمارش معکوس
@@ -739,44 +732,41 @@
             checkWalletStatus();
 
             // بررسی وضعیت تسک ها از backend
-            const tasksCompleted = {{ tasks_completed|tojson if tasks_completed else 'false' }};
-            const invited = {{ invited|tojson if invited else 'false' }};
-            const walletConnected = {{ wallet_connected|tojson if wallet_connected else 'false' }};
-            const commissionPaidStatus = {{ commission_paid|tojson if commission_paid else 'false' }};
+            const tasksCompletedFromBackend = {{ tasks_completed|tojson if tasks_completed else 'false' }};
+            const invitedFromBackend = {{ invited|tojson if invited else 'false' }};
+            const walletConnectedFromBackend = {{ wallet_connected|tojson if wallet_connected else 'false' }};
+            const commissionPaidFromBackend = {{ commission_paid|tojson if commission_paid else 'false' }};
+            const userWalletAddress = "{{ user_wallet_address }}";
 
             // آپدیت UI بر اساس وضعیت backend
-            if (tasksCompleted) {
+            if (tasksCompletedFromBackend) {
                 markAsCompleted("task-completion");
+                tasksCompleted.task = true;
             }
             
-            if (invited) {
+            if (invitedFromBackend) {
                 markAsCompleted("inviting-friends");
+                tasksCompleted.invite = true;
             }
             
-            if (walletConnected) {
+            if (walletConnectedFromBackend && userWalletAddress) {
                 isWalletConnected = true;
-                // باید آدرس wallet از backend دریافت شود
+                connectedWalletAddress = userWalletAddress;
                 updateWalletUI();
+                tasksCompleted.wallet = true;
             }
             
-            if (commissionPaidStatus) {
+            if (commissionPaidFromBackend) {
                 commissionPaid = true;
                 markCommissionAsPaid();
+                tasksCompleted.pay = true;
             }
         });
 
-        // بررسی اتصال به Phantom در صورت وجود
-        if (window.solana && window.solana.isPhantom) {
-            console.log('Phantom wallet detected');
-            
-            // بررسی اتصال خودکار
+        // Event listeners برای Phantom wallet
+        if (window.solana) {
             window.solana.on('connect', () => {
-                console.log('Phantom wallet connected automatically');
-                if (window.solana.publicKey) {
-                    isWalletConnected = true;
-                    connectedWalletAddress = window.solana.publicKey.toString();
-                    updateWalletUI();
-                }
+                console.log('Phantom wallet connected');
             });
 
             window.solana.on('disconnect', () => {
