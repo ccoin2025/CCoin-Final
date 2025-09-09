@@ -44,9 +44,13 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     commission_paid = user.commission_paid
 
     if tasks_completed and invited and wallet_connected and commission_paid:
-        user.airdrop.eligible = True
-        db.commit()
+        if hasattr(user, 'airdrop') and user.airdrop:
+            user.airdrop.eligible = True
+            db.commit()
 
+    # اضافه کردن config به context
+    from CCOIN import config
+    
     return templates.TemplateResponse("airdrop.html", {
         "request": request,
         "countdown": countdown,
@@ -54,22 +58,27 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
         "tasks_completed": tasks_completed,
         "invited": invited,
         "wallet_connected": wallet_connected,
-        "commission_paid": commission_paid
+        "commission_paid": commission_paid,
+        "config": config,  # اضافه کردن config
+        "user_wallet_address": user.wallet_address if user.wallet_address else ""
     })
 
 @router.post("/connect_wallet")
 @limiter.limit("5/minute")
-async def connect_wallet(wallet: str, request: Request, db: Session = Depends(get_db)):
+async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
 
+    body = await request.json()
+    wallet = body.get("wallet")
+    
+    if not wallet or not isinstance(wallet, str):
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    if not wallet or not isinstance(wallet, str):
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
 
     try:
         Pubkey.from_string(wallet)
@@ -79,7 +88,7 @@ async def connect_wallet(wallet: str, request: Request, db: Session = Depends(ge
         cache_key = f"wallet:{telegram_id}"
         redis_client.setex(cache_key, 3600, wallet)
 
-        return {"message": "Wallet connected successfully"}
+        return {"success": True, "message": "Wallet connected successfully"}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
 
