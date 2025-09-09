@@ -145,11 +145,12 @@
         }
 
         /* تغییر آیکون برای حالت connected */
-        .task-button.wallet-connected .right-icon {
+        .task-button.wallet-connected .right-icon,
+        .task-button.commission-paid .right-icon {
             color: #28a745 !important;
         }
 
-        /* تغییر رنگ دکمه برای حالت connected */
+        /* تغییر رنگ دکمه برای حالت completed */
         .task-box.completed {
             border-color: #28a745;
         }
@@ -198,6 +199,21 @@
 
         #pay-commission {
             margin-top: 5px;
+        }
+
+        /* استایل برای دکمه commission در حالت loading */
+        .task-button.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .task-button.loading .right-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         /* بهبود responsive */
@@ -277,9 +293,9 @@
             </div>
 
             <div id="pay-commission" class="task-box">
-                <button onclick="payCommission()" class="task-button">
-                    <span class="left-text">Pay for the Commission</span>
-                    <i class="fas fa-chevron-right right-icon"></i>
+                <button onclick="payCommission()" class="task-button" id="commission-button">
+                    <span class="left-text" id="commission-button-text">Pay for the Commission</span>
+                    <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
                 </button>
             </div>
         </div>
@@ -316,6 +332,7 @@
         let isWalletConnected = false;
         let walletDropdownOpen = false;
         let connectedWalletAddress = '';
+        let commissionPaid = false;
 
         // بررسی پارامتر wallet_updated در URL
         function checkWalletUpdateParam() {
@@ -342,6 +359,58 @@
             icon.classList.remove("fa-chevron-right");
             icon.classList.add("fa-check");
             box.classList.add("completed");
+        }
+
+        function markCommissionAsPaid() {
+            const box = document.getElementById("pay-commission");
+            const button = document.getElementById("commission-button");
+            const icon = document.getElementById("commission-icon");
+            const buttonText = document.getElementById("commission-button-text");
+
+            // تغییر آیکون به تیک
+            icon.classList.remove("fa-chevron-right", "fa-spinner");
+            icon.classList.add("fa-check");
+            
+            // تغییر متن دکمه
+            buttonText.textContent = "Commission Paid";
+            
+            // اضافه کردن کلاس‌های مربوط به تکمیل
+            box.classList.add("completed");
+            button.classList.add("commission-paid");
+            
+            commissionPaid = true;
+            tasksCompleted.pay = true;
+            
+            // ذخیره در localStorage
+            localStorage.setItem('commissionPaid', 'true');
+            
+            console.log('Commission marked as paid');
+        }
+
+        function markCommissionAsUnpaid() {
+            const box = document.getElementById("pay-commission");
+            const button = document.getElementById("commission-button");
+            const icon = document.getElementById("commission-icon");
+            const buttonText = document.getElementById("commission-button-text");
+
+            // برگردان آیکون به حالت اولیه
+            icon.classList.remove("fa-check", "fa-spinner");
+            icon.classList.add("fa-chevron-right");
+            
+            // برگردان متن به حالت اولیه
+            buttonText.textContent = "Pay for the Commission";
+            
+            // حذف کلاس‌های مربوط به تکمیل
+            box.classList.remove("completed");
+            button.classList.remove("commission-paid");
+            
+            commissionPaid = false;
+            tasksCompleted.pay = false;
+            
+            // پاک کردن localStorage
+            localStorage.removeItem('commissionPaid');
+            
+            console.log('Commission marked as unpaid');
         }
 
         function markAsConnected(id, walletAddress) {
@@ -491,6 +560,28 @@
             }
         }
 
+        async function checkCommissionStatus() {
+            console.log('Checking commission status...');
+            
+            try {
+                const response = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
+                const data = await response.json();
+                
+                console.log('Commission status response:', data);
+                
+                if (data.success && data.paid) {
+                    markCommissionAsPaid();
+                    console.log('Commission found as paid');
+                } else {
+                    markCommissionAsUnpaid();
+                    console.log('Commission not paid');
+                }
+            } catch (err) {
+                console.error("Error checking commission status:", err);
+                markCommissionAsUnpaid();
+            }
+        }
+
         function toggleWalletDropdown() {
             if (!isWalletConnected) {
                 // اگر کیف پول متصل نیست، برو به صفحه اتصال
@@ -592,6 +683,71 @@
             }
         }
 
+        async function payCommission() {
+            if (commissionPaid) {
+                console.log("Commission already paid");
+                return;
+            }
+
+            // بررسی اتصال wallet
+            if (!isWalletConnected) {
+                alert('❌ Please connect your wallet first');
+                return;
+            }
+
+            console.log("Initiating commission payment");
+
+            const button = document.getElementById("commission-button");
+            const icon = document.getElementById("commission-icon");
+            
+            // نمایش loading state
+            button.classList.add("loading");
+            icon.classList.remove("fa-chevron-right");
+            icon.classList.add("fa-spinner");
+
+            try {
+                // ارسال درخواست پرداخت کمیسیون
+                const response = await fetch('/api/commission/pay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        telegram_id: USER_ID,
+                        wallet_address: connectedWalletAddress
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.payment_url) {
+                    console.log('Payment URL received:', data.payment_url);
+                    
+                    // هدایت به wallet برای پرداخت
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.openLink(data.payment_url);
+                    } else {
+                        window.open(data.payment_url, '_blank');
+                    }
+
+                    // بعد از مدتی وضعیت را چک کن
+                    setTimeout(() => {
+                        checkCommissionStatus();
+                    }, 3000);
+
+                } else {
+                    throw new Error(data.error || 'Failed to initiate payment');
+                }
+
+            } catch (error) {
+                console.error('Error paying commission:', error);
+                alert(`❌ Error initiating payment: ${error.message}`);
+            } finally {
+                // حذف loading state
+                button.classList.remove("loading");
+                icon.classList.remove("fa-spinner");
+                icon.classList.add("fa-chevron-right");
+            }
+        }
+
         function handleTaskCompletion() {
             if (tasksCompleted.task) return;
             window.location.href = "/earn";
@@ -602,10 +758,6 @@
             window.location.href = "/friends";
         }
 
-        function payCommission() {
-            console.log("Pay commission clicked");
-        }
-
         // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
@@ -613,9 +765,10 @@
             
             // Handle page focus events in Telegram
             window.addEventListener('focus', () => {
-                console.log('Page gained focus, checking wallet status...');
+                console.log('Page gained focus, checking statuses...');
                 setTimeout(() => {
                     checkWalletStatus();
+                    checkCommissionStatus();
                 }, 1000);
             });
             
@@ -628,9 +781,10 @@
         // اضافه کردن event listener برای تشخیص بازگشت به صفحه
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                console.log('Page became visible, checking wallet status...');
+                console.log('Page became visible, checking statuses...');
                 setTimeout(() => {
                     checkWalletStatus();
+                    checkCommissionStatus();
                 }, 500);
             }
         });
@@ -646,22 +800,25 @@
                 // بررسی وضعیت‌ها
                 checkUserTasks();
                 checkWalletStatus();
+                checkCommissionStatus();
             }
             
-            // Set up periodic wallet status check (every 30 seconds)
+            // Set up periodic status check (every 30 seconds)
             setInterval(() => {
                 if (!document.hidden) {
-                    console.log('Periodic wallet status check...');
+                    console.log('Periodic status check...');
                     checkWalletStatus();
+                    checkCommissionStatus();
                 }
             }, 30000);
         });
 
         // اضافه کردن event listener برای window focus
         window.addEventListener('focus', () => {
-            console.log('Window focused, refreshing wallet status...');
+            console.log('Window focused, refreshing statuses...');
             setTimeout(() => {
                 checkWalletStatus();
+                checkCommissionStatus();
             }, 1000);
         });
 
