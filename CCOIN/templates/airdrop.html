@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
         /* استایل منوی کشویی کیف پول */
         .wallet-dropdown {
@@ -216,6 +217,39 @@
             to { transform: rotate(360deg); }
         }
 
+        /* استایل Toast notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            max-width: 300px;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast-success {
+            background: #28a745;
+        }
+
+        .toast-error {
+            background: #dc3545;
+        }
+
+        .toast-info {
+            background: #007bff;
+        }
+
         /* بهبود responsive */
         @media (max-width: 480px) {
             .wallet-address-dropdown {
@@ -227,9 +261,16 @@
                 padding: 8px 10px;
                 font-size: 11px;
             }
-
+            
             .task-box {
                 margin-bottom: 12px;
+            }
+
+            .toast {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
             }
         }
     </style>
@@ -347,7 +388,6 @@
                 setTimeout(() => {
                     checkWalletStatus();
                 }, 500);
-                
                 return true;
             }
             return false;
@@ -367,462 +407,383 @@
             const icon = document.getElementById("commission-icon");
             const buttonText = document.getElementById("commission-button-text");
 
-            // تغییر آیکون به تیک
+            // تغییر آیکون و متن
             icon.classList.remove("fa-chevron-right", "fa-spinner");
             icon.classList.add("fa-check");
-            
-            // تغییر متن دکمه
             buttonText.textContent = "Commission Paid";
             
-            // اضافه کردن کلاس‌های مربوط به تکمیل
+            // اضافه کردن کلاس completed
             box.classList.add("completed");
             button.classList.add("commission-paid");
             
+            // تنظیم وضعیت
             commissionPaid = true;
             tasksCompleted.pay = true;
-            
-            // ذخیره در localStorage
-            localStorage.setItem('commissionPaid', 'true');
-            
-            console.log('Commission marked as paid');
         }
 
-        function markCommissionAsUnpaid() {
-            const box = document.getElementById("pay-commission");
-            const button = document.getElementById("commission-button");
-            const icon = document.getElementById("commission-icon");
-            const buttonText = document.getElementById("commission-button-text");
-
-            // برگردان آیکون به حالت اولیه
-            icon.classList.remove("fa-check", "fa-spinner");
-            icon.classList.add("fa-chevron-right");
-            
-            // برگردان متن به حالت اولیه
-            buttonText.textContent = "Pay for the Commission";
-            
-            // حذف کلاس‌های مربوط به تکمیل
-            box.classList.remove("completed");
-            button.classList.remove("commission-paid");
-            
-            commissionPaid = false;
-            tasksCompleted.pay = false;
-            
-            // پاک کردن localStorage
-            localStorage.removeItem('commissionPaid');
-            
-            console.log('Commission marked as unpaid');
+        function handleTaskCompletion() {
+            window.location.href = "/earn";
         }
 
-        function markAsConnected(id, walletAddress) {
-            const box = document.getElementById(id);
-            const button = box.querySelector(".task-button");
-            const icon = document.getElementById("wallet-icon");
-            const buttonText = document.getElementById("wallet-button-text");
-            const statusIndicator = document.getElementById("wallet-status-indicator");
-            const addressDropdown = document.getElementById("wallet-address-dropdown");
-            const dropdown = document.getElementById("wallet-dropdown");
-
-            // تغییر آیکون به تیک
-            icon.classList.remove("fa-chevron-right", "fa-chevron-down", "fa-chevron-up");
-            icon.classList.add("fa-check");
-            
-            // تغییر متن دکمه
-            buttonText.textContent = "Wallet Connected";
-            
-            // اضافه کردن کلاس‌های مربوط به اتصال
-            box.classList.add("completed");
-            button.classList.add("wallet-connected");
-
-            // نمایش نشانگر اتصال با انیمیشن
-            statusIndicator.classList.add("connected");
-
-            // قرار دادن آدرس در dropdown
-            addressDropdown.textContent = walletAddress;
-            
-            // ذخیره آدرس
-            connectedWalletAddress = walletAddress;
-            isWalletConnected = true;
-            tasksCompleted.wallet = true;
-            
-            // ذخیره در localStorage
-            localStorage.setItem('phantomConnected', 'true');
-            localStorage.setItem('walletAddress', walletAddress);
-            
-            console.log('Wallet marked as connected:', walletAddress);
-
-            // اگر dropdown باز بود، آن را ببند
-            if (walletDropdownOpen) {
-                closeDropdown();
-            }
-        }
-
-        function markAsDisconnected(id) {
-            const box = document.getElementById(id);
-            const button = box.querySelector(".task-button");
-            const icon = document.getElementById("wallet-icon");
-            const buttonText = document.getElementById("wallet-button-text");
-            const statusIndicator = document.getElementById("wallet-status-indicator");
-            const dropdownContent = document.getElementById("wallet-dropdown-content");
-            const dropdown = document.getElementById("wallet-dropdown");
-
-            // برگردان آیکون به حالت اولیه
-            icon.classList.remove("fa-check", "fa-chevron-down", "fa-chevron-up");
-            icon.classList.add("fa-chevron-right");
-            
-            // برگردان متن به حالت اولیه
-            buttonText.textContent = "Connect Wallet";
-            
-            // حذف کلاس‌های مربوط به اتصال
-            box.classList.remove("completed");
-            button.classList.remove("wallet-connected");
-
-            // مخفی کردن نشانگر اتصال
-            statusIndicator.classList.remove("connected");
-
-            // بستن dropdown
-            closeDropdown();
-            
-            // پاک کردن متغیرها
-            connectedWalletAddress = '';
-            isWalletConnected = false;
-            tasksCompleted.wallet = false;
-            
-            // پاک کردن localStorage
-            localStorage.removeItem('phantomConnected');
-            localStorage.removeItem('walletAddress');
-            
-            console.log('Wallet marked as disconnected');
-        }
-
-        function openDropdown() {
-            const dropdownContent = document.getElementById("wallet-dropdown-content");
-            const icon = document.getElementById("wallet-icon");
-            const dropdown = document.getElementById("wallet-dropdown");
-            
-            dropdownContent.classList.add("show");
-            dropdown.classList.add("open");
-            icon.classList.remove("fa-check");
-            icon.classList.add("fa-chevron-up");
-            walletDropdownOpen = true;
-            
-            console.log('Dropdown opened');
-        }
-
-        function closeDropdown() {
-            const dropdownContent = document.getElementById("wallet-dropdown-content");
-            const icon = document.getElementById("wallet-icon");
-            const dropdown = document.getElementById("wallet-dropdown");
-            
-            dropdownContent.classList.remove("show");
-            dropdown.classList.remove("open");
-            
-            if (isWalletConnected) {
-                icon.classList.remove("fa-chevron-up", "fa-chevron-down");
-                icon.classList.add("fa-check");
-            } else {
-                icon.classList.remove("fa-chevron-up", "fa-chevron-down");
-                icon.classList.add("fa-chevron-right");
-            }
-            
-            walletDropdownOpen = false;
-            console.log('Dropdown closed');
-        }
-
-        async function checkUserTasks() {
-            try {
-                const response = await fetch(`/api/user-tasks/status?user_id=${USER_ID}`);
-                const data = await response.json();
-                if (data.task) markAsCompleted("task-completion");
-            } catch (err) {
-                console.error("Error checking tasks:", err);
-            }
-        }
-
-        async function checkWalletStatus() {
-            console.log('Checking wallet status...');
-            
-            try {
-                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
-                const data = await response.json();
-                
-                console.log('Wallet status response:', data);
-                
-                if (data.success && data.connected && data.address) {
-                    markAsConnected("connect-wallet", data.address);
-                    console.log('Wallet found and marked as connected');
-                } else {
-                    markAsDisconnected("connect-wallet");
-                    console.log('No wallet connection found');
-                }
-            } catch (err) {
-                console.error("Error checking wallet status:", err);
-                markAsDisconnected("connect-wallet");
-            }
-        }
-
-        async function checkCommissionStatus() {
-            console.log('Checking commission status...');
-            
-            try {
-                const response = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
-                const data = await response.json();
-                
-                console.log('Commission status response:', data);
-                
-                if (data.success && data.paid) {
-                    markCommissionAsPaid();
-                    console.log('Commission found as paid');
-                } else {
-                    markCommissionAsUnpaid();
-                    console.log('Commission not paid');
-                }
-            } catch (err) {
-                console.error("Error checking commission status:", err);
-                markCommissionAsUnpaid();
-            }
+        function handleInviteCheck() {
+            window.location.href = "/friends";
         }
 
         function toggleWalletDropdown() {
-            if (!isWalletConnected) {
-                // اگر کیف پول متصل نیست، برو به صفحه اتصال
-                connectWallet();
-                return;
-            }
-
-            // اگر کیف پول متصل است، toggle کن dropdown
-            if (walletDropdownOpen) {
-                closeDropdown();
+            if (isWalletConnected) {
+                const dropdown = document.getElementById("wallet-dropdown-content");
+                walletDropdownOpen = !walletDropdownOpen;
+                
+                if (walletDropdownOpen) {
+                    dropdown.classList.add("show");
+                } else {
+                    dropdown.classList.remove("show");
+                }
             } else {
-                openDropdown();
+                connectToPhantom();
             }
         }
 
-        // بستن dropdown وقتی کاربر جای دیگه کلیک میکنه
-        document.addEventListener('click', function(event) {
-            const walletDropdown = document.querySelector('.wallet-dropdown');
-            if (!walletDropdown.contains(event.target) && walletDropdownOpen) {
-                closeDropdown();
-            }
-        });
-
-        async function connectWallet() {
-            if (tasksCompleted.wallet) {
-                console.log("Wallet already connected");
-                return;
-            }
-
-            console.log("Opening wallet connection");
-            
-            // اتصال مستقیم با در نظر گیری محیط
-            if (window.Telegram && window.Telegram.WebApp) {
-                // در Telegram WebApp از openLink استفاده کن
-                const connectUrl = `/wallet-browser-connect?telegram_id=${USER_ID}`;
-                console.log('Opening wallet connection in Telegram WebApp:', connectUrl);
-                window.Telegram.WebApp.openLink(connectUrl);
-            } else {
-                // در مرورگر عادی
-                console.log('Opening wallet connection in regular browser');
-                window.location.href = `/wallet-browser-connect?telegram_id=${USER_ID}`;
-            }
-        }
-
-        async function changeWallet() {
-            console.log("Redirecting to change wallet");
-            
-            if (window.Telegram && window.Telegram.WebApp) {
-                const connectUrl = `/wallet-browser-connect?telegram_id=${USER_ID}`;
-                window.Telegram.WebApp.openLink(connectUrl);
-            } else {
-                window.location.href = `/wallet-browser-connect?telegram_id=${USER_ID}`;
-            }
-            
-            // بستن dropdown
-            closeDropdown();
-        }
-
-        async function disconnectWallet() {
-            if (!confirm('Are you sure you want to disconnect your wallet?')) {
-                return;
-            }
-
+        // اتصال به Phantom Wallet
+        async function connectToPhantom() {
             try {
-                const response = await fetch('/api/wallet/disconnect', {
+                if (!window.solana || !window.solana.isPhantom) {
+                    showToast('Phantom wallet not found! Please install Phantom wallet.', 'error');
+                    window.open('https://phantom.app/', '_blank');
+                    return;
+                }
+
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+                
+                // ارسال آدرس wallet به backend
+                const connectResponse = await fetch('/airdrop/connect_wallet', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: USER_ID })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ wallet: walletAddress })
                 });
 
-                if (response.ok) {
-                    markAsDisconnected("connect-wallet");
-                    
-                    // نمایش پیام موفقیت
-                    const successMsg = document.createElement('div');
-                    successMsg.innerHTML = '✅ Wallet disconnected successfully!';
-                    successMsg.style.cssText = `
-                        position: fixed;
-                        top: 20px;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        background: #28a745;
-                        color: white;
-                        padding: 10px 20px;
-                        border-radius: 5px;
-                        z-index: 10000;
-                        font-weight: bold;
-                    `;
-                    document.body.appendChild(successMsg);
-                    setTimeout(() => successMsg.remove(), 3000);
-                    
+                if (connectResponse.ok) {
+                    isWalletConnected = true;
+                    connectedWalletAddress = walletAddress;
+                    updateWalletUI();
+                    showToast('Wallet connected successfully!', 'success');
                 } else {
-                    const errorData = await response.json();
-                    alert(`❌ Error disconnecting wallet: ${errorData.error || 'Unknown error'}`);
+                    const errorData = await connectResponse.json();
+                    throw new Error(errorData.detail || 'Failed to connect wallet');
                 }
+
             } catch (error) {
-                console.error('Error disconnecting wallet:', error);
-                alert('❌ Error disconnecting wallet');
+                console.error('Wallet connection error:', error);
+                showToast(`Connection failed: ${error.message}`, 'error');
             }
         }
 
+        function updateWalletUI() {
+            const walletButtonText = document.getElementById("wallet-button-text");
+            const walletIcon = document.getElementById("wallet-icon");
+            const walletIndicator = document.getElementById("wallet-status-indicator");
+            const walletAddressDropdown = document.getElementById("wallet-address-dropdown");
+            const connectWalletBox = document.getElementById("connect-wallet");
+
+            if (isWalletConnected) {
+                walletButtonText.textContent = "Wallet Connected";
+                walletIcon.classList.remove("fa-chevron-right");
+                walletIcon.classList.add("fa-check");
+                walletIndicator.classList.add("connected");
+                walletAddressDropdown.textContent = connectedWalletAddress;
+                connectWalletBox.classList.add("completed");
+                
+                tasksCompleted.wallet = true;
+                markAsCompleted("connect-wallet");
+            } else {
+                walletButtonText.textContent = "Connect Wallet";
+                walletIcon.classList.remove("fa-check");
+                walletIcon.classList.add("fa-chevron-right");
+                walletIndicator.classList.remove("connected");
+                walletAddressDropdown.textContent = "";
+                connectWalletBox.classList.remove("completed");
+                
+                tasksCompleted.wallet = false;
+            }
+        }
+
+        function changeWallet() {
+            disconnectWallet();
+            setTimeout(connectToPhantom, 500);
+        }
+
+        function disconnectWallet() {
+            if (window.solana && window.solana.isConnected) {
+                window.solana.disconnect();
+            }
+            
+            isWalletConnected = false;
+            connectedWalletAddress = '';
+            walletDropdownOpen = false;
+            
+            document.getElementById("wallet-dropdown-content").classList.remove("show");
+            updateWalletUI();
+            showToast('Wallet disconnected', 'info');
+        }
+
+        // تابع payCommission اصلاح شده
         async function payCommission() {
+            const commissionButton = document.getElementById('commission-button');
+            const commissionIcon = document.getElementById('commission-icon');
+            const commissionButtonText = document.getElementById('commission-button-text');
+            
+            // بررسی اگر کمیسیون قبلاً پرداخت شده
             if (commissionPaid) {
-                console.log("Commission already paid");
+                showToast('Commission already paid!', 'info');
                 return;
             }
 
             // بررسی اتصال wallet
             if (!isWalletConnected) {
-                alert('❌ Please connect your wallet first');
+                showToast('Please connect your wallet first!', 'error');
                 return;
             }
 
-            console.log("Initiating commission payment");
-
-            const button = document.getElementById("commission-button");
-            const icon = document.getElementById("commission-icon");
-            
             // نمایش loading state
-            button.classList.add("loading");
-            icon.classList.remove("fa-chevron-right");
-            icon.classList.add("fa-spinner");
+            commissionButton.classList.add('loading');
+            commissionIcon.className = 'fas fa-spinner';
+            commissionButtonText.textContent = 'Processing...';
 
             try {
-                // ارسال درخواست پرداخت کمیسیون
-                const response = await fetch('/api/commission/pay', {
+                // بررسی اتصال Phantom Wallet
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error('Phantom wallet not found! Please install Phantom wallet.');
+                }
+
+                // اتصال به wallet اگر متصل نیست
+                if (!window.solana.isConnected) {
+                    await window.solana.connect();
+                }
+
+                // درخواست ایجاد transaction از backend
+                const response = await fetch('/airdrop/pay_commission', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        telegram_id: USER_ID,
-                        wallet_address: connectedWalletAddress
-                    })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include'
                 });
 
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to create transaction');
+                }
+
                 const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to prepare transaction');
+                }
 
-                if (data.success && data.payment_url) {
-                    console.log('Payment URL received:', data.payment_url);
+                // تبدیل transaction از base64
+                const transactionBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+                
+                // ایجاد transaction object از solana web3
+                const transaction = solanaWeb3.Transaction.from(transactionBuffer);
+                
+                // تنظیم fee payer
+                transaction.feePayer = window.solana.publicKey;
+                
+                // دریافت recent blockhash
+                const connection = new solanaWeb3.Connection('{{ config.SOLANA_RPC }}', 'confirmed');
+                const { blockhash } = await connection.getRecentBlockhash();
+                transaction.recentBlockhash = blockhash;
+
+                // امضا کردن transaction توسط Phantom
+                const signedTransaction = await window.solana.signTransaction(transaction);
+                
+                // ارسال transaction
+                const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                
+                // تایید transaction
+                await connection.confirmTransaction(signature);
+
+                // تایید پرداخت در backend
+                const confirmResponse = await fetch('/airdrop/confirm_commission', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ signature: signature })
+                });
+
+                if (confirmResponse.ok) {
+                    const confirmData = await confirmResponse.json();
                     
-                    // هدایت به wallet برای پرداخت
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.openLink(data.payment_url);
+                    if (confirmData.success) {
+                        // نمایش موفقیت
+                        markCommissionAsPaid();
+                        showToast('Commission paid successfully!', 'success');
                     } else {
-                        window.open(data.payment_url, '_blank');
+                        throw new Error(confirmData.message || 'Failed to confirm payment');
                     }
-
-                    // بعد از مدتی وضعیت را چک کن
-                    setTimeout(() => {
-                        checkCommissionStatus();
-                    }, 3000);
-
                 } else {
-                    throw new Error(data.error || 'Failed to initiate payment');
+                    throw new Error('Failed to confirm payment');
                 }
 
             } catch (error) {
-                console.error('Error paying commission:', error);
-                alert(`❌ Error initiating payment: ${error.message}`);
+                console.error('Payment error:', error);
+                showToast(`Error: ${error.message}`, 'error');
             } finally {
                 // حذف loading state
-                button.classList.remove("loading");
-                icon.classList.remove("fa-spinner");
-                icon.classList.add("fa-chevron-right");
-            }
-        }
-
-        function handleTaskCompletion() {
-            if (tasksCompleted.task) return;
-            window.location.href = "/earn";
-        }
-
-        function handleInviteCheck() {
-            if (tasksCompleted.invite) return;
-            window.location.href = "/friends";
-        }
-
-        // Initialize Telegram WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-            
-            // Handle page focus events in Telegram
-            window.addEventListener('focus', () => {
-                console.log('Page gained focus, checking statuses...');
-                setTimeout(() => {
-                    checkWalletStatus();
-                    checkCommissionStatus();
-                }, 1000);
-            });
-            
-            // Listen for Telegram WebApp events
-            window.Telegram.WebApp.onEvent('viewportChanged', () => {
-                console.log('Telegram viewport changed');
-            });
-        }
-
-        // اضافه کردن event listener برای تشخیص بازگشت به صفحه
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                console.log('Page became visible, checking statuses...');
-                setTimeout(() => {
-                    checkWalletStatus();
-                    checkCommissionStatus();
-                }, 500);
-            }
-        });
-
-        // بررسی وضعیت‌ها هنگام لود صفحه
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing...');
-            
-            // بررسی پارامتر wallet_updated
-            const wasUpdated = checkWalletUpdateParam();
-            
-            if (!wasUpdated) {
-                // بررسی وضعیت‌ها
-                checkUserTasks();
-                checkWalletStatus();
-                checkCommissionStatus();
-            }
-            
-            // Set up periodic status check (every 30 seconds)
-            setInterval(() => {
-                if (!document.hidden) {
-                    console.log('Periodic status check...');
-                    checkWalletStatus();
-                    checkCommissionStatus();
+                commissionButton.classList.remove('loading');
+                
+                if (commissionPaid) {
+                    commissionIcon.className = 'fas fa-check';
+                    commissionButtonText.textContent = 'Commission Paid';
+                } else {
+                    commissionIcon.className = 'fas fa-chevron-right';
+                    commissionButtonText.textContent = 'Pay for the Commission';
                 }
-            }, 30000);
-        });
+            }
+        }
 
-        // اضافه کردن event listener برای window focus
-        window.addEventListener('focus', () => {
-            console.log('Window focused, refreshing statuses...');
+        // تابع برای نمایش toast notifications
+        function showToast(message, type = 'info') {
+            // حذف toast های قبلی
+            const existingToasts = document.querySelectorAll('.toast');
+            existingToasts.forEach(toast => toast.remove());
+
+            // ایجاد toast element جدید
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            // نمایش toast با انیمیشن
             setTimeout(() => {
-                checkWalletStatus();
-                checkCommissionStatus();
-            }, 1000);
+                toast.classList.add('show');
+            }, 100);
+            
+            // حذف toast بعد از 5 ثانیه
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 5000);
+        }
+
+        // بررسی وضعیت wallet
+        async function checkWalletStatus() {
+            try {
+                const response = await fetch('/airdrop/', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // وضعیت از backend دریافت شود و UI آپدیت شود
+                    // این قسمت باید بر اساس response backend تنظیم شود
+                }
+            } catch (error) {
+                console.error('Error checking wallet status:', error);
+            }
+        }
+
+        // شمارش معکوس
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const endDate = new Date("2024-12-31T23:59:59Z").getTime();
+            const distance = endDate - now;
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            document.getElementById("days").textContent = days.toString().padStart(2, '0');
+            document.getElementById("hours").textContent = hours.toString().padStart(2, '0');
+            document.getElementById("minutes").textContent = minutes.toString().padStart(2, '0');
+            document.getElementById("seconds").textContent = seconds.toString().padStart(2, '0');
+
+            if (distance < 0) {
+                document.querySelector(".countdown").innerHTML = "EXPIRED";
+            }
+        }
+
+        // بستن dropdown هنگام کلیک خارج از آن
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('wallet-dropdown');
+            const dropdownContent = document.getElementById('wallet-dropdown-content');
+            
+            if (!dropdown.contains(event.target)) {
+                dropdownContent.classList.remove('show');
+                walletDropdownOpen = false;
+            }
         });
 
-        console.log('Airdrop script initialized');
+        // راه‌اندازی
+        document.addEventListener('DOMContentLoaded', function() {
+            // شروع شمارش معکوس
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+
+            // بررسی پارامتر wallet_updated
+            checkWalletUpdateParam();
+
+            // بررسی وضعیت اولیه
+            checkWalletStatus();
+
+            // بررسی وضعیت تسک ها از backend
+            const tasksCompleted = {{ tasks_completed|tojson if tasks_completed else 'false' }};
+            const invited = {{ invited|tojson if invited else 'false' }};
+            const walletConnected = {{ wallet_connected|tojson if wallet_connected else 'false' }};
+            const commissionPaidStatus = {{ commission_paid|tojson if commission_paid else 'false' }};
+
+            // آپدیت UI بر اساس وضعیت backend
+            if (tasksCompleted) {
+                markAsCompleted("task-completion");
+            }
+            
+            if (invited) {
+                markAsCompleted("inviting-friends");
+            }
+            
+            if (walletConnected) {
+                isWalletConnected = true;
+                // باید آدرس wallet از backend دریافت شود
+                updateWalletUI();
+            }
+            
+            if (commissionPaidStatus) {
+                commissionPaid = true;
+                markCommissionAsPaid();
+            }
+        });
+
+        // بررسی اتصال به Phantom در صورت وجود
+        if (window.solana && window.solana.isPhantom) {
+            console.log('Phantom wallet detected');
+            
+            // بررسی اتصال خودکار
+            window.solana.on('connect', () => {
+                console.log('Phantom wallet connected automatically');
+                if (window.solana.publicKey) {
+                    isWalletConnected = true;
+                    connectedWalletAddress = window.solana.publicKey.toString();
+                    updateWalletUI();
+                }
+            });
+
+            window.solana.on('disconnect', () => {
+                console.log('Phantom wallet disconnected');
+                disconnectWallet();
+            });
+        }
     </script>
 </body>
 </html>
