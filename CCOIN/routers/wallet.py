@@ -210,3 +210,123 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
             "error": f"Server error: {str(e)}",
             "telegram_id": request.query_params.get("telegram_id")
         })
+
+
+
+@router.get("/api/commission/status")
+async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت پرداخت کمیسیون"""
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        
+        if user and user.commission_paid:
+            return JSONResponse({
+                "success": True,
+                "paid": True,
+                "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None
+            })
+        else:
+            return JSONResponse({
+                "success": True,
+                "paid": False
+            })
+            
+    except Exception as e:
+        print(f"Error checking commission status: {e}")
+        return JSONResponse({
+            "success": False,
+            "paid": False,
+            "error": str(e)
+        })
+
+@router.post("/api/commission/pay")
+async def pay_commission(request: Request, db: Session = Depends(get_db)):
+    """شروع فرآیند پرداخت کمیسیون"""
+    try:
+        data = await request.json()
+        telegram_id = data.get("telegram_id")
+        wallet_address = data.get("wallet_address")
+        
+        if not telegram_id or not wallet_address:
+            return JSONResponse({
+                "success": False,
+                "error": "Missing telegram_id or wallet_address"
+            })
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            })
+        
+        if user.commission_paid:
+            return JSONResponse({
+                "success": False,
+                "error": "Commission already paid"
+            })
+        
+        # مقدار کمیسیون (مثلاً 0.01 SOL)
+        commission_amount = 0.01
+        admin_wallet = "YOUR_ADMIN_WALLET_ADDRESS"  # آدرس wallet admin
+        
+        # ایجاد URL پرداخت برای Phantom
+        payment_url = f"https://phantom.app/ul/v1/transfer?recipient={admin_wallet}&amount={commission_amount}&spl-token=none&reference={telegram_id}"
+        
+        return JSONResponse({
+            "success": True,
+            "payment_url": payment_url,
+            "commission_amount": commission_amount,
+            "recipient": admin_wallet
+        })
+        
+    except Exception as e:
+        print(f"Error initiating commission payment: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        })
+
+@router.post("/api/commission/verify")
+async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
+    """تایید پرداخت کمیسیون (webhook یا manual verification)"""
+    try:
+        data = await request.json()
+        telegram_id = data.get("telegram_id")
+        transaction_hash = data.get("transaction_hash")
+        
+        if not telegram_id:
+            return JSONResponse({
+                "success": False,
+                "error": "Missing telegram_id"
+            })
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            })
+        
+        # اینجا می‌توانید transaction را verify کنید
+        # فعلاً برای تست، فقط mark می‌کنیم
+        
+        user.commission_paid = True
+        user.commission_payment_date = datetime.utcnow()
+        if transaction_hash:
+            user.commission_transaction_hash = transaction_hash
+        
+        db.commit()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Commission payment verified successfully"
+        })
+        
+    except Exception as e:
+        print(f"Error verifying commission payment: {e}")
+        db.rollback()
+        return JSONResponse({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        })
