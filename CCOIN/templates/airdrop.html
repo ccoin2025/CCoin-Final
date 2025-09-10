@@ -148,7 +148,9 @@
         
         /* تغییر آیکون برای حالت connected */
         .task-button.wallet-connected .right-icon,
-        .task-button.commission-paid .right-icon {
+        .task-button.commission-paid .right-icon,
+        .task-button.tasks-completed .right-icon,
+        .task-button.friends-invited .right-icon {
             color: #28a745 !important;
         }
         
@@ -370,38 +372,37 @@
     <script>
         const USER_ID = "{{ request.session.telegram_id }}";
         const SOLANA_RPC_URL = "{{ config.SOLANA_RPC }}";
-        console.log("airdrop.js loaded");
+        
+        // وضعیت‌های اولیه از backend
+        const INITIAL_TASKS_COMPLETED = {{ 'true' if tasks_completed else 'false' }};
+        const INITIAL_INVITED_FRIENDS = {{ 'true' if invited else 'false' }};
+        const INITIAL_WALLET_CONNECTED = {{ 'true' if wallet_connected else 'false' }};
+        const INITIAL_COMMISSION_PAID = {{ 'true' if commission_paid else 'false' }};
+        const INITIAL_WALLET_ADDRESS = "{{ user_wallet_address if user_wallet_address else '' }}";
+        
+        console.log("Initial states:", {
+            tasks: INITIAL_TASKS_COMPLETED,
+            friends: INITIAL_INVITED_FRIENDS,
+            wallet: INITIAL_WALLET_CONNECTED,
+            commission: INITIAL_COMMISSION_PAID,
+            address: INITIAL_WALLET_ADDRESS
+        });
 
-        let tasksCompleted = { task: false, invite: false, wallet: false, pay: false };
-        let isWalletConnected = false;
+        let tasksCompleted = { task: INITIAL_TASKS_COMPLETED, invite: INITIAL_INVITED_FRIENDS, wallet: INITIAL_WALLET_CONNECTED, pay: INITIAL_COMMISSION_PAID };
+        let isWalletConnected = INITIAL_WALLET_CONNECTED;
         let walletDropdownOpen = false;
-        let connectedWalletAddress = '';
-        let commissionPaid = false;
+        let connectedWalletAddress = INITIAL_WALLET_ADDRESS;
+        let commissionPaid = INITIAL_COMMISSION_PAID;
 
-        // بررسی پارامتر wallet_updated در URL
-        function checkWalletUpdateParam() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('wallet_updated') === '1') {
-                console.log('Wallet was updated, refreshing status...');
-                // حذف پارامتر از URL
-                const newUrl = window.location.pathname + (urlParams.has('telegram_id') ? `?telegram_id=${urlParams.get('telegram_id')}` : '');
-                window.history.replaceState({}, '', newUrl);
-                // بررسی مجدد وضعیت wallet با تاخیر کوتاه
-                setTimeout(() => {
-                    checkWalletStatus();
-                }, 500);
-                return true;
-            }
-            return false;
-        }
-
-        function markAsCompleted(id) {
+        function markAsCompleted(id, className = '') {
             const box = document.getElementById(id);
             const button = box.querySelector('.task-button');
             const icon = box.querySelector('.right-icon');
             
             box.classList.add('completed');
-            button.classList.add('wallet-connected');
+            if (className) {
+                button.classList.add(className);
+            }
             icon.classList.remove('fa-chevron-right');
             icon.classList.add('fa-check');
         }
@@ -491,7 +492,7 @@
                 walletIcon.classList.add('fa-check');
                 statusIndicator.classList.add('connected');
                 dropdownAddress.textContent = address;
-                markAsCompleted('connect-wallet');
+                markAsCompleted('connect-wallet', 'wallet-connected');
             } else {
                 buttonText.textContent = 'Connect Wallet';
                 walletIcon.classList.remove('fa-check');
@@ -700,39 +701,6 @@
             }
         }
 
-        async function checkWalletStatus() {
-            try {
-                const provider = await getProvider();
-                if (provider && provider.isConnected) {
-                    isWalletConnected = true;
-                    connectedWalletAddress = provider.publicKey.toString();
-                    updateWalletUI(true, connectedWalletAddress);
-                }
-            } catch (error) {
-                console.log('No wallet connected');
-            }
-        }
-
-        async function checkCommissionStatus() {
-            // بررسی وضعیت commission از صفحه
-            const commissionPaidFromServer = {{ 'true' if commission_paid else 'false' }};
-            
-            if (commissionPaidFromServer) {
-                commissionPaid = true;
-                const commissionButton = document.getElementById('commission-button');
-                const commissionIcon = document.getElementById('commission-icon');
-                const commissionText = document.getElementById('commission-button-text');
-                
-                commissionButton.classList.add('commission-paid');
-                commissionText.textContent = 'Commission Paid ✅';
-                commissionIcon.classList.remove('fa-chevron-right');
-                commissionIcon.classList.add('fa-check');
-                
-                const payBox = document.getElementById('pay-commission');
-                payBox.classList.add('completed');
-            }
-        }
-
         function handleTaskCompletion() {
             window.location.href = '/usertasks';
         }
@@ -760,24 +728,54 @@
             }
         }
 
-        // اجرای اولیه
-        document.addEventListener('DOMContentLoaded', async function() {
-            console.log('DOM loaded, initializing...');
+        // اجرای اولیه وضعیت‌ها
+        function initializeStates() {
+            console.log("Initializing states...");
             
-            // شروع شمارش معکوس
+            // بررسی وضعیت tasks completion
+            if (INITIAL_TASKS_COMPLETED) {
+                markAsCompleted('task-completion', 'tasks-completed');
+                console.log("Tasks marked as completed");
+            }
+            
+            // بررسی وضعیت inviting friends  
+            if (INITIAL_INVITED_FRIENDS) {
+                markAsCompleted('inviting-friends', 'friends-invited');
+                console.log("Friends marked as completed");
+            }
+            
+            // بررسی وضعیت wallet connection
+            if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
+                isWalletConnected = true;
+                connectedWalletAddress = INITIAL_WALLET_ADDRESS;
+                updateWalletUI(true, INITIAL_WALLET_ADDRESS);
+                console.log("Wallet marked as connected:", INITIAL_WALLET_ADDRESS);
+            }
+            
+            // بررسی وضعیت commission payment
+            if (INITIAL_COMMISSION_PAID) {
+                commissionPaid = true;
+                const commissionButton = document.getElementById('commission-button');
+                const commissionIcon = document.getElementById('commission-icon');
+                const commissionText = document.getElementById('commission-button-text');
+                
+                commissionButton.classList.add('commission-paid');
+                commissionText.textContent = 'Commission Paid ✅';
+                commissionIcon.classList.remove('fa-chevron-right');
+                commissionIcon.classList.add('fa-check');
+                
+                const payBox = document.getElementById('pay-commission');
+                payBox.classList.add('completed');
+                console.log("Commission marked as paid");
+            }
+        }
+
+        // شروع countdown و تنظیم وضعیت‌های اولیه
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded, initializing...");
+            initializeStates();
             updateCountdown();
             setInterval(updateCountdown, 1000);
-            
-            // بررسی پارامترهای URL
-            checkWalletUpdateParam();
-            
-            // بررسی وضعیت wallet
-            await checkWalletStatus();
-            
-            // بررسی وضعیت commission
-            checkCommissionStatus();
-            
-            console.log('Initialization complete');
         });
     </script>
 </body>
