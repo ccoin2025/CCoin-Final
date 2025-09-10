@@ -1,3 +1,4 @@
+// استفاده از متغیرهای global از HTML
 const {
     USER_ID,
     SOLANA_RPC_URL,
@@ -75,7 +76,6 @@ async function getPhantomProvider() {
     if (phantomProvider && phantomDetected) {
         return phantomProvider;
     }
-
     phantomProvider = await detectPhantomWallet();
     return phantomProvider;
 }
@@ -137,7 +137,7 @@ function setupEventListeners() {
 
         // Close modal when clicking outside
         const modal = document.getElementById('phantom-modal');
-        if (modal && !modal.querySelector('div').contains(event.target)) {
+        if (modal && event.target === modal) {
             closePhantomModal();
         }
     });
@@ -210,7 +210,6 @@ function setupPhantomListeners() {
 // **شمارش معکوس با تاریخ درست (2025)**
 function initCountdown() {
     console.log("⏰ Initializing countdown...");
-    // تاریخ 2025 درست شده
     const countdownDate = new Date("2025-12-31T23:59:59").getTime();
 
     const timer = setInterval(function() {
@@ -298,16 +297,51 @@ function updateTasksUI() {
 function showToast(message, type = 'info') {
     console.log(`📢 Toast: ${message} (${type})`);
     
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    `;
+
+    if (type === 'success') {
+        toast.style.background = '#28a745';
+    } else if (type === 'error') {
+        toast.style.background = '#dc3545';
+    } else if (type === 'info') {
+        toast.style.background = '#007bff';
+    }
+
     document.body.appendChild(toast);
 
-    setTimeout(() => toast.classList.add('show'), 100);
+    setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+    }, 100);
 
     setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => document.body.removeChild(toast), 300);
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
     }, 3000);
 }
 
@@ -340,19 +374,19 @@ function showPhantomModal(type = 'install') {
     if (type === 'install') {
         title = 'Phantom Wallet Required';
         description = 'To continue, you need to install Phantom wallet extension first.';
-        buttonText = 'Install Phantom Wallet';
+        buttonText = '📥 Install Phantom Wallet';
         buttonAction = 'installPhantom()';
         buttonClass = 'phantom-modal-btn';
     } else if (type === 'connect') {
         title = 'Connect Phantom Wallet';
         description = 'Phantom wallet detected! Click to connect your wallet.';
-        buttonText = 'Open Phantom App';
+        buttonText = '🚀 Open Phantom App';
         buttonAction = 'connectWalletFromModal()';
         buttonClass = 'phantom-modal-btn open-app';
     } else if (type === 'payment') {
         title = 'Pay Commission';
         description = `Click to open Phantom app and pay ${COMMISSION_AMOUNT} SOL commission.`;
-        buttonText = 'Open Phantom App';
+        buttonText = '💰 Open Phantom App';
         buttonAction = 'processCommissionPayment()';
         buttonClass = 'phantom-modal-btn open-app';
     }
@@ -368,12 +402,24 @@ function showPhantomModal(type = 'install') {
             border: 2px solid #333;
         ">
             <div style="font-size: 48px; margin-bottom: 20px;">👛</div>
-            <h2 style="color: white; margin-bottom: 15px;">${title}</h2>
-            <p style="color: #ccc; margin-bottom: 25px; line-height: 1.5;">
+            <h2 style="color: white; margin-bottom: 15px; font-family: Urbanist, sans-serif;">${title}</h2>
+            <p style="color: #ccc; margin-bottom: 25px; line-height: 1.5; font-family: Urbanist, sans-serif;">
                 ${description}
             </p>
-            <button class="${buttonClass}" onclick="${buttonAction}">
-                <div class="phantom-icon"></div>
+            <button class="${buttonClass}" onclick="${buttonAction}" style="
+                background: ${type === 'install' ? 'linear-gradient(135deg, #9945FF 0%, #14F195 100%)' : 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)'};
+                color: white;
+                border: none;
+                padding: 15px 25px;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                width: 100%;
+                margin: 10px 0;
+                font-family: Urbanist, sans-serif;
+            ">
                 ${buttonText}
             </button>
             <button onclick="closePhantomModal()" style="
@@ -385,6 +431,7 @@ function showPhantomModal(type = 'install') {
                 cursor: pointer;
                 width: 100%;
                 margin-top: 10px;
+                font-family: Urbanist, sans-serif;
             ">
                 Cancel
             </button>
@@ -401,7 +448,6 @@ function installPhantom() {
     window.open('https://phantom.app/', '_blank');
     closePhantomModal();
     
-    // بررسی مجدد بعد از چند ثانیه
     setTimeout(async () => {
         phantomProvider = await getPhantomProvider();
         if (phantomProvider) {
@@ -467,9 +513,10 @@ function updateWalletUI(address, connected) {
     }
 }
 
-// **Toggle wallet dropdown - اصلاح شده**
+// **Toggle wallet dropdown - اصلاح شده برای رفع مشکل**
 async function toggleWalletDropdown() {
     console.log("👛 Toggle wallet dropdown clicked");
+    console.log("Current state:", { connectedWallet, walletTask: tasksCompleted.wallet });
     
     const dropdown = document.getElementById('wallet-dropdown-content');
     
@@ -562,7 +609,6 @@ async function changeWallet() {
         updateTasksUI();
         document.getElementById('wallet-dropdown-content')?.classList.remove('show');
         showToast('Wallet disconnected. Click to connect a new one.', 'info');
-        // فوراً اتصال جدید برقرار کنیم
         setTimeout(() => showPhantomModal('connect'), 500);
     } catch (error) {
         console.error('Failed to change wallet:', error);
@@ -591,6 +637,7 @@ async function disconnectWallet() {
 // **تابع پرداخت کمیسیون اصلاح شده**
 async function payCommission() {
     console.log("💰 Pay commission clicked");
+    console.log("Current state:", { commissionPaid: tasksCompleted.pay, connectedWallet, walletConnected: tasksCompleted.wallet });
 
     if (tasksCompleted.pay === true) {
         showToast('Commission already paid!', 'info');
@@ -633,7 +680,7 @@ async function processCommissionTransaction(provider) {
         
         // Loading state
         commissionButton?.classList.add('loading');
-        commissionIcon?.classList.add('fa-spinner');
+        commissionIcon?.classList.add('fa-spinner', 'fa-spin');
         commissionIcon?.classList.remove('fa-chevron-right');
         if (commissionText) commissionText.textContent = 'Processing payment...';
 
@@ -720,7 +767,7 @@ async function processCommissionTransaction(provider) {
     } finally {
         // Reset button state
         commissionButton?.classList.remove('loading');
-        commissionIcon?.classList.remove('fa-spinner');
+        commissionIcon?.classList.remove('fa-spinner', 'fa-spin');
         commissionIcon?.classList.add('fa-chevron-right');
         if (commissionText) commissionText.textContent = `Pay Commission (${COMMISSION_AMOUNT} SOL)`;
     }
@@ -750,7 +797,9 @@ function handleInviteCheck() {
 window.addEventListener('load', async function() {
     console.log("🔄 Window loaded, checking for existing connections...");
     
-    // صبر برای تشخیص phantom
+    // صبر کوتاه برای اطمینان از تشخیص phantom
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const provider = await getPhantomProvider();
     if (provider && provider.isConnected && !connectedWallet) {
         try {
@@ -782,3 +831,6 @@ window.addEventListener('focus', async function() {
         }
     }
 });
+
+// Log تشخیص عیب یابی
+console.log("🚀 airdrop.js loaded successfully");
