@@ -290,6 +290,29 @@ transform: translateY(-2px);
 box-shadow: 0 8px 25px rgba(153, 69, 255, 0.3);
 }
 
+.connect-phantom-btn {
+background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+color: white;
+border: none;
+padding: 15px 25px;
+border-radius: 12px;
+font-weight: 600;
+font-size: 14px;
+cursor: pointer;
+transition: all 0.3s ease;
+display: flex;
+align-items: center;
+gap: 10px;
+justify-content: center;
+width: 100%;
+margin: 10px 0;
+}
+
+.connect-phantom-btn:hover {
+transform: translateY(-2px);
+box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
+}
+
 .phantom-icon {
 width: 24px;
 height: 24px;
@@ -317,14 +340,14 @@ background-size: contain;
 <h2>Airdrop Criteria</h2>
 
 <div id="task-completion" class="task-box">
-<button onclick="handleTaskCompletion()" class="task-button">
+<button class="task-button" id="task-completion-btn">
 <span class="left-text">Tasks Completion</span>
 <i class="fas fa-chevron-right right-icon"></i>
 </button>
 </div>
 
 <div id="inviting-friends" class="task-box">
-<button onclick="handleInviteCheck()" class="task-button">
+<button class="task-button" id="inviting-friends-btn">
 <span class="left-text">Inviting Friends</span>
 <i class="fas fa-chevron-right right-icon"></i>
 </button>
@@ -333,7 +356,7 @@ background-size: contain;
 <!-- کیف پول با منوی کشویی -->
 <div id="connect-wallet" class="task-box">
 <div class="wallet-dropdown" id="wallet-dropdown">
-<button onclick="toggleWalletDropdown()" class="task-button wallet-connect-button">
+<button class="task-button wallet-connect-button" id="wallet-connect-btn">
 <span class="left-text" id="wallet-button-text">Connect Wallet</span>
 <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
 <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
@@ -344,10 +367,10 @@ background-size: contain;
 <div><strong>✅ Connected Wallet:</strong></div>
 <div id="wallet-address-dropdown" class="wallet-address-dropdown"></div>
 <div class="wallet-actions-dropdown">
-<button onclick="changeWallet()" class="wallet-action-btn change-btn">
+<button class="wallet-action-btn change-btn" id="change-wallet-btn">
 🔄 Change
 </button>
-<button onclick="disconnectWallet()" class="wallet-action-btn disconnect-btn">
+<button class="wallet-action-btn disconnect-btn" id="disconnect-wallet-btn">
 🚫 Disconnect
 </button>
 </div>
@@ -357,7 +380,7 @@ background-size: contain;
 </div>
 
 <div id="pay-commission" class="task-box">
-<button onclick="payCommission()" class="task-button" id="commission-button">
+<button class="task-button" id="commission-button">
 <span class="left-text" id="commission-button-text">Pay for the Commission</span>
 <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
 </button>
@@ -396,12 +419,16 @@ window.APP_CONFIG = {
     SOLANA_RPC_URL: "{{ config.SOLANA_RPC }}",
     COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT if config.COMMISSION_AMOUNT else 0.1 }},
     ADMIN_WALLET: "{{ config.ADMIN_WALLET }}",
-    INITIAL_TASKS_COMPLETED: {{'true' if tasks_completed else 'false'}},
-    INITIAL_INVITED_FRIENDS: {{'true' if invited else 'false'}},
-    INITIAL_WALLET_CONNECTED: {{'true' if wallet_connected else 'false'}},
-    INITIAL_COMMISSION_PAID: {{'true' if commission_paid else 'false'}},
+    // مقادیر string به boolean تبدیل می‌شود
+    INITIAL_TASKS_COMPLETED: {{ 'true' if tasks_completed else 'false' }},
+    INITIAL_INVITED_FRIENDS: {{ 'true' if invited else 'false' }},
+    INITIAL_WALLET_CONNECTED: {{ 'true' if wallet_connected else 'false' }},
+    INITIAL_COMMISSION_PAID: {{ 'true' if commission_paid else 'false' }},
     INITIAL_WALLET_ADDRESS: "{{ user_wallet_address if user_wallet_address else '' }}"
 };
+
+// Debug لاگ برای بررسی مقادیر
+console.log("APP_CONFIG:", window.APP_CONFIG);
 </script>
 
 <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
