@@ -28,35 +28,67 @@ let tasksCompleted = {
 
 let connectedWallet = INITIAL_WALLET_ADDRESS;
 let phantomProvider = null;
+let phantomDetected = false;
 
-// **تابع اصلاح شده برای تشخیص Phantom با retry logic**
-async function detectPhantomWallet(maxRetries = 30, retryDelay = 200) {
-    console.log("Detecting Phantom wallet...");
-
-    for (let i = 0; i < maxRetries; i++) {
-        // بررسی Phantom جدید
-        if (window.phantom?.solana?.isPhantom) {
-            console.log("Phantom detected via window.phantom.solana");
-            return window.phantom.solana;
-        }
-
-        // بررسی Phantom قدیمی (legacy)
-        if (window.solana?.isPhantom) {
-            console.log("Phantom detected via window.solana (legacy)");
-            return window.solana;
-        }
-
-        console.log(`Attempt ${i + 1}/${maxRetries}: Phantom not yet available, waiting...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+// **تابع بهبود یافته برای تشخیص Phantom**
+async function detectPhantomWallet() {
+    console.log("🔍 Starting Phantom detection...");
+    
+    // متد 1: بررسی مستقیم
+    if (window.phantom?.solana?.isPhantom) {
+        console.log("✅ Phantom detected via window.phantom.solana");
+        phantomDetected = true;
+        return window.phantom.solana;
     }
 
-    console.log("Phantom wallet not found after all retries");
+    // متد 2: بررسی legacy
+    if (window.solana?.isPhantom) {
+        console.log("✅ Phantom detected via window.solana (legacy)");
+        phantomDetected = true;
+        return window.solana;
+    }
+
+    // متد 3: صبر برای لود شدن extension
+    console.log("⏳ Waiting for Phantom extension to load...");
+    for (let i = 0; i < 50; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (window.phantom?.solana?.isPhantom) {
+            console.log("✅ Phantom detected after waiting");
+            phantomDetected = true;
+            return window.phantom.solana;
+        }
+        
+        if (window.solana?.isPhantom) {
+            console.log("✅ Phantom detected (legacy) after waiting");
+            phantomDetected = true;
+            return window.solana;
+        }
+    }
+
+    // متد 4: چک کردن تمام provider های موجود
+    if (window.solana) {
+        const providers = window.solana;
+        console.log("🔍 Found solana providers:", providers);
+        
+        if (Array.isArray(providers)) {
+            const phantomProvider = providers.find(p => p.isPhantom);
+            if (phantomProvider) {
+                console.log("✅ Phantom found in providers array");
+                phantomDetected = true;
+                return phantomProvider;
+            }
+        }
+    }
+
+    console.log("❌ Phantom wallet not found");
+    phantomDetected = false;
     return null;
 }
 
 // **تابع اصلاح شده برای دریافت provider**
 async function getPhantomProvider() {
-    if (phantomProvider) {
+    if (phantomProvider && phantomDetected) {
         return phantomProvider;
     }
 
@@ -64,17 +96,85 @@ async function getPhantomProvider() {
     return phantomProvider;
 }
 
+// **Event listeners برای buttons**
+function setupEventListeners() {
+    console.log("🔧 Setting up event listeners...");
+
+    // Task completion button
+    const taskBtn = document.getElementById('task-completion-btn');
+    if (taskBtn) {
+        taskBtn.addEventListener('click', handleTaskCompletion);
+        console.log("✅ Task completion listener added");
+    }
+
+    // Inviting friends button
+    const inviteBtn = document.getElementById('inviting-friends-btn');
+    if (inviteBtn) {
+        inviteBtn.addEventListener('click', handleInviteCheck);
+        console.log("✅ Invite friends listener added");
+    }
+
+    // Wallet connect button
+    const walletBtn = document.getElementById('wallet-connect-btn');
+    if (walletBtn) {
+        walletBtn.addEventListener('click', toggleWalletDropdown);
+        console.log("✅ Wallet connect listener added");
+    }
+
+    // Change wallet button
+    const changeBtn = document.getElementById('change-wallet-btn');
+    if (changeBtn) {
+        changeBtn.addEventListener('click', changeWallet);
+        console.log("✅ Change wallet listener added");
+    }
+
+    // Disconnect wallet button
+    const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', disconnectWallet);
+        console.log("✅ Disconnect wallet listener added");
+    }
+
+    // Commission payment button
+    const commissionBtn = document.getElementById('commission-button');
+    if (commissionBtn) {
+        commissionBtn.addEventListener('click', payCommission);
+        console.log("✅ Commission payment listener added");
+    }
+
+    // Click outside to close dropdown
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('wallet-dropdown');
+        const dropdownContent = document.getElementById('wallet-dropdown-content');
+
+        if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
+            dropdownContent.classList.remove('show');
+        }
+
+        // Close install modal when clicking outside
+        const modal = document.getElementById('phantom-install-modal');
+        if (modal && !modal.querySelector('div').contains(event.target)) {
+            closeInstallModal();
+        }
+    });
+
+    console.log("✅ All event listeners setup complete");
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log("DOM loaded, initializing...");
+    console.log("🚀 DOM loaded, initializing application...");
 
-    // تشخیص Phantom با صبر
+    // Setup event listeners first
+    setupEventListeners();
+
+    // تشخیص Phantom
     phantomProvider = await getPhantomProvider();
     if (phantomProvider) {
-        console.log("Phantom successfully detected!");
+        console.log("✅ Phantom successfully detected!");
         setupPhantomListeners();
     } else {
-        console.log("Phantom not found - user needs to install it");
+        console.log("⚠️ Phantom not found - user needs to install it");
     }
 
     updateTasksUI();
@@ -84,41 +184,48 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
         updateWalletUI(INITIAL_WALLET_ADDRESS, true);
     }
+
+    console.log("✅ Application initialization complete");
 });
 
 // **تابع جدید برای تنظیم event listeners برای Phantom**
 function setupPhantomListeners() {
     if (!phantomProvider) return;
 
+    console.log("🔧 Setting up Phantom event listeners...");
+
     phantomProvider.on('connect', (publicKey) => {
-        console.log('Phantom connected:', publicKey.toString());
+        console.log('👛 Phantom connected:', publicKey.toString());
     });
 
     phantomProvider.on('disconnect', () => {
-        console.log('Phantom disconnected');
+        console.log('👛 Phantom disconnected');
         connectedWallet = '';
-        tasksCompleted.wallet = 'false';
+        tasksCompleted.wallet = false;
         updateWalletUI('', false);
         updateTasksUI();
     });
 
     phantomProvider.on('accountChanged', (publicKey) => {
         if (publicKey) {
-            console.log('Account changed:', publicKey.toString());
+            console.log('👛 Account changed:', publicKey.toString());
             connectedWallet = publicKey.toString();
             updateWalletUI(connectedWallet, true);
         } else {
-            console.log('Account disconnected');
+            console.log('👛 Account disconnected');
             connectedWallet = '';
-            tasksCompleted.wallet = 'false';
+            tasksCompleted.wallet = false;
             updateWalletUI('', false);
             updateTasksUI();
         }
     });
+
+    console.log("✅ Phantom listeners setup complete");
 }
 
 // **شمارش معکوس با تاریخ درست**
 function initCountdown() {
+    console.log("⏰ Initializing countdown...");
     // تاریخ را به سال 2025 تغییر دادیم
     const countdownDate = new Date("2025-12-31T23:59:59").getTime();
 
@@ -145,57 +252,68 @@ function initCountdown() {
         document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
         document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
     }, 1000);
+
+    console.log("✅ Countdown initialized");
 }
 
 // بروزرسانی UI وظایف
 function updateTasksUI() {
+    console.log("🔄 Updating tasks UI...", tasksCompleted);
+
     // Tasks completion
     const taskBox = document.getElementById('task-completion');
-    const taskButton = taskBox.querySelector('.task-button');
-    const taskIcon = taskButton.querySelector('.right-icon');
+    const taskButton = taskBox?.querySelector('.task-button');
+    const taskIcon = taskButton?.querySelector('.right-icon');
 
-    if (tasksCompleted.task === 'true') {
-        taskBox.classList.add('completed');
-        taskButton.classList.add('tasks-completed');
-        taskIcon.classList.remove('fa-chevron-right');
-        taskIcon.classList.add('fa-check');
+    if (tasksCompleted.task === true) {
+        taskBox?.classList.add('completed');
+        taskButton?.classList.add('tasks-completed');
+        taskIcon?.classList.remove('fa-chevron-right');
+        taskIcon?.classList.add('fa-check');
+        console.log("✅ Tasks completion marked as complete");
     }
 
     // Inviting friends
     const inviteBox = document.getElementById('inviting-friends');
-    const inviteButton = inviteBox.querySelector('.task-button');
-    const inviteIcon = inviteButton.querySelector('.right-icon');
+    const inviteButton = inviteBox?.querySelector('.task-button');
+    const inviteIcon = inviteButton?.querySelector('.right-icon');
 
-    if (tasksCompleted.invite === 'true') {
-        inviteBox.classList.add('completed');
-        inviteButton.classList.add('friends-invited');
-        inviteIcon.classList.remove('fa-chevron-right');
-        inviteIcon.classList.add('fa-check');
+    if (tasksCompleted.invite === true) {
+        inviteBox?.classList.add('completed');
+        inviteButton?.classList.add('friends-invited');
+        inviteIcon?.classList.remove('fa-chevron-right');
+        inviteIcon?.classList.add('fa-check');
+        console.log("✅ Friends invitation marked as complete");
     }
 
     // Wallet connection
-    updateWalletUI(connectedWallet, tasksCompleted.wallet === 'true');
+    updateWalletUI(connectedWallet, tasksCompleted.wallet === true);
 
     // Commission payment
     const commissionBox = document.getElementById('pay-commission');
-    const commissionButton = commissionBox.querySelector('.task-button');
-    const commissionIcon = commissionButton.querySelector('.right-icon');
-    const commissionText = commissionButton.querySelector('.left-text');
+    const commissionButton = commissionBox?.querySelector('.task-button');
+    const commissionIcon = commissionButton?.querySelector('.right-icon');
+    const commissionText = commissionButton?.querySelector('.left-text');
 
-    if (tasksCompleted.pay === 'true') {
-        commissionBox.classList.add('completed');
-        commissionButton.classList.add('commission-paid');
-        commissionIcon.classList.remove('fa-chevron-right');
-        commissionIcon.classList.add('fa-check');
-        commissionText.textContent = 'Commission Paid ✓';
-        commissionButton.disabled = true;
+    if (tasksCompleted.pay === true) {
+        commissionBox?.classList.add('completed');
+        commissionButton?.classList.add('commission-paid');
+        commissionIcon?.classList.remove('fa-chevron-right');
+        commissionIcon?.classList.add('fa-check');
+        if (commissionText) commissionText.textContent = 'Commission Paid ✓';
+        if (commissionButton) commissionButton.disabled = true;
+        console.log("✅ Commission payment marked as complete");
     } else {
-        commissionText.textContent = `Pay Commission (${COMMISSION_AMOUNT} SOL)`;
+        if (commissionText) commissionText.textContent = `Pay Commission (${COMMISSION_AMOUNT} SOL)`;
     }
+
+    console.log("✅ Tasks UI update complete");
 }
 
 // Toast notification
 function showToast(message, type = 'info') {
+    console.log(`📢 Toast: ${message} (${type})`);
+    
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
@@ -209,8 +327,10 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// **نمایش دکمه نصب Phantom**
-function showInstallPhantomModal() {
+// **نمایش modal اصلاح شده برای Phantom**
+function showPhantomModal() {
+    console.log("🔄 Showing Phantom modal...");
+    
     const existingModal = document.getElementById('phantom-install-modal');
     if (existingModal) {
         existingModal.remove();
@@ -231,6 +351,10 @@ function showInstallPhantomModal() {
         z-index: 10000;
     `;
 
+    // چک کنیم که آیا Phantom نصب است یا نه
+    const isPhantomDetected = phantomDetected;
+    console.log("🔍 Phantom detected in modal:", isPhantomDetected);
+
     modal.innerHTML = `
         <div style="
             background: #1a1a1a;
@@ -242,14 +366,25 @@ function showInstallPhantomModal() {
             border: 2px solid #333;
         ">
             <div style="font-size: 48px; margin-bottom: 20px;">👛</div>
-            <h2 style="color: white; margin-bottom: 15px;">Phantom Wallet Required</h2>
+            <h2 style="color: white; margin-bottom: 15px;">
+                ${isPhantomDetected ? 'Connect Phantom Wallet' : 'Phantom Wallet Required'}
+            </h2>
             <p style="color: #ccc; margin-bottom: 25px; line-height: 1.5;">
-                To pay commission, you need to install Phantom wallet extension first.
+                ${isPhantomDetected 
+                    ? 'Phantom wallet detected! Click connect to link your wallet.' 
+                    : 'To pay commission, you need to install Phantom wallet extension first.'}
             </p>
-            <button class="install-phantom-btn" onclick="installPhantom()">
-                <div class="phantom-icon"></div>
-                Install Phantom Wallet
-            </button>
+            ${isPhantomDetected ? `
+                <button class="connect-phantom-btn" onclick="connectWalletFromModal()">
+                    <div class="phantom-icon"></div>
+                    Connect Phantom Wallet
+                </button>
+            ` : `
+                <button class="install-phantom-btn" onclick="installPhantom()">
+                    <div class="phantom-icon"></div>
+                    Install Phantom Wallet
+                </button>
+            `}
             <button onclick="closeInstallModal()" style="
                 background: transparent;
                 color: #999;
@@ -266,22 +401,42 @@ function showInstallPhantomModal() {
     `;
 
     document.body.appendChild(modal);
+    console.log("✅ Phantom modal displayed");
+}
+
+// **تابع جدید برای اتصال از modal**
+async function connectWalletFromModal() {
+    console.log("🔗 Connecting wallet from modal...");
+    closeInstallModal();
+    await connectWallet();
 }
 
 function installPhantom() {
+    console.log("📥 Opening Phantom installation page...");
     window.open('https://phantom.app/', '_blank');
     closeInstallModal();
+    
+    // Check again after a few seconds
+    setTimeout(async () => {
+        phantomProvider = await getPhantomProvider();
+        if (phantomProvider) {
+            showToast('Phantom wallet detected! You can now connect.', 'success');
+        }
+    }, 3000);
 }
 
 function closeInstallModal() {
     const modal = document.getElementById('phantom-install-modal');
     if (modal) {
         modal.remove();
+        console.log("✅ Install modal closed");
     }
 }
 
 // بروزرسانی UI کیف پول
 function updateWalletUI(address, connected) {
+    console.log(`🔄 Updating wallet UI: ${address}, connected: ${connected}`);
+    
     const walletButton = document.getElementById('wallet-button-text');
     const walletIcon = document.getElementById('wallet-icon');
     const walletIndicator = document.getElementById('wallet-status-indicator');
@@ -289,28 +444,30 @@ function updateWalletUI(address, connected) {
     const connectWalletBox = document.getElementById('connect-wallet');
 
     if (connected && address) {
-        walletButton.textContent = `${address.slice(0,4)}...${address.slice(-4)}`;
-        walletIcon.classList.remove('fa-chevron-right');
-        walletIcon.classList.add('fa-check');
-        walletIndicator.classList.add('connected');
-        walletDropdownAddress.textContent = address;
-        connectWalletBox.classList.add('completed');
-        connectWalletBox.querySelector('.task-button').classList.add('wallet-connected');
+        if (walletButton) walletButton.textContent = `${address.slice(0,4)}...${address.slice(-4)}`;
+        walletIcon?.classList.remove('fa-chevron-right');
+        walletIcon?.classList.add('fa-check');
+        walletIndicator?.classList.add('connected');
+        if (walletDropdownAddress) walletDropdownAddress.textContent = address;
+        connectWalletBox?.classList.add('completed');
+        connectWalletBox?.querySelector('.task-button')?.classList.add('wallet-connected');
+        console.log("✅ Wallet UI updated - connected");
     } else {
-        walletButton.textContent = 'Connect Wallet';
-        walletIcon.classList.remove('fa-check');
-        walletIcon.classList.add('fa-chevron-right');
-        walletIndicator.classList.remove('connected');
-        connectWalletBox.classList.remove('completed');
-        connectWalletBox.querySelector('.task-button').classList.remove('wallet-connected');
+        if (walletButton) walletButton.textContent = 'Connect Wallet';
+        walletIcon?.classList.remove('fa-check');
+        walletIcon?.classList.add('fa-chevron-right');
+        walletIndicator?.classList.remove('connected');
+        connectWalletBox?.classList.remove('completed');
+        connectWalletBox?.querySelector('.task-button')?.classList.remove('wallet-connected');
+        console.log("✅ Wallet UI updated - disconnected");
     }
 }
 
 // **تابع اصلی پرداخت کمیسیون - اصلاح شده**
 async function payCommission() {
-    console.log("Pay commission clicked");
+    console.log("💰 Pay commission clicked");
 
-    if (tasksCompleted.pay === 'true') {
+    if (tasksCompleted.pay === true) {
         showToast('Commission already paid!', 'info');
         return;
     }
@@ -318,14 +475,14 @@ async function payCommission() {
     // **بررسی دقیق تشخیص Phantom**
     const provider = await getPhantomProvider();
     if (!provider) {
-        console.log("Phantom not detected, showing install modal");
-        showInstallPhantomModal();
+        console.log("❌ Phantom not detected, showing modal");
+        showPhantomModal();
         return;
     }
 
-    console.log("Phantom detected, proceeding...");
+    console.log("✅ Phantom detected, proceeding...");
 
-    if (!connectedWallet || tasksCompleted.wallet !== 'true') {
+    if (!connectedWallet || tasksCompleted.wallet !== true) {
         showToast('Please connect your wallet first!', 'error');
         toggleWalletDropdown(); // باز کردن dropdown برای اتصال
         return;
@@ -341,12 +498,12 @@ async function payCommission() {
     const commissionText = document.getElementById('commission-button-text');
 
     try {
-        console.log("Starting commission payment process...");
+        console.log("💳 Starting commission payment process...");
         // Set loading state
-        commissionButton.classList.add('loading');
-        commissionIcon.classList.add('fa-spinner');
-        commissionIcon.classList.remove('fa-chevron-right');
-        commissionText.textContent = 'Processing payment...';
+        commissionButton?.classList.add('loading');
+        commissionIcon?.classList.add('fa-spinner');
+        commissionIcon?.classList.remove('fa-chevron-right');
+        if (commissionText) commissionText.textContent = 'Processing payment...';
 
         // Connect to Solana network
         const connection = new solanaWeb3.Connection(SOLANA_RPC_URL || solanaWeb3.clusterApiUrl('mainnet-beta'));
@@ -355,7 +512,7 @@ async function payCommission() {
         const transaction = new solanaWeb3.Transaction();
         const lamports = Math.floor(COMMISSION_AMOUNT * solanaWeb3.LAMPORTS_PER_SOL);
 
-        console.log(`Creating transaction: ${COMMISSION_AMOUNT} SOL (${lamports} lamports) to ${ADMIN_WALLET}`);
+        console.log(`💸 Creating transaction: ${COMMISSION_AMOUNT} SOL (${lamports} lamports) to ${ADMIN_WALLET}`);
 
         // Add transfer instruction
         transaction.add(
@@ -367,31 +524,31 @@ async function payCommission() {
         );
 
         // Get recent blockhash
-        console.log("Getting latest blockhash...");
+        console.log("🔗 Getting latest blockhash...");
         const { blockhash } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = provider.publicKey;
 
-        console.log('Transaction prepared, requesting signature...');
+        console.log('📝 Transaction prepared, requesting signature...');
 
         // Sign and send transaction
         const { signature } = await provider.signAndSendTransaction(transaction);
 
-        console.log('Transaction signature received:', signature);
-        commissionText.textContent = 'Confirming transaction...';
+        console.log('✅ Transaction signature received:', signature);
+        if (commissionText) commissionText.textContent = 'Confirming transaction...';
 
         // Confirm transaction
-        console.log("Waiting for transaction confirmation...");
+        console.log("⏳ Waiting for transaction confirmation...");
         const confirmation = await connection.confirmTransaction(signature, 'confirmed');
 
         if (confirmation.value.err) {
             throw new Error('Transaction failed to confirm: ' + JSON.stringify(confirmation.value.err));
         }
 
-        console.log('Transaction confirmed successfully:', signature);
+        console.log('✅ Transaction confirmed successfully:', signature);
 
         // Update backend
-        console.log("Updating backend...");
+        console.log("💾 Updating backend...");
         const response = await fetch('/airdrop/confirm_commission', {
             method: 'POST',
             headers: {
@@ -406,20 +563,20 @@ async function payCommission() {
         });
 
         const result = await response.json();
-        console.log("Backend response:", result);
+        console.log("📡 Backend response:", result);
 
         if (result.success) {
             // Update state
-            tasksCompleted.pay = 'true';
+            tasksCompleted.pay = true;
             updateTasksUI();
             showToast(`Commission paid successfully! (${COMMISSION_AMOUNT} SOL)`, 'success');
-            console.log("Commission payment completed successfully!");
+            console.log("🎉 Commission payment completed successfully!");
         } else {
             throw new Error(result.message || 'Failed to confirm commission payment');
         }
 
     } catch (error) {
-        console.error('Commission payment failed:', error);
+        console.error('❌ Commission payment failed:', error);
         let errorMessage = 'Payment failed: ' + error.message;
 
         if (error.message.includes('User rejected') || error.code === 4001) {
@@ -436,51 +593,58 @@ async function payCommission() {
 
     } finally {
         // Reset button state
-        commissionButton.classList.remove('loading');
-        commissionIcon.classList.remove('fa-spinner');
-        commissionIcon.classList.add('fa-chevron-right');
-        commissionText.textContent = `Pay Commission (${COMMISSION_AMOUNT} SOL)`;
+        commissionButton?.classList.remove('loading');
+        commissionIcon?.classList.remove('fa-spinner');
+        commissionIcon?.classList.add('fa-chevron-right');
+        if (commissionText) commissionText.textContent = `Pay Commission (${COMMISSION_AMOUNT} SOL)`;
     }
 }
 
 // Toggle wallet dropdown
-function toggleWalletDropdown() {
+async function toggleWalletDropdown() {
+    console.log("🔄 Toggle wallet dropdown clicked");
+    
     const dropdown = document.getElementById('wallet-dropdown-content');
 
-    if (!phantomProvider) {
-        showInstallPhantomModal();
+    // اگر Phantom نصب نیست
+    if (!phantomDetected) {
+        console.log("❌ Phantom not detected, showing install modal");
+        showPhantomModal();
         return;
     }
 
     // اگر wallet متصل نیست، به جای نمایش dropdown اتصال برقرار کنیم
-    if (!connectedWallet || tasksCompleted.wallet !== 'true') {
-        connectWallet();
+    if (!connectedWallet || tasksCompleted.wallet !== true) {
+        console.log("🔗 Wallet not connected, attempting to connect...");
+        await connectWallet();
         return;
     }
 
-    dropdown.classList.toggle('show');
+    // Toggle dropdown
+    dropdown?.classList.toggle('show');
+    console.log("✅ Dropdown toggled");
 }
 
 // **تابع اصلاح شده برای اتصال wallet**
 async function connectWallet() {
-    console.log("Connect wallet clicked");
+    console.log("🔗 Connect wallet function called");
 
     const provider = await getPhantomProvider();
     if (!provider) {
-        console.log("Phantom not found for connection");
-        showInstallPhantomModal();
+        console.log("❌ Phantom not found for connection");
+        showPhantomModal();
         return;
     }
 
     try {
-        console.log("Requesting wallet connection...");
+        console.log("🔑 Requesting wallet connection...");
         const response = await provider.connect();
-        console.log('Connected to wallet:', response.publicKey.toString());
+        console.log('✅ Connected to wallet:', response.publicKey.toString());
 
         const walletAddress = response.publicKey.toString();
 
         // Update backend
-        console.log("Updating backend with wallet address...");
+        console.log("💾 Updating backend with wallet address...");
         const backendResponse = await fetch('/airdrop/connect_wallet', {
             method: 'POST',
             headers: {
@@ -492,21 +656,21 @@ async function connectWallet() {
         });
 
         const result = await backendResponse.json();
-        console.log("Backend response for wallet connection:", result);
+        console.log("📡 Backend response for wallet connection:", result);
 
         if (result.success) {
             connectedWallet = walletAddress;
-            tasksCompleted.wallet = 'true';
+            tasksCompleted.wallet = true;
             updateWalletUI(walletAddress, true);
             updateTasksUI();
             showToast('Wallet connected successfully!', 'success');
-            console.log("Wallet connection completed!");
+            console.log("🎉 Wallet connection completed!");
         } else {
             throw new Error(result.message || 'Failed to save wallet address');
         }
 
     } catch (error) {
-        console.error('Wallet connection failed:', error);
+        console.error('❌ Wallet connection failed:', error);
 
         let errorMessage = 'Failed to connect wallet: ' + error.message;
         if (error.code === 4001) {
@@ -518,44 +682,50 @@ async function connectWallet() {
 
 // Change wallet
 async function changeWallet() {
+    console.log("🔄 Change wallet clicked");
+    
     try {
         if (phantomProvider) {
             await phantomProvider.disconnect();
         }
         connectedWallet = '';
-        tasksCompleted.wallet = 'false';
+        tasksCompleted.wallet = false;
         updateWalletUI('', false);
         updateTasksUI();
-        document.getElementById('wallet-dropdown-content').classList.remove('show');
+        document.getElementById('wallet-dropdown-content')?.classList.remove('show');
         showToast('Wallet disconnected. Click to connect a new one.', 'info');
         // فوراً اتصال جدید برقرار کنیم
         setTimeout(() => connectWallet(), 500);
     } catch (error) {
-        console.error('Failed to change wallet:', error);
+        console.error('❌ Failed to change wallet:', error);
     }
 }
 
 // Disconnect wallet
 async function disconnectWallet() {
+    console.log("🚫 Disconnect wallet clicked");
+    
     try {
         if (phantomProvider) {
             await phantomProvider.disconnect();
         }
         connectedWallet = '';
-        tasksCompleted.wallet = 'false';
+        tasksCompleted.wallet = false;
         updateWalletUI('', false);
         updateTasksUI();
-        document.getElementById('wallet-dropdown-content').classList.remove('show');
+        document.getElementById('wallet-dropdown-content')?.classList.remove('show');
         showToast('Wallet disconnected successfully!', 'success');
     } catch (error) {
-        console.error('Failed to disconnect wallet:', error);
+        console.error('❌ Failed to disconnect wallet:', error);
         showToast('Failed to disconnect wallet', 'error');
     }
 }
 
 // Handle task completion click
 function handleTaskCompletion() {
-    if (tasksCompleted.task === 'true') {
+    console.log("📋 Task completion clicked");
+    
+    if (tasksCompleted.task === true) {
         showToast('Tasks already completed!', 'info');
     } else {
         showToast('Please complete the required tasks first', 'info');
@@ -565,7 +735,9 @@ function handleTaskCompletion() {
 
 // Handle invite check click
 function handleInviteCheck() {
-    if (tasksCompleted.invite === 'true') {
+    console.log("👥 Invite check clicked");
+    
+    if (tasksCompleted.invite === true) {
         showToast('Friends already invited!', 'info');
     } else {
         showToast('Please invite friends to earn rewards', 'info');
@@ -573,53 +745,48 @@ function handleInviteCheck() {
     }
 }
 
-// Close dropdown when clicking outside
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('wallet-dropdown');
-    const dropdownContent = document.getElementById('wallet-dropdown-content');
-
-    if (!dropdown.contains(event.target)) {
-        dropdownContent.classList.remove('show');
-    }
-
-    // Close install modal when clicking outside
-    const modal = document.getElementById('phantom-install-modal');
-    if (modal && !modal.querySelector('div').contains(event.target)) {
-        closeInstallModal();
-    }
-});
-
 // **بررسی خودکار اتصال wallet در صورت وجود**
-document.addEventListener('DOMContentLoaded', async function() {
-    // صبر برای تشخیص phantom
+window.addEventListener('load', async function() {
+    console.log("🌐 Window loaded, checking for auto-connect...");
+    
+    // صبر کمی برای تشخیص phantom
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const provider = await getPhantomProvider();
     if (provider && provider.isConnected && !connectedWallet) {
         try {
-            console.log('Auto-connecting to previously connected wallet...');
+            console.log('🔄 Auto-connecting to previously connected wallet...');
             const publicKey = provider.publicKey?.toString();
             if (publicKey) {
                 connectedWallet = publicKey;
-                tasksCompleted.wallet = 'true';
+                tasksCompleted.wallet = true;
                 updateWalletUI(publicKey, true);
                 updateTasksUI();
-                console.log('Auto-connected to wallet:', publicKey);
+                console.log('✅ Auto-connected to wallet:', publicKey);
             }
         } catch (error) {
-            console.log('Auto-connect failed:', error);
+            console.log('❌ Auto-connect failed:', error);
         }
     }
 });
 
 // **اضافه کردن event listener برای تشخیص نصب Phantom**
 window.addEventListener('focus', async function() {
-    if (!phantomProvider) {
-        console.log('Window focused, re-checking for Phantom...');
+    if (!phantomDetected) {
+        console.log('🔍 Window focused, re-checking for Phantom...');
         phantomProvider = await getPhantomProvider();
-        if (phantomProvider) {
-            console.log('Phantom detected after window focus!');
+        if (phantomProvider && phantomDetected) {
+            console.log('✅ Phantom detected after window focus!');
             setupPhantomListeners();
             closeInstallModal();
             showToast('Phantom wallet detected! You can now connect.', 'success');
         }
     }
 });
+
+// Make functions global for onclick handlers
+window.connectWalletFromModal = connectWalletFromModal;
+window.installPhantom = installPhantom;
+window.closeInstallModal = closeInstallModal;
+
+console.log("📄 airdrop.js loaded successfully");
