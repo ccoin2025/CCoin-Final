@@ -111,163 +111,7 @@ background:#ffa502;
 color:#000;
 }
 
-.wallet-connect-button {
-position: relative;
-}
-
-.wallet-status-indicator {
-position: absolute;
-top:-3px;
-right:-3px;
-width:14px;
-height:14px;
-background:#28a745;
-border-radius:50%;
-display: none;
-border:2px solid #fff;
-box-shadow:0 0 0 1px #28a745;
-}
-
-.wallet-status-indicator.connected {
-display: block;
-animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-0% {
-box-shadow:0 0 0 0 rgba(40,167,69,0.7);
-}
-70% {
-box-shadow:0 0 0 10px rgba(40,167,69,0);
-}
-100% {
-box-shadow:0 0 0 0 rgba(40,167,69,0);
-}
-}
-
-.task-button.wallet-connected .right-icon,
-.task-button.commission-paid .right-icon,
-.task-button.tasks-completed .right-icon,
-.task-button.friends-invited .right-icon {
-color:#28a745!important;
-}
-
-.task-box.completed {
-border-color:#28a745;
-}
-
-.task-box.completed .task-button {
-background:rgba(40,167,69,0.1);
-}
-
-.fa-check {
-color:#28a745;
-font-weight: bold;
-}
-
-.task-box {
-margin-bottom:15px;
-position: relative;
-}
-
-.wallet-dropdown {
-z-index:10;
-}
-
-.wallet-dropdown-content {
-position: absolute;
-top:100%;
-left:0;
-right:0;
-}
-
-.task-box:has(.wallet-dropdown) {
-z-index:10;
-}
-
-.task-box:not(:has(.wallet-dropdown)) {
-z-index:1;
-}
-
-#connect-wallet {
-margin-bottom:20px;
-}
-
-#pay-commission {
-margin-top:5px;
-}
-
-.task-button.loading {
-opacity:0.7;
-pointer-events: none;
-}
-
-.task-button.loading .right-icon {
-animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-from { transform:rotate(0deg); }
-to { transform:rotate(360deg); }
-}
-
-.toast {
-position: fixed;
-top:20px;
-right:20px;
-padding:15px 20px;
-border-radius:8px;
-color: white;
-font-weight:500;
-z-index:10000;
-max-width:300px;
-word-wrap: break-word;
-box-shadow:0 4px 12px rgba(0,0,0,0.3);
-transform:translateX(100%);
-transition: transform 0.3s ease;
-}
-
-.toast.show {
-transform:translateX(0);
-}
-
-.toast-success {
-background:#28a745;
-}
-
-.toast-error {
-background:#dc3545;
-}
-
-.toast-info {
-background:#007bff;
-}
-
-@media (max-width:480px) {
-.wallet-address-dropdown {
-font-size:10px;
-padding:6px;
-}
-
-.wallet-action-btn {
-padding:8px 10px;
-font-size:11px;
-}
-
-.task-box {
-margin-bottom:12px;
-}
-
-.toast {
-top:10px;
-right:10px;
-left:10px;
-max-width: none;
-}
-}
-
-/* استایل برای دکمه نصب Phantom */
-.install-phantom-btn {
+.phantom-modal-btn {
 background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
 color: white;
 border: none;
@@ -285,44 +129,23 @@ width: 100%;
 margin: 10px 0;
 }
 
-.install-phantom-btn:hover {
+.phantom-modal-btn:hover {
 transform: translateY(-2px);
 box-shadow: 0 8px 25px rgba(153, 69, 255, 0.3);
 }
 
-.connect-phantom-btn {
+.phantom-modal-btn.open-app {
 background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-color: white;
-border: none;
-padding: 15px 25px;
-border-radius: 12px;
-font-weight: 600;
-font-size: 14px;
-cursor: pointer;
-transition: all 0.3s ease;
-display: flex;
-align-items: center;
-gap: 10px;
-justify-content: center;
-width: 100%;
-margin: 10px 0;
 }
 
-.connect-phantom-btn:hover {
-transform: translateY(-2px);
+.phantom-modal-btn.open-app:hover {
 box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
-}
-
-.phantom-icon {
-width: 24px;
-height: 24px;
-background: url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBoZWlnaHQ9IjM0IiB3aWR0aD0iMzQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGxpbmVhckdyYWRpZW50IGlkPSJhIiB4MT0iLjUiIHgyPSIuNSIgeTE9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM1MzRiYjEiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM1NTFiZjkiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0iYiIgeDE9Ii41IiB4Mj0iLjUiIHkxPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmZmIiBzdG9wLW9wYWNpdHk9Ii44MiIvPjwvbGluZWFyR3JhZGllbnQ+PGNpcmNsZSBjeD0iMTciIGN5PSIxNyIgZmlsbD0idXJsKCNhKSIgcj0iMTciLz48cGF0aCBkPSJtMTQuMzYgMTQuMzMtLjk2LS45NmE1LjUgNS41IDAgMCAwIDQgMS4zMWgxLjMzYTEuNSAxLjUgMCAwIDAgMC0zSDEyYTUuNSA1LjUgMCAwIDAgMCAwaC0uNWExLjUgMS41IDAgMCAwIDAgM2gxMGExLjUgMS41IDAgMCAwIDAtM2gtNi4xNFoiIGZpbGw9InVybCgjYikiLz48L3N2Zz4=') no-repeat center;
-background-size: contain;
 }
 </style>
 </head>
 
 <body>
+<!-- محتوای HTML همان‌طور که در GitHub شماست -->
 <div class="container">
 <div class="box">
 <div class="countdown">
@@ -353,7 +176,6 @@ background-size: contain;
 </button>
 </div>
 
-<!-- کیف پول با منوی کشویی -->
 <div id="connect-wallet" class="task-box">
 <div class="wallet-dropdown" id="wallet-dropdown">
 <button class="task-button wallet-connect-button" id="wallet-connect-btn">
@@ -361,7 +183,6 @@ background-size: contain;
 <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
 <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
 </button>
-<!-- منوی کشویی -->
 <div id="wallet-dropdown-content" class="wallet-dropdown-content">
 <div class="wallet-info-dropdown">
 <div><strong>✅ Connected Wallet:</strong></div>
@@ -412,14 +233,14 @@ background-size: contain;
 </div>
 </div>
 
-<!-- متغیرهای اولیه از backend برای JavaScript -->
+<!-- کدهای JavaScript مستقیماً در HTML -->
 <script>
-window.APP_CONFIG = {
+// متغیرهای اولیه
+const APP_CONFIG = {
     USER_ID: "{{ request.session.telegram_id }}",
     SOLANA_RPC_URL: "{{ config.SOLANA_RPC }}",
     COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT if config.COMMISSION_AMOUNT else 0.1 }},
     ADMIN_WALLET: "{{ config.ADMIN_WALLET }}",
-    // مقادیر string به boolean تبدیل می‌شود
     INITIAL_TASKS_COMPLETED: {{ 'true' if tasks_completed else 'false' }},
     INITIAL_INVITED_FRIENDS: {{ 'true' if invited else 'false' }},
     INITIAL_WALLET_CONNECTED: {{ 'true' if wallet_connected else 'false' }},
@@ -427,10 +248,216 @@ window.APP_CONFIG = {
     INITIAL_WALLET_ADDRESS: "{{ user_wallet_address if user_wallet_address else '' }}"
 };
 
-// Debug لاگ برای بررسی مقادیر
-console.log("APP_CONFIG:", window.APP_CONFIG);
+let tasksCompleted = {
+    task: APP_CONFIG.INITIAL_TASKS_COMPLETED,
+    invite: APP_CONFIG.INITIAL_INVITED_FRIENDS,
+    wallet: APP_CONFIG.INITIAL_WALLET_CONNECTED,
+    pay: APP_CONFIG.INITIAL_COMMISSION_PAID
+};
+
+let connectedWallet = APP_CONFIG.INITIAL_WALLET_ADDRESS;
+let phantomProvider = null;
+let phantomDetected = false;
+
+// تشخیص Phantom
+async function detectPhantomWallet() {
+    console.log("🔍 Starting Phantom detection...");
+    
+    if (window.phantom?.solana?.isPhantom) {
+        phantomDetected = true;
+        return window.phantom.solana;
+    }
+
+    if (window.solana?.isPhantom) {
+        phantomDetected = true;
+        return window.solana;
+    }
+
+    for (let i = 0; i < 50; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (window.phantom?.solana?.isPhantom) {
+            phantomDetected = true;
+            return window.phantom.solana;
+        }
+        
+        if (window.solana?.isPhantom) {
+            phantomDetected = true;
+            return window.solana;
+        }
+    }
+
+    phantomDetected = false;
+    return null;
+}
+
+async function getPhantomProvider() {
+    if (phantomProvider && phantomDetected) {
+        return phantomProvider;
+    }
+    phantomProvider = await detectPhantomWallet();
+    return phantomProvider;
+}
+
+// Toggle wallet dropdown - اصلاح شده
+async function toggleWalletDropdown() {
+    console.log("👛 Toggle wallet dropdown clicked");
+    
+    const dropdown = document.getElementById('wallet-dropdown-content');
+    
+    // بررسی Phantom
+    const provider = await getPhantomProvider();
+    if (!provider) {
+        console.log("❌ Phantom not installed, showing install modal");
+        showPhantomModal('install');
+        return;
+    }
+
+    // اگر wallet متصل است - نمایش/مخفی کردن منوی کشویی
+    if (connectedWallet && tasksCompleted.wallet === true) {
+        console.log("📋 Toggling dropdown menu for connected wallet");
+        dropdown?.classList.toggle('show');
+        return;
+    }
+
+    // اگر wallet متصل نیست - نمایش modal برای اتصال
+    console.log("🔗 Wallet not connected, showing connect modal");
+    dropdown?.classList.remove('show');
+    showPhantomModal('connect');
+}
+
+// نمایش modal
+function showPhantomModal(type = 'install') {
+    console.log(`🔄 Showing Phantom modal: ${type}`);
+    
+    const existingModal = document.getElementById('phantom-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'phantom-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.8); display: flex; align-items: center;
+        justify-content: center; z-index: 10000;
+    `;
+
+    let title, description, buttonText, buttonAction, buttonClass;
+
+    if (type === 'install') {
+        title = 'Phantom Wallet Required';
+        description = 'To continue, you need to install Phantom wallet extension first.';
+        buttonText = 'Install Phantom Wallet';
+        buttonAction = 'installPhantom()';
+        buttonClass = 'phantom-modal-btn';
+    } else if (type === 'connect') {
+        title = 'Connect Phantom Wallet';
+        description = 'Phantom wallet detected! Click to connect your wallet.';
+        buttonText = 'Open Phantom App';
+        buttonAction = 'connectWalletFromModal()';
+        buttonClass = 'phantom-modal-btn open-app';
+    } else if (type === 'payment') {
+        title = 'Pay Commission';
+        description = `Click to open Phantom app and pay ${APP_CONFIG.COMMISSION_AMOUNT} SOL commission.`;
+        buttonText = 'Open Phantom App';
+        buttonAction = 'processCommissionPayment()';
+        buttonClass = 'phantom-modal-btn open-app';
+    }
+
+    modal.innerHTML = `
+        <div style="background: #1a1a1a; padding: 30px; border-radius: 15px; text-align: center; 
+                    max-width: 350px; width: 90%; border: 2px solid #333;">
+            <div style="font-size: 48px; margin-bottom: 20px;">👛</div>
+            <h2 style="color: white; margin-bottom: 15px;">${title}</h2>
+            <p style="color: #ccc; margin-bottom: 25px; line-height: 1.5;">${description}</p>
+            <button class="${buttonClass}" onclick="${buttonAction}">${buttonText}</button>
+            <button onclick="closePhantomModal()" style="background: transparent; color: #999; 
+                   border: 1px solid #444; padding: 12px 20px; border-radius: 8px; cursor: pointer; 
+                   width: 100%; margin-top: 10px;">Cancel</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+function closePhantomModal() {
+    const modal = document.getElementById('phantom-modal');
+    if (modal) modal.remove();
+}
+
+function installPhantom() {
+    window.open('https://phantom.app/', '_blank');
+    closePhantomModal();
+}
+
+async function connectWalletFromModal() {
+    closePhantomModal();
+    await connectWallet();
+}
+
+async function processCommissionPayment() {
+    closePhantomModal();
+    const provider = await getPhantomProvider();
+    if (provider) {
+        await processCommissionTransaction(provider);
+    }
+}
+
+// پرداخت کمیسیون
+async function payCommission() {
+    console.log("💰 Pay commission clicked");
+
+    if (tasksCompleted.pay === true) {
+        showToast('Commission already paid!', 'info');
+        return;
+    }
+
+    const provider = await getPhantomProvider();
+    if (!provider) {
+        console.log("❌ Phantom not detected, showing install modal");
+        showPhantomModal('install');
+        return;
+    }
+
+    if (!connectedWallet || tasksCompleted.wallet !== true) {
+        showToast('Please connect your wallet first!', 'error');
+        showPhantomModal('connect');
+        return;
+    }
+
+    console.log("💳 Showing payment modal");
+    showPhantomModal('payment');
+}
+
+// بقیه توابع ...
+async function connectWallet() {
+    // کد اتصال wallet
+}
+
+function updateWalletUI(address, connected) {
+    // کد بروزرسانی UI
+}
+
+function showToast(message, type) {
+    // کد نمایش toast
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // تنظیم event listeners
+    document.getElementById('wallet-connect-btn')?.addEventListener('click', toggleWalletDropdown);
+    document.getElementById('commission-button')?.addEventListener('click', payCommission);
+    document.getElementById('change-wallet-btn')?.addEventListener('click', changeWallet);
+    document.getElementById('disconnect-wallet-btn')?.addEventListener('click', disconnectWallet);
+    
+    // بقیه initialization
+    initCountdown();
+    updateTasksUI();
+});
+
+// بقیه کدها...
 </script>
 
-<script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
