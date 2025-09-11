@@ -20,10 +20,14 @@ import base64
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 solana_client = Client(SOLANA_RPC)
-redis_client = redis.Redis.from_url(REDIS_URL)
+
+# Initialize Redis client with error handling
+try:
+    redis_client = redis.Redis.from_url(REDIS_URL) if REDIS_URL else None
+except:
+    redis_client = None
 
 @router.get("/", response_class=HTMLResponse)
 @limiter.limit("10/minute")
@@ -36,7 +40,7 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    end_date = datetime(2024, 12, 31)
+    end_date = datetime(2025, 12, 31)  # Fixed year to 2025
     countdown = end_date - datetime.now()
 
     # بررسی دقیق‌تر وضعیت tasks
@@ -45,10 +49,15 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
         completed_tasks = [t for t in user.tasks if t.completed]
         tasks_completed = len(completed_tasks) > 0
 
-    # بررسی دقیق‌تر وضعیت referrals
+    # بررسی دقیق‌تر وضعیت referrals - اصلاح شده
     invited = False
-    if user.referrals:
+    if hasattr(user, 'referrals') and user.referrals:
+        # Check if user has actually invited someone (referrals list is not empty)
         invited = len(user.referrals) > 0
+    else:
+        # Alternative check: count users who were referred by this user
+        referral_count = db.query(User).filter(User.referred_by == user.id).count()
+        invited = referral_count > 0
 
     wallet_connected = bool(user.wallet_address)
     commission_paid = user.commission_paid
@@ -84,28 +93,56 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     wallet = body.get("wallet")
     
-    if not wallet or not isinstance(wallet, str):
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
-
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # اگر wallet خالی است، یعنی disconnect
+    if not wallet or wallet == "":
+        user.wallet_address = None
+        db.commit()
+        
+        # Clear cache
+        if redis_client:
+            cache_key = f"wallet:{telegram_id}"
+            redis_client.delete(cache_key)
+        
+        return {"success": True, "message": "Wallet disconnected successfully"}
+
+    # Validate wallet address format
+    if not isinstance(wallet, str) or len(wallet) < 32:
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
 
     try:
         # Validate Solana public key format
         Pubkey.from_string(wallet)
         
+        # Check if wallet already exists for another user
+        existing_user = db.query(User).filter(
+            User.wallet_address == wallet,
+            User.id != user.id
+        ).first()
+        
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Wallet already connected to another account")
+        
         user.wallet_address = wallet
         db.commit()
-        
+
         # Cache wallet address
-        cache_key = f"wallet:{telegram_id}"
-        redis_client.setex(cache_key, 3600, wallet)
-        
+        if redis_client:
+            cache_key = f"wallet:{telegram_id}"
+            redis_client.setex(cache_key, 3600, wallet)
+
         return {"success": True, "message": "Wallet connected successfully"}
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to connect wallet: {str(e)}")
 
 @router.post("/confirm_commission")
 @limiter.limit("3/minute")
@@ -118,7 +155,7 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
     tx_signature = body.get("signature")
     amount = body.get("amount", COMMISSION_AMOUNT)
     recipient = body.get("recipient", ADMIN_WALLET)
-    
+
     if not tx_signature:
         raise HTTPException(status_code=400, detail="Missing transaction signature")
 
@@ -135,37 +172,43 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
     try:
         # بررسی cache ابتدا
         cache_key = f"tx:{tx_signature}"
-        cached_result = redis_client.get(cache_key)
-        
-        if cached_result:
-            # Transaction قبلاً تأیید شده
-            user.commission_paid = True
-            db.commit()
-            return {"success": True, "message": "Commission confirmed successfully!"}
+        if redis_client:
+            cached_result = redis_client.get(cache_key)
+            if cached_result:
+                # Transaction قبلاً تأیید شده
+                user.commission_paid = True
+                user.commission_transaction_hash = tx_signature
+                user.commission_payment_date = datetime.utcnow()
+                db.commit()
+                return {"success": True, "message": "Commission confirmed successfully!"}
 
         # بررسی transaction از Solana network
         try:
-            transaction_response = solana_client.get_transaction(tx_signature, encoding="json", max_supported_transaction_version=0)
+            transaction_response = solana_client.get_transaction(
+                tx_signature, 
+                encoding="json", 
+                max_supported_transaction_version=0
+            )
             
             if not transaction_response.value:
                 raise HTTPException(status_code=400, detail="Transaction not found on blockchain")
-                
+
             tx_data = transaction_response.value
-            
+
             # بررسی وضعیت تراکنش
             if tx_data.meta.err:
                 raise HTTPException(status_code=400, detail="Transaction failed on blockchain")
-            
+
             # بررسی جزئیات تراکنش (sender, recipient, amount)
             transaction_info = tx_data.transaction
-            
+
             # Extract account keys
             account_keys = transaction_info.message.account_keys
-            
+
             # بررسی instructions برای transfer
             instructions = transaction_info.message.instructions
             transfer_found = False
-            
+
             for instruction in instructions:
                 # System Program transfers have program_id_index = 0 (System Program)
                 if instruction.program_id_index == 0:  # System Program
@@ -182,26 +225,35 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
                                 to_account == ADMIN_WALLET):
                                 transfer_found = True
                                 break
-            
+
             if not transfer_found:
                 raise HTTPException(status_code=400, detail="Invalid transaction: Transfer not found or incorrect details")
-            
+
             # ذخیره در cache (24 ساعت)
-            redis_client.setex(cache_key, 86400, "confirmed")
-            
+            if redis_client:
+                redis_client.setex(cache_key, 86400, "confirmed")
+
             # آپدیت وضعیت کاربر
             user.commission_paid = True
+            user.commission_transaction_hash = tx_signature
+            user.commission_payment_date = datetime.utcnow()
             db.commit()
-            
+
             return {"success": True, "message": "Commission confirmed successfully!"}
-            
+
         except Exception as solana_error:
             print(f"Solana verification error: {solana_error}")
+            
             # اگر نتوانیم از Solana تأیید کنیم، اما signature معتبر است، آن را قبول می‌کنیم
             if len(tx_signature) == 88:  # Valid base58 signature length
                 user.commission_paid = True
+                user.commission_transaction_hash = tx_signature
+                user.commission_payment_date = datetime.utcnow()
                 db.commit()
-                redis_client.setex(cache_key, 3600, "confirmed")  # Cache for 1 hour
+                
+                if redis_client:
+                    redis_client.setex(cache_key, 3600, "confirmed")  # Cache for 1 hour
+                
                 return {"success": True, "message": "Commission payment recorded (verification pending)"}
             else:
                 raise HTTPException(status_code=400, detail="Invalid transaction signature format")
@@ -231,6 +283,27 @@ async def get_commission_status(request: Request, db: Session = Depends(get_db))
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
+    }
+
+@router.get("/referral_status")
+@limiter.limit("10/minute")
+async def get_referral_status(request: Request, db: Session = Depends(get_db)):
+    """Check if user has successfully invited friends"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Count referrals
+    referral_count = db.query(User).filter(User.referred_by == user.id).count()
+    
+    return {
+        "has_referrals": referral_count > 0,
+        "referral_count": referral_count,
+        "referral_code": user.referral_code
     }
 
 # Deprecated endpoint - kept for backward compatibility
