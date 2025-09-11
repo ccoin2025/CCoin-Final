@@ -737,7 +737,7 @@
                 if (isMobile) {
                     // برای موبایل، مستقیماً به Phantom ریدایرکت کن
                     const currentUrl = encodeURIComponent(window.location.href);
-                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
+                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}?action=change_wallet`;
                     window.location.href = phantomUrl;
                     return;
                 }
@@ -796,14 +796,30 @@
                     dropdownContent.classList.remove('show');
                 }
                 
-                // قطع اتصال
+                // قطع اتصال از Phantom
                 if (typeof window.solana !== 'undefined' && window.solana.isPhantom) {
                     try {
                         await window.solana.disconnect();
-                        console.log("Phantom disconnected");
+                        console.log("Phantom disconnected successfully");
                     } catch (error) {
-                        console.error("Error disconnecting Phantom:", error);
+                        console.log("Error disconnecting from Phantom:", error);
                     }
+                }
+                
+                // پاک کردن از backend
+                try {
+                    await fetch('/airdrop/connect_wallet', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            wallet: ""
+                        })
+                    });
+                    console.log("Wallet cleared from backend");
+                } catch (error) {
+                    console.log("Could not clear wallet from backend:", error);
                 }
                 
                 // Update UI and state
@@ -811,9 +827,8 @@
                 showToast("Wallet disconnected successfully!", "success");
                 
             } catch (error) {
-                console.error("Disconnect error:", error);
-                showToast("Disconnection completed", "info");
-                updateWalletUI('', false);
+                console.error("Disconnect failed:", error);
+                showToast("Error disconnecting wallet", "error");
             }
         }
 
@@ -836,57 +851,70 @@
         }
 
         function showPhantomModal() {
-            safeExecute(() => {
-                const modal = document.getElementById('phantom-modal');
-                if (modal) {
-                    modal.classList.add('show');
-                }
-            });
+            const modal = document.getElementById('phantom-modal');
+            if (modal) {
+                modal.classList.add('show');
+            }
         }
 
         function closePhantomModal() {
-            safeExecute(() => {
-                const modal = document.getElementById('phantom-modal');
-                if (modal) {
-                    modal.classList.remove('show');
-                }
-            });
+            const modal = document.getElementById('phantom-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
         }
 
         function showCommissionModal() {
-            safeExecute(() => {
-                const modal = document.getElementById('commission-modal');
-                if (modal) {
-                    modal.classList.add('show');
-                }
-            });
+            const modal = document.getElementById('commission-modal');
+            if (modal) {
+                modal.classList.add('show');
+            }
         }
 
         function closeCommissionModal() {
-            safeExecute(() => {
-                const modal = document.getElementById('commission-modal');
-                if (modal) {
-                    modal.classList.remove('show');
-                }
-            });
+            const modal = document.getElementById('commission-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
         }
 
         function openPhantomApp() {
-            safeExecute(() => {
+            try {
                 console.log("Opening Phantom app...");
                 
-                // Try to open Phantom app
-                if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-                    const currentUrl = encodeURIComponent(window.location.href);
-                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
-                    window.location.href = phantomUrl;
+                // بررسی مرورگر موبایل
+                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // برای موبایل، سعی کن اپ Phantom را باز کنی
+                    const currentUrl = window.location.href;
+                    
+                    // متد 1: سعی کن اپ Phantom را مستقیماً باز کنی
+                    const phantomAppUrl = `phantom://browse/${encodeURIComponent(currentUrl)}`;
+                    window.location.href = phantomAppUrl;
+                    
+                    // اگر اپ نصب نبود، بعد از 3 ثانیه به store ریدایرکت کن
+                    setTimeout(() => {
+                        const isAndroid = /Android/i.test(navigator.userAgent);
+                        const storeUrl = isAndroid 
+                            ? "https://play.google.com/store/apps/details?id=app.phantom"
+                            : "https://apps.apple.com/app/phantom-solana-wallet/id1598432977";
+                        window.open(storeUrl, "_blank");
+                    }, 3000);
+                    
                 } else {
-                    showToast("Please install Phantom extension", "info");
+                    // برای دسکتاپ، نصب extension را پیشنهاد کن
+                    showToast("Please install Phantom extension for your browser", "info");
                     window.open("https://phantom.app/download", "_blank");
                 }
                 
                 closePhantomModal();
-            });
+                
+            } catch (error) {
+                console.error("Error opening Phantom app:", error);
+                showToast("Error opening Phantom app", "error");
+                closePhantomModal();
+            }
         }
 
         async function processCommissionPayment() {
@@ -908,27 +936,59 @@
                 const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
                 if (isMobile) {
-                    // برای موبایل، به Phantom ریدایرکت کن
-                    const currentUrl = encodeURIComponent(window.location.href);
-                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
-                    window.location.href = phantomUrl;
+                    // برای موبایل، به اپ Phantom ریدایرکت کن
+                    const currentUrl = window.location.href;
+                    const phantomAppUrl = `phantom://browse/${encodeURIComponent(currentUrl)}?action=pay_commission`;
+                    
+                    closeCommissionModal();
+                    showToast("Opening Phantom app for payment...", "info");
+                    
+                    window.location.href = phantomAppUrl;
+                    
+                    // اگر اپ نصب نبود، بعد از 3 ثانیه به store ریدایرکت کن
+                    setTimeout(() => {
+                        const isAndroid = /Android/i.test(navigator.userAgent);
+                        const storeUrl = isAndroid 
+                            ? "https://play.google.com/store/apps/details?id=app.phantom"
+                            : "https://apps.apple.com/app/phantom-solana-wallet/id1598432977";
+                        window.open(storeUrl, "_blank");
+                    }, 3000);
+                    
                     return;
                 }
                 
-                // بررسی دقیق‌تر Phantom
-                if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
-                    showToast("Phantom wallet not found!", "error");
+                // برای دسکتاپ، بررسی کن که Phantom نصب باشد
+                let provider = null;
+                
+                if (window.phantom?.solana?.isPhantom) {
+                    provider = window.phantom.solana;
+                } else if (window.solana?.isPhantom) {
+                    provider = window.solana;
+                }
+                
+                if (!provider) {
+                    showToast("Phantom wallet not found! Please install Phantom.", "error");
                     closeCommissionModal();
                     showPhantomModal();
                     return;
                 }
                 
-                if (!window.solana.isConnected) {
+                if (!provider.isConnected) {
                     showToast("Connecting to Phantom...", "info");
-                    await window.solana.connect();
+                    try {
+                        await provider.connect();
+                    } catch (connectError) {
+                        showToast("Please connect your wallet first!", "error");
+                        return;
+                    }
                 }
                 
                 // Create transaction using Solana Web3.js
+                if (typeof solanaWeb3 === 'undefined') {
+                    showToast("Solana library not loaded. Please refresh the page.", "error");
+                    return;
+                }
+                
                 const connection = new solanaWeb3.Connection(SOLANA_RPC_URL, 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
                 
@@ -937,7 +997,7 @@
                 
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: window.solana.publicKey,
+                        fromPubkey: provider.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(ADMIN_WALLET),
                         lamports: lamports
                     })
@@ -946,12 +1006,12 @@
                 // Get recent blockhash
                 const { blockhash } = await connection.getLatestBlockhash();
                 transaction.recentBlockhash = blockhash;
-                transaction.feePayer = window.solana.publicKey;
+                transaction.feePayer = provider.publicKey;
                 
                 showToast("Please confirm transaction in Phantom...", "info");
                 
                 // Sign and send transaction
-                const signedTransaction = await window.solana.signTransaction(transaction);
+                const signedTransaction = await provider.signTransaction(transaction);
                 const signature = await connection.sendRawTransaction(signedTransaction.serialize());
                 
                 console.log("Transaction sent:", signature);
@@ -997,12 +1057,14 @@
             } catch (error) {
                 console.error("Commission payment failed:", error);
                 
-                if (error.code === 4001 || error.message.includes("User rejected")) {
+                if (error.message.includes("User rejected")) {
                     showToast("Payment cancelled by user", "info");
                 } else if (error.message.includes("Insufficient funds")) {
                     showToast("Insufficient funds for transaction", "error");
+                } else if (error.code === 4001) {
+                    showToast("Payment cancelled by user", "info");
                 } else {
-                    showToast("Payment failed", "error");
+                    showToast("Payment failed: " + error.message, "error");
                 }
             } finally {
                 // Remove loading state
@@ -1078,88 +1140,89 @@
             });
         }
 
+        // تابع جدید برای بررسی وضعیت دعوت از backend
+        async function checkInviteStatus() {
+            try {
+                const response = await fetch('/friends/status', {
+                    method: 'GET',
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.has_invited_friends && !tasksCompleted.invite) {
+                        tasksCompleted.invite = true;
+                        updateTasksUI();
+                        console.log("Invite status updated from backend");
+                    }
+                }
+            } catch (error) {
+                console.log("Could not check invite status:", error);
+            }
+        }
+
         // Countdown function
         function initCountdown() {
-            safeExecute(() => {
-                const countdownDate = new Date("2025-12-31T23:59:59").getTime();
+            const countdownDate = new Date("2025-12-31T23:59:59").getTime();
+            
+            const timer = setInterval(function() {
+                const now = new Date().getTime();
+                const distance = countdownDate - now;
                 
-                const timer = setInterval(function() {
-                    try {
-                        const now = new Date().getTime();
-                        const distance = countdownDate - now;
-                        
-                        if (distance < 0) {
-                            clearInterval(timer);
-                            const days = document.getElementById("days");
-                            const hours = document.getElementById("hours");
-                            const minutes = document.getElementById("minutes");
-                            const seconds = document.getElementById("seconds");
-                            
-                            if (days) days.innerHTML = "00";
-                            if (hours) hours.innerHTML = "00";
-                            if (minutes) minutes.innerHTML = "00";
-                            if (seconds) seconds.innerHTML = "00";
-                            return;
-                        }
-                        
-                        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                        
-                        const daysEl = document.getElementById("days");
-                        const hoursEl = document.getElementById("hours");
-                        const minutesEl = document.getElementById("minutes");
-                        const secondsEl = document.getElementById("seconds");
-                        
-                        if (daysEl) daysEl.innerHTML = String(days).padStart(2, '0');
-                        if (hoursEl) hoursEl.innerHTML = String(hours).padStart(2, '0');
-                        if (minutesEl) minutesEl.innerHTML = String(minutes).padStart(2, '0');
-                        if (secondsEl) secondsEl.innerHTML = String(seconds).padStart(2, '0');
-                    } catch (error) {
-                        console.error('Countdown error:', error);
-                    }
-                }, 1000);
-            });
+                if (distance < 0) {
+                    clearInterval(timer);
+                    document.getElementById("days").innerHTML = "00";
+                    document.getElementById("hours").innerHTML = "00";
+                    document.getElementById("minutes").innerHTML = "00";
+                    document.getElementById("seconds").innerHTML = "00";
+                    return;
+                }
+                
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                
+                document.getElementById("days").innerHTML = String(days).padStart(2, '0');
+                document.getElementById("hours").innerHTML = String(hours).padStart(2, '0');
+                document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
+                document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
+            }, 1000);
         }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            safeExecute(() => {
-                console.log("DOM loaded");
-                initCountdown();
-                
-                // بروزرسانی UI براساس وضعیت اولیه
-                updateTasksUI();
-                
-                // بررسی وضعیت اتصال wallet
-                if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
-                    updateWalletUI(INITIAL_WALLET_ADDRESS, true);
+            console.log("DOM loaded");
+            initCountdown();
+            
+            // بروزرسانی UI براساس وضعیت اولیه
+            updateTasksUI();
+            
+            // بررسی وضعیت اتصال wallet
+            if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
+                updateWalletUI(INITIAL_WALLET_ADDRESS, true);
+            }
+            
+            // بررسی وضعیت دعوت از backend
+            checkInviteStatus();
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('wallet-dropdown');
+                const dropdownContent = document.getElementById('wallet-dropdown-content');
+                if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
+                    dropdownContent.classList.remove('show');
                 }
                 
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(event) {
-                    try {
-                        const dropdown = document.getElementById('wallet-dropdown');
-                        const dropdownContent = document.getElementById('wallet-dropdown-content');
-                        if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
-                            dropdownContent.classList.remove('show');
-                        }
-                        
-                        // Close modals when clicking outside
-                        const phantomModal = document.getElementById('phantom-modal');
-                        if (phantomModal && event.target === phantomModal) {
-                            closePhantomModal();
-                        }
-                        
-                        const commissionModal = document.getElementById('commission-modal');
-                        if (commissionModal && event.target === commissionModal) {
-                            closeCommissionModal();
-                        }
-                    } catch (error) {
-                        console.error('Click handler error:', error);
-                    }
-                });
+                // Close modals when clicking outside
+                const phantomModal = document.getElementById('phantom-modal');
+                if (phantomModal && event.target === phantomModal) {
+                    closePhantomModal();
+                }
+                
+                const commissionModal = document.getElementById('commission-modal');
+                if (commissionModal && event.target === commissionModal) {
+                    closeCommissionModal();
+                }
             });
         });
     </script>
