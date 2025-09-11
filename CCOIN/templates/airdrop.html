@@ -253,84 +253,6 @@
             background: #007bff;
         }
 
-        /* Modal styles for Phantom connection */
-        .phantom-modal {
-            display: none;
-            position: fixed;
-            z-index: 10001;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            justify-content: center;
-            align-items: center;
-        }
-
-        .phantom-modal.show {
-            display: flex;
-        }
-
-        .phantom-modal-content {
-            background: #1a1a1a;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border: 2px solid #333;
-        }
-
-        .phantom-modal-content h3 {
-            color: #fff;
-            margin-bottom: 20px;
-            font-size: 22px;
-        }
-
-        .phantom-modal-content p {
-            color: #ccc;
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-
-        .phantom-modal-buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-        }
-
-        .phantom-modal-btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .phantom-modal-btn.primary {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-        }
-
-        .phantom-modal-btn.primary:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
-        }
-
-        .phantom-modal-btn.secondary {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-        }
-
-        .phantom-modal-btn.secondary:hover {
-            background: #444;
-        }
-
         /* بهبود responsive */
         @media (max-width: 480px) {
             .wallet-address-dropdown {
@@ -352,15 +274,6 @@
                 right: 10px;
                 left: 10px;
                 max-width: none;
-            }
-
-            .phantom-modal-content {
-                padding: 20px;
-                margin: 20px;
-            }
-
-            .phantom-modal-buttons {
-                flex-direction: column;
             }
         }
     </style>
@@ -455,22 +368,6 @@
         </div>
     </div>
 
-    <!-- Phantom Connection Modal -->
-    <div id="phantom-modal" class="phantom-modal">
-        <div class="phantom-modal-content">
-            <h3>Connect to Phantom Wallet</h3>
-            <p>To continue, you need to connect your Phantom wallet. Click the button below to open Phantom app.</p>
-            <div class="phantom-modal-buttons">
-                <button onclick="openPhantomApp()" class="phantom-modal-btn primary">
-                    🦄 Open Phantom App
-                </button>
-                <button onclick="closePhantomModal()" class="phantom-modal-btn secondary">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
         const USER_ID = "{{ request.session.telegram_id }}";
         const SOLANA_RPC_URL = "{{ config.SOLANA_RPC }}";
@@ -504,7 +401,96 @@
             commission: INITIAL_COMMISSION_PAID,
             address: INITIAL_WALLET_ADDRESS
         });
+
+        // توابع ساده برای تست دکمه‌ها
+        function handleTaskCompletion() {
+            console.log("Task completion clicked");
+            alert("Redirecting to Tasks page...");
+            window.location.href = '/earn';
+        }
+
+        function handleInviteCheck() {
+            console.log("Invite check clicked"); 
+            alert("Redirecting to Friends page...");
+            window.location.href = '/friends';
+        }
+
+        function toggleWalletDropdown() {
+            console.log("Wallet dropdown toggled");
+            const dropdownContent = document.getElementById('wallet-dropdown-content');
+            if (dropdownContent) {
+                dropdownContent.classList.toggle('show');
+            }
+        }
+
+        function changeWallet() {
+            console.log("Change wallet clicked");
+            alert("Change wallet functionality");
+            // بستن dropdown
+            const dropdownContent = document.getElementById('wallet-dropdown-content');
+            if (dropdownContent) {
+                dropdownContent.classList.remove('show');
+            }
+        }
+
+        function disconnectWallet() {
+            console.log("Disconnect wallet clicked");
+            alert("Disconnect wallet functionality");
+            // بستن dropdown
+            const dropdownContent = document.getElementById('wallet-dropdown-content');
+            if (dropdownContent) {
+                dropdownContent.classList.remove('show');
+            }
+        }
+
+        function payCommission() {
+            console.log("Pay commission clicked");
+            alert("Pay commission functionality");
+        }
+
+        // Countdown function
+        function initCountdown() {
+            const countdownDate = new Date("2025-12-31T23:59:59").getTime();
+            
+            const timer = setInterval(function() {
+                const now = new Date().getTime();
+                const distance = countdownDate - now;
+                
+                if (distance < 0) {
+                    clearInterval(timer);
+                    document.getElementById("days").innerHTML = "00";
+                    document.getElementById("hours").innerHTML = "00";
+                    document.getElementById("minutes").innerHTML = "00";
+                    document.getElementById("seconds").innerHTML = "00";
+                    return;
+                }
+                
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                
+                document.getElementById("days").innerHTML = String(days).padStart(2, '0');
+                document.getElementById("hours").innerHTML = String(hours).padStart(2, '0');
+                document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
+                document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
+            }, 1000);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded");
+            initCountdown();
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('wallet-dropdown');
+                const dropdownContent = document.getElementById('wallet-dropdown-content');
+                if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
+                    dropdownContent.classList.remove('show');
+                }
+            });
+        });
     </script>
-    <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
