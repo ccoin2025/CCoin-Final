@@ -86,43 +86,28 @@ async function getPhantomProvider() {
 
 // **تابع جدید برای تولید کلیدهای رمزنگاری**
 function generateDappKeyPair() {
-    if (typeof nacl !== 'undefined') {
-        dappKeyPair = nacl.box.keyPair();
+    try {
+        // استفاده از Web Crypto API
+        const keyPair = crypto.getRandomValues(new Uint8Array(32));
+        dappKeyPair = {
+            publicKey: keyPair.slice(0, 16),
+            secretKey: keyPair.slice(16, 32)
+        };
         return dappKeyPair;
-    } else {
-        // Fallback برای محیط‌هایی که nacl ندارند
-        console.warn("NaCl not available, using fallback");
+    } catch (error) {
+        console.warn("Error generating keypair:", error);
         return null;
     }
 }
 
-// **تابع جدید برای رمزنگاری payload**
-function encryptPayload(payload, sharedSecret) {
-    if (!sharedSecret || typeof nacl === 'undefined') {
-        return [null, JSON.stringify(payload)];
+// **تابع جدید برای base58 encoding/decoding ساده**
+function simpleBase58Encode(bytes) {
+    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let result = '';
+    for (let i = 0; i < bytes.length; i++) {
+        result += alphabet[bytes[i] % 58];
     }
-    
-    const nonce = nacl.randomBytes(24);
-    const encryptedPayload = nacl.box.after(
-        Buffer.from(JSON.stringify(payload)),
-        nonce,
-        sharedSecret
-    );
-    return [nonce, encryptedPayload];
-}
-
-// **تابع جدید برای رمزگشایی payload**
-function decryptPayload(data, nonce, sharedSecret) {
-    if (!sharedSecret || typeof nacl === 'undefined') {
-        return JSON.parse(data);
-    }
-    
-    const decryptedData = nacl.box.open.after(
-        typeof data === 'string' ? base58.decode(data) : data,
-        typeof nonce === 'string' ? base58.decode(nonce) : nonce,
-        sharedSecret
-    );
-    return JSON.parse(Buffer.from(decryptedData).toString("utf8"));
+    return result;
 }
 
 // **تابع جدید برای نمایش پنجره واسط**
@@ -132,6 +117,11 @@ function showPhantomIntermediateModal(type, data) {
     const content = document.getElementById('intermediate-modal-content');
     const actionBtn = document.getElementById('intermediate-action-btn');
     
+    if (!modal || !title || !content || !actionBtn) {
+        console.error("Modal elements not found");
+        return;
+    }
+    
     if (type === 'connect') {
         title.textContent = 'اتصال به کیف پول Phantom';
         content.innerHTML = `
@@ -140,7 +130,7 @@ function showPhantomIntermediateModal(type, data) {
                 <p><strong>نوع درخواست:</strong> اتصال کیف پول</p>
                 <p><strong>دامنه:</strong> ${window.location.host}</p>
                 <p><strong>شبکه:</strong> Solana Devnet</p>
-                <p><strong>کلید عمومی dApp:</strong> ${data.publicKey}</p>
+                <p><strong>کلید عمومی dApp:</strong> ${data.publicKey || 'ناموجود'}</p>
             </div>
             <p>آیا می‌خواهید به اپ Phantom منتقل شوید؟</p>
         `;
@@ -169,10 +159,12 @@ function showPhantomIntermediateModal(type, data) {
 // **تابع جدید برای بستن پنجره واسط**
 function closeIntermediateModal() {
     const modal = document.getElementById('phantom-intermediate-modal');
-    modal.classList.remove('show');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
 }
 
 // **تابع جدید برای باز کردن Phantom برای اتصال**
@@ -244,8 +236,8 @@ async function connectWallet() {
             }
             
             let publicKeyParam = '';
-            if (dappKeyPair && typeof base58 !== 'undefined') {
-                publicKeyParam = base58.encode(dappKeyPair.publicKey);
+            if (dappKeyPair) {
+                publicKeyParam = simpleBase58Encode(dappKeyPair.publicKey);
             }
             
             // ساخت URL deeplink
@@ -321,35 +313,12 @@ async function payCommission() {
     if (isMobile) {
         // برای موبایل از deeplink استفاده کنیم
         try {
-            if (!phantomSession) {
-                showToast("جلسه Phantom نامعتبر است. لطفاً مجدداً متصل شوید", "error");
-                return;
-            }
-            
-            // ساخت تراکنش
-            const transaction = await createCommissionTransaction();
-            const payload = {
-                session: phantomSession,
-                transaction: base58.encode(transaction.serialize({ verifySignatures: false }))
-            };
-            
-            // رمزنگاری payload
-            const [nonce, encryptedPayload] = encryptPayload(payload, sharedSecret);
-            
-            let nonceParam = '';
-            let payloadParam = '';
-            
-            if (nonce && encryptedPayload && typeof base58 !== 'undefined') {
-                nonceParam = base58.encode(nonce);
-                payloadParam = base58.encode(encryptedPayload);
-            }
-            
             // ساخت URL deeplink برای تراکنش
             const params = new URLSearchParams({
-                dapp_encryption_public_key: base58.encode(dappKeyPair.publicKey),
-                nonce: nonceParam,
-                redirect_link: `${window.location.origin}/airdrop?phantom_action=sign`,
-                payload: payloadParam
+                amount: COMMISSION_AMOUNT,
+                recipient: ADMIN_WALLET,
+                cluster: "devnet",
+                redirect_link: `${window.location.origin}/airdrop?phantom_action=sign`
             });
             
             const signUrl = `https://phantom.app/ul/v1/signTransaction?${params.toString()}`;
@@ -443,44 +412,27 @@ function handlePhantomRedirect() {
     if (action === 'connect') {
         // پردازش نتیجه اتصال
         const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
-        const data = urlParams.get('data');
-        const nonce = urlParams.get('nonce');
+        const publicKey = urlParams.get('public_key');
         
-        if (phantomPublicKey && data && nonce && dappKeyPair) {
-            try {
-                // ایجاد shared secret
-                if (typeof nacl !== 'undefined' && typeof base58 !== 'undefined') {
-                    sharedSecret = nacl.box.before(
-                        base58.decode(phantomPublicKey),
-                        dappKeyPair.secretKey
-                    );
-                    
-                    // رمزگشایی اطلاعات
-                    const connectData = decryptPayload(data, nonce, sharedSecret);
-                    phantomSession = connectData.session;
-                    connectedWallet = connectData.public_key;
-                    
-                    // ذخیره در backend
-                    fetch('/airdrop/connect_wallet', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            wallet: connectedWallet
-                        })
-                    }).then(response => {
-                        if (response.ok) {
-                            tasksCompleted.wallet = true;
-                            updateTasksUI();
-                            showToast("کیف پول با موفقیت متصل شد!", "success");
-                        }
-                    });
+        if (publicKey) {
+            connectedWallet = publicKey;
+            
+            // ذخیره در backend
+            fetch('/airdrop/connect_wallet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    wallet: connectedWallet
+                })
+            }).then(response => {
+                if (response.ok) {
+                    tasksCompleted.wallet = true;
+                    updateTasksUI();
+                    showToast("کیف پول با موفقیت متصل شد!", "success");
                 }
-            } catch (error) {
-                console.error("Error processing connection result:", error);
-                showToast("خطا در پردازش نتیجه اتصال", "error");
-            }
+            });
         }
         
         // پاک کردن URL parameters
@@ -488,41 +440,65 @@ function handlePhantomRedirect() {
         
     } else if (action === 'sign') {
         // پردازش نتیجه امضای تراکنش
-        const data = urlParams.get('data');
-        const nonce = urlParams.get('nonce');
+        const signature = urlParams.get('signature');
         
-        if (data && nonce && sharedSecret) {
-            try {
-                const signData = decryptPayload(data, nonce, sharedSecret);
-                const signature = signData.signature;
-                
-                // تأیید تراکنش در backend
-                fetch('/airdrop/confirm_commission', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        signature: signature
-                    })
-                }).then(response => {
-                    if (response.ok) {
-                        tasksCompleted.pay = true;
-                        updateTasksUI();
-                        showToast("کمیسیون با موفقیت پرداخت شد!", "success");
-                    } else {
-                        showToast("خطا در تأیید تراکنش", "error");
-                    }
-                });
-                
-            } catch (error) {
-                console.error("Error processing transaction result:", error);
-                showToast("خطا در پردازش نتیجه تراکنش", "error");
-            }
+        if (signature) {
+            // تأیید تراکنش در backend
+            fetch('/airdrop/confirm_commission', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    signature: signature
+                })
+            }).then(response => {
+                if (response.ok) {
+                    tasksCompleted.pay = true;
+                    updateTasksUI();
+                    showToast("کمیسیون با موفقیت پرداخت شد!", "success");
+                } else {
+                    showToast("خطا در تأیید تراکنش", "error");
+                }
+            });
         }
         
         // پاک کردن URL parameters
         window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+// **تابع برای setupPhantomListeners**
+function setupPhantomListeners() {
+    if (!phantomProvider) return;
+    
+    try {
+        phantomProvider.on('connect', (publicKey) => {
+            console.log("Phantom connected:", publicKey.toString());
+            connectedWallet = publicKey.toString();
+            tasksCompleted.wallet = true;
+            updateTasksUI();
+        });
+        
+        phantomProvider.on('disconnect', () => {
+            console.log("Phantom disconnected");
+            connectedWallet = null;
+            phantomSession = null;
+            sharedSecret = null;
+            tasksCompleted.wallet = false;
+            tasksCompleted.pay = false;
+            updateTasksUI();
+        });
+        
+        phantomProvider.on('accountChanged', (publicKey) => {
+            if (publicKey) {
+                console.log("Account changed:", publicKey.toString());
+                connectedWallet = publicKey.toString();
+                updateTasksUI();
+            }
+        });
+    } catch (error) {
+        console.log("Error setting up Phantom listeners:", error);
     }
 }
 
@@ -630,12 +606,12 @@ function updateTasksUI() {
     const connectBox = document.getElementById('connect-wallet');
     
     if (tasksCompleted.wallet && connectedWallet) {
-        connectBtn.classList.add('wallet-connected');
-        connectIcon.className = 'right-icon fas fa-check';
-        connectBox.classList.add('completed');
+        if (connectBtn) connectBtn.classList.add('wallet-connected');
+        if (connectIcon) connectIcon.className = 'right-icon fas fa-check';
+        if (connectBox) connectBox.classList.add('completed');
         
         // نمایش dropdown برای wallet
-        const dropdown = connectBox.querySelector('.wallet-dropdown-content');
+        const dropdown = connectBox?.querySelector('.wallet-dropdown-content');
         if (dropdown) {
             const addressDiv = dropdown.querySelector('.wallet-address-dropdown');
             if (addressDiv) {
@@ -650,9 +626,9 @@ function updateTasksUI() {
     const commissionBox = document.getElementById('pay-commission');
     
     if (tasksCompleted.pay) {
-        commissionBtn.classList.add('commission-paid');
-        commissionIcon.className = 'right-icon fas fa-check';
-        commissionBox.classList.add('completed');
+        if (commissionBtn) commissionBtn.classList.add('commission-paid');
+        if (commissionIcon) commissionIcon.className = 'right-icon fas fa-check';
+        if (commissionBox) commissionBox.classList.add('completed');
     }
     
     // سایر tasks...
@@ -758,77 +734,56 @@ function closePhantomModal() {
     }
 }
 
-// **تابع برای setup کردن event listeners برای Phantom**
-function setupPhantomListeners() {
-    if (phantomProvider) {
-        phantomProvider.on('connect', (publicKey) => {
-            console.log("Phantom connected:", publicKey.toString());
-            connectedWallet = publicKey.toString();
-            tasksCompleted.wallet = true;
-            updateTasksUI();
-        });
-        
-        phantomProvider.on('disconnect', () => {
-            console.log("Phantom disconnected");
-            connectedWallet = null;
-            phantomSession = null;
-            sharedSecret = null;
-            tasksCompleted.wallet = false;
-            tasksCompleted.pay = false;
-            updateTasksUI();
-        });
-    }
-}
-
-// **تابع برای شروع countdown**
+// **تابع initCountdown**
 function initCountdown() {
     // Implementation for countdown timer
-    const countdownElement = document.querySelector('.countdown');
+    const countdownElement = document.getElementById('countdown');
     if (countdownElement) {
-        // Add countdown logic here if needed
+        // Add countdown logic here
+        console.log("Countdown initialized");
     }
 }
 
-// Event listeners برای click خارج از dropdown
-document.addEventListener('click', function(event) {
-    const walletBox = document.getElementById('connect-wallet');
-    const dropdown = document.querySelector('#connect-wallet .wallet-dropdown-content');
-    
-    if (dropdown && !walletBox.contains(event.target)) {
-        dropdown.classList.remove('show');
-    }
-});
-
-// Event listeners برای دکمه‌ها
-document.addEventListener('click', function(event) {
-    if (event.target.closest('#connect-wallet .task-button')) {
-        if (tasksCompleted.wallet) {
-            toggleWalletDropdown();
-        } else {
+// Event listeners for buttons
+document.addEventListener('click', function(e) {
+    if (e.target.closest('#connect-wallet .task-button')) {
+        if (!tasksCompleted.wallet) {
             connectWallet();
+        } else {
+            toggleWalletDropdown();
         }
     }
     
-    if (event.target.closest('#pay-commission .task-button')) {
+    if (e.target.closest('#pay-commission .task-button')) {
         if (!tasksCompleted.pay) {
             payCommission();
         }
     }
     
-    if (event.target.classList.contains('disconnect-btn')) {
+    if (e.target.classList.contains('disconnect-btn')) {
         disconnectWallet();
     }
     
-    if (event.target.classList.contains('change-btn')) {
+    if (e.target.classList.contains('change-btn')) {
         disconnectWallet();
-        setTimeout(connectWallet, 500);
+        setTimeout(() => connectWallet(), 500);
     }
     
-    if (event.target.classList.contains('copy-btn')) {
+    if (e.target.classList.contains('copy-btn')) {
         copyWalletAddress();
     }
     
-    if (event.target.id === 'intermediate-cancel-btn') {
+    if (e.target.id === 'intermediate-close-btn') {
         closeIntermediateModal();
+    }
+});
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.wallet-dropdown')) {
+        const dropdowns = document.querySelectorAll('.wallet-dropdown-content.show');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.remove('show');
+        });
     }
 });
