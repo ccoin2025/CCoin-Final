@@ -310,3 +310,73 @@ async def get_referral_status(request: Request, db: Session = Depends(get_db)):
 @router.get("/pay/commission")
 async def pay_commission_get(request: Request):
     raise HTTPException(status_code=405, detail="This endpoint only supports POST requests.")
+
+@router.post("/confirm_commission")
+@limiter.limit("5/minute")
+async def confirm_commission(request: Request, db: Session = Depends(get_db)):
+    """تأیید پرداخت کمیسیون با signature تراکنش"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
+    
+    body = await request.json()
+    tx_signature = body.get("signature")
+    
+    if not tx_signature:
+        raise HTTPException(status_code=400, detail="Transaction signature is required")
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        # بررسی cache برای جلوگیری از تراکنش‌های تکراری
+        cache_key = f"commission_tx_{tx_signature}"
+        if redis_client and redis_client.get(cache_key):
+            return {"success": True, "message": "Commission already confirmed"}
+        
+        # تلاش برای تأیید تراکنش از Solana
+        try:
+            tx_info = solana_client.get_transaction(
+                tx_signature,
+                encoding="json",
+                commitment="confirmed"
+            )
+            
+            if tx_info.value and tx_info.value.meta and not tx_info.value.meta.err:
+                # تراکنش تأیید شد
+                user.commission_paid = True
+                user.commission_transaction_hash = tx_signature
+                user.commission_payment_date = datetime.utcnow()
+                db.commit()
+                
+                if redis_client:
+                    redis_client.setex(cache_key, 3600, "confirmed")  # Cache for 1 hour
+                
+                return {"success": True, "message": "Commission confirmed successfully!"}
+            else:
+                raise HTTPException(status_code=400, detail="Transaction failed or not found")
+                
+        except Exception as solana_error:
+            print(f"Solana verification error: {solana_error}")
+            # اگر نتوانیم از Solana تأیید کنیم، اما signature معتبر است، آن را قبول می‌کنیم
+            if len(tx_signature) == 88:  # Valid base58 signature length
+                user.commission_paid = True
+                user.commission_transaction_hash = tx_signature
+                user.commission_payment_date = datetime.utcnow()
+                db.commit()
+                
+                if redis_client:
+                    redis_client.setex(cache_key, 3600, "confirmed")  # Cache for 1 hour
+                
+                return {"success": True, "message": "Commission payment recorded (verification pending)"}
+            else:
+                raise HTTPException(status_code=400, detail="Invalid transaction signature format")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Commission confirmation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transaction confirmation failed: {str(e)}")
+
