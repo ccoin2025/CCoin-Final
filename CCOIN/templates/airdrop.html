@@ -488,6 +488,12 @@
     </div>
 
     <script>
+        // Global error handling
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            showToast('An error occurred. Please try again.', 'error');
+        });
+
         const USER_ID = "{{ request.session.telegram_id }}";
         const SOLANA_RPC_URL = "{{ config.SOLANA_RPC }}";
         const COMMISSION_AMOUNT = {{ config.COMMISSION_AMOUNT if config.COMMISSION_AMOUNT else 0.1 }};
@@ -517,303 +523,413 @@
             address: INITIAL_WALLET_ADDRESS
         });
 
-        // Toast notification function
+        // Toast notification function with error handling
         function showToast(message, type = 'info') {
-            console.log(`Toast: ${message} (${type})`);
-            
-            // Remove existing toasts
-            const existingToasts = document.querySelectorAll('.toast');
-            existingToasts.forEach(toast => toast.remove());
-            
-            // Create new toast
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            
-            document.body.appendChild(toast);
-            
-            // Show toast
-            setTimeout(() => toast.classList.add('show'), 100);
-            
-            // Hide and remove toast
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            try {
+                console.log(`Toast: ${message} (${type})`);
+                
+                // Remove existing toasts
+                const existingToasts = document.querySelectorAll('.toast');
+                existingToasts.forEach(toast => {
+                    try {
+                        toast.remove();
+                    } catch (e) {
+                        console.log('Error removing toast:', e);
+                    }
+                });
+                
+                // Create new toast
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.textContent = message;
+                
+                document.body.appendChild(toast);
+                
+                // Show toast
+                setTimeout(() => {
+                    try {
+                        toast.classList.add('show');
+                    } catch (e) {
+                        console.log('Error showing toast:', e);
+                    }
+                }, 100);
+                
+                // Hide and remove toast
+                setTimeout(() => {
+                    try {
+                        toast.classList.remove('show');
+                        setTimeout(() => {
+                            try {
+                                toast.remove();
+                            } catch (e) {
+                                console.log('Error removing toast:', e);
+                            }
+                        }, 300);
+                    } catch (e) {
+                        console.log('Error hiding toast:', e);
+                    }
+                }, 3000);
+            } catch (error) {
+                console.error('Toast error:', error);
+            }
+        }
+
+        // Safe function execution wrapper
+        function safeExecute(func, ...args) {
+            try {
+                return func.apply(this, args);
+            } catch (error) {
+                console.error('Function execution error:', error);
+                showToast('An error occurred. Please try again.', 'error');
+                return null;
+            }
         }
 
         // توابع اصلی
         function handleTaskCompletion() {
-            console.log("Task completion clicked");
-            window.location.href = '/earn';
+            safeExecute(() => {
+                console.log("Task completion clicked");
+                window.location.href = '/earn';
+            });
         }
 
-        async function handleInviteCheck() {
-            console.log("Invite check clicked"); 
-            window.location.href = '/friends';
+        function handleInviteCheck() {
+            safeExecute(() => {
+                console.log("Invite check clicked"); 
+                window.location.href = '/friends';
+            });
         }
 
         function toggleWalletDropdown() {
-            console.log("Wallet dropdown toggled");
-            
-            // اگر wallet متصل نیست، سعی کن وصل کن
-            if (!tasksCompleted.wallet) {
-                connectWallet();
-                return;
-            }
-            
-            // اگر wallet متصل است، dropdown را نمایش بده
-            const dropdownContent = document.getElementById('wallet-dropdown-content');
-            if (dropdownContent) {
-                dropdownContent.classList.toggle('show');
-            }
+            safeExecute(() => {
+                console.log("Wallet dropdown toggled");
+                
+                // اگر wallet متصل نیست، سعی کن وصل کن
+                if (!tasksCompleted.wallet) {
+                    connectWallet();
+                    return;
+                }
+                
+                // اگر wallet متصل است، dropdown را نمایش بده
+                const dropdownContent = document.getElementById('wallet-dropdown-content');
+                if (dropdownContent) {
+                    dropdownContent.classList.toggle('show');
+                }
+            });
         }
 
         async function connectWallet() {
-            console.log("Starting wallet connection...");
-            showToast("Connecting to Phantom wallet...", "info");
-            
-            // Check if Phantom is available
-            if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
-                try {
-                    const response = await window.solana.connect();
-                    const walletAddress = response.publicKey.toString();
-                    
-                    console.log("Phantom connected:", walletAddress);
-                    
-                    // Send to backend
-                    const result = await fetch('/airdrop/connect_wallet', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            wallet: walletAddress
-                        })
-                    });
-                    
-                    if (result.ok) {
-                        const data = await result.json();
-                        console.log("Wallet saved to backend:", data);
-                        
-                        updateWalletUI(walletAddress, true);
-                        showToast("Wallet connected successfully!", "success");
-                    } else {
-                        const errorData = await result.json();
-                        console.error("Backend error:", errorData);
-                        showToast("Error saving wallet: " + errorData.detail, "error");
-                    }
-                    
-                } catch (error) {
-                    console.error("Wallet connection failed:", error);
-                    showToast("Failed to connect wallet: " + error.message, "error");
+            try {
+                console.log("Starting wallet connection...");
+                showToast("Connecting to Phantom wallet...", "info");
+                
+                // بررسی مرورگر موبایل
+                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // برای موبایل، مستقیماً به Phantom ریدایرکت کن
+                    const currentUrl = encodeURIComponent(window.location.href);
+                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
+                    window.location.href = phantomUrl;
+                    return;
                 }
-            } else {
-                console.log("Phantom not detected, showing modal");
-                showPhantomModal();
+                
+                // برای دسکتاپ، بررسی کن که Phantom نصب باشد
+                if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
+                    console.log("Phantom not detected, showing modal");
+                    showPhantomModal();
+                    return;
+                }
+                
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+                
+                console.log("Phantom connected:", walletAddress);
+                
+                // Send to backend
+                const result = await fetch('/airdrop/connect_wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        wallet: walletAddress
+                    })
+                });
+                
+                if (result.ok) {
+                    const data = await result.json();
+                    console.log("Wallet saved to backend:", data);
+                    
+                    updateWalletUI(walletAddress, true);
+                    showToast("Wallet connected successfully!", "success");
+                } else {
+                    const errorData = await result.json();
+                    console.error("Backend error:", errorData);
+                    showToast("Error saving wallet", "error");
+                }
+                
+            } catch (error) {
+                console.error("Wallet connection failed:", error);
+                if (error.code === 4001) {
+                    showToast("Connection cancelled by user", "info");
+                } else {
+                    showToast("Failed to connect wallet", "error");
+                }
             }
         }
 
         function updateWalletUI(walletAddress, isConnected) {
-            console.log("Updating wallet UI:", { walletAddress, isConnected });
-            
-            const walletBox = document.getElementById('connect-wallet');
-            const walletButton = walletBox?.querySelector('.task-button');
-            const walletButtonText = document.getElementById('wallet-button-text');
-            const walletIcon = document.getElementById('wallet-icon');
-            const walletIndicator = document.getElementById('wallet-status-indicator');
-            const walletAddressDropdown = document.getElementById('wallet-address-dropdown');
-            
-            if (isConnected && walletAddress) {
-                // Connected state
-                walletBox?.classList.add('completed');
-                walletButton?.classList.add('wallet-connected');
-                walletButtonText.textContent = "Wallet Connected";
-                walletIcon?.classList.remove('fa-chevron-right');
-                walletIcon?.classList.add('fa-check');
-                walletIndicator?.classList.add('connected');
-                walletAddressDropdown.textContent = walletAddress;
+            safeExecute(() => {
+                console.log("Updating wallet UI:", { walletAddress, isConnected });
                 
-                tasksCompleted.wallet = true;
-                connectedWallet = walletAddress;
-                console.log("Wallet UI updated to connected state");
-            } else {
-                // Disconnected state
-                walletBox?.classList.remove('completed');
-                walletButton?.classList.remove('wallet-connected');
-                walletButtonText.textContent = "Connect Wallet";
-                walletIcon?.classList.remove('fa-check');
-                walletIcon?.classList.add('fa-chevron-right');
-                walletIndicator?.classList.remove('connected');
-                walletAddressDropdown.textContent = "";
+                const walletBox = document.getElementById('connect-wallet');
+                const walletButton = walletBox?.querySelector('.task-button');
+                const walletButtonText = document.getElementById('wallet-button-text');
+                const walletIcon = document.getElementById('wallet-icon');
+                const walletIndicator = document.getElementById('wallet-status-indicator');
+                const walletAddressDropdown = document.getElementById('wallet-address-dropdown');
                 
-                tasksCompleted.wallet = false;
-                connectedWallet = '';
-                console.log("Wallet UI updated to disconnected state");
-            }
+                if (isConnected && walletAddress) {
+                    // Connected state
+                    walletBox?.classList.add('completed');
+                    walletButton?.classList.add('wallet-connected');
+                    if (walletButtonText) walletButtonText.textContent = "Wallet Connected";
+                    walletIcon?.classList.remove('fa-chevron-right');
+                    walletIcon?.classList.add('fa-check');
+                    walletIndicator?.classList.add('connected');
+                    if (walletAddressDropdown) walletAddressDropdown.textContent = walletAddress;
+                    
+                    tasksCompleted.wallet = true;
+                    connectedWallet = walletAddress;
+                    console.log("Wallet UI updated to connected state");
+                } else {
+                    // Disconnected state
+                    walletBox?.classList.remove('completed');
+                    walletButton?.classList.remove('wallet-connected');
+                    if (walletButtonText) walletButtonText.textContent = "Connect Wallet";
+                    walletIcon?.classList.remove('fa-check');
+                    walletIcon?.classList.add('fa-chevron-right');
+                    walletIndicator?.classList.remove('connected');
+                    if (walletAddressDropdown) walletAddressDropdown.textContent = "";
+                    
+                    tasksCompleted.wallet = false;
+                    connectedWallet = '';
+                    console.log("Wallet UI updated to disconnected state");
+                }
+            });
         }
 
         async function changeWallet() {
-            console.log("Change wallet clicked");
-            showToast("Connecting to new wallet...", "info");
-            
-            // بستن dropdown
-            const dropdownContent = document.getElementById('wallet-dropdown-content');
-            if (dropdownContent) {
-                dropdownContent.classList.remove('show');
-            }
-            
-            // اتصال به wallet جدید
-            if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
-                try {
-                    await window.solana.disconnect();
-                    const response = await window.solana.connect();
-                    const walletAddress = response.publicKey.toString();
-                    
-                    console.log("New wallet connected:", walletAddress);
-                    
-                    // Send to backend
-                    const result = await fetch('/airdrop/connect_wallet', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            wallet: walletAddress
-                        })
-                    });
-                    
-                    if (result.ok) {
-                        const data = await result.json();
-                        console.log("New wallet saved to backend:", data);
-                        
-                        updateWalletUI(walletAddress, true);
-                        showToast("Wallet changed successfully!", "success");
-                    } else {
-                        const errorData = await result.json();
-                        console.error("Backend error:", errorData);
-                        showToast("Error changing wallet: " + errorData.detail, "error");
-                    }
-                    
-                } catch (error) {
-                    console.error("Wallet change failed:", error);
-                    showToast("Failed to change wallet: " + error.message, "error");
+            try {
+                console.log("Change wallet clicked");
+                showToast("Connecting to new wallet...", "info");
+                
+                // بستن dropdown
+                const dropdownContent = document.getElementById('wallet-dropdown-content');
+                if (dropdownContent) {
+                    dropdownContent.classList.remove('show');
                 }
-            } else {
-                showPhantomModal();
+                
+                // بررسی مرورگر موبایل
+                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // برای موبایل، مستقیماً به Phantom ریدایرکت کن
+                    const currentUrl = encodeURIComponent(window.location.href);
+                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
+                    window.location.href = phantomUrl;
+                    return;
+                }
+                
+                // برای دسکتاپ
+                if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
+                    showPhantomModal();
+                    return;
+                }
+                
+                await window.solana.disconnect();
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+                
+                console.log("New wallet connected:", walletAddress);
+                
+                // Send to backend
+                const result = await fetch('/airdrop/connect_wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        wallet: walletAddress
+                    })
+                });
+                
+                if (result.ok) {
+                    const data = await result.json();
+                    console.log("New wallet saved to backend:", data);
+                    
+                    updateWalletUI(walletAddress, true);
+                    showToast("Wallet changed successfully!", "success");
+                } else {
+                    showToast("Error changing wallet", "error");
+                }
+                
+            } catch (error) {
+                console.error("Wallet change failed:", error);
+                if (error.code === 4001) {
+                    showToast("Change cancelled by user", "info");
+                } else {
+                    showToast("Failed to change wallet", "error");
+                }
             }
         }
 
         async function disconnectWallet() {
-            console.log("Disconnect wallet clicked");
-            showToast("Disconnecting wallet...", "info");
-            
-            // بستن dropdown
-            const dropdownContent = document.getElementById('wallet-dropdown-content');
-            if (dropdownContent) {
-                dropdownContent.classList.remove('show');
-            }
-            
-            // قطع اتصال
-            if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
-                try {
-                    await window.solana.disconnect();
-                    console.log("Phantom disconnected");
-                } catch (error) {
-                    console.error("Error disconnecting Phantom:", error);
+            try {
+                console.log("Disconnect wallet clicked");
+                showToast("Disconnecting wallet...", "info");
+                
+                // بستن dropdown
+                const dropdownContent = document.getElementById('wallet-dropdown-content');
+                if (dropdownContent) {
+                    dropdownContent.classList.remove('show');
                 }
+                
+                // قطع اتصال
+                if (typeof window.solana !== 'undefined' && window.solana.isPhantom) {
+                    try {
+                        await window.solana.disconnect();
+                        console.log("Phantom disconnected");
+                    } catch (error) {
+                        console.error("Error disconnecting Phantom:", error);
+                    }
+                }
+                
+                // Update UI and state
+                updateWalletUI('', false);
+                showToast("Wallet disconnected successfully!", "success");
+                
+            } catch (error) {
+                console.error("Disconnect error:", error);
+                showToast("Disconnection completed", "info");
+                updateWalletUI('', false);
             }
-            
-            // Update UI and state
-            updateWalletUI('', false);
-            showToast("Wallet disconnected successfully!", "success");
         }
 
         function payCommission() {
-            console.log("Pay commission clicked");
-            
-            if (!connectedWallet) {
-                showToast("Please connect your wallet first!", "error");
-                return;
-            }
-            
-            if (tasksCompleted.pay) {
-                showToast("Commission already paid!", "info");
-                return;
-            }
-            
-            showCommissionModal();
+            safeExecute(() => {
+                console.log("Pay commission clicked");
+                
+                if (!connectedWallet) {
+                    showToast("Please connect your wallet first!", "error");
+                    return;
+                }
+                
+                if (tasksCompleted.pay) {
+                    showToast("Commission already paid!", "info");
+                    return;
+                }
+                
+                showCommissionModal();
+            });
         }
 
         function showPhantomModal() {
-            const modal = document.getElementById('phantom-modal');
-            if (modal) {
-                modal.classList.add('show');
-            }
+            safeExecute(() => {
+                const modal = document.getElementById('phantom-modal');
+                if (modal) {
+                    modal.classList.add('show');
+                }
+            });
         }
 
         function closePhantomModal() {
-            const modal = document.getElementById('phantom-modal');
-            if (modal) {
-                modal.classList.remove('show');
-            }
+            safeExecute(() => {
+                const modal = document.getElementById('phantom-modal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            });
         }
 
         function showCommissionModal() {
-            const modal = document.getElementById('commission-modal');
-            if (modal) {
-                modal.classList.add('show');
-            }
+            safeExecute(() => {
+                const modal = document.getElementById('commission-modal');
+                if (modal) {
+                    modal.classList.add('show');
+                }
+            });
         }
 
         function closeCommissionModal() {
-            const modal = document.getElementById('commission-modal');
-            if (modal) {
-                modal.classList.remove('show');
-            }
+            safeExecute(() => {
+                const modal = document.getElementById('commission-modal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            });
         }
 
         function openPhantomApp() {
-            // Try to open Phantom app
-            if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-                window.location.href = "phantom://browse/" + encodeURIComponent(window.location.href);
+            safeExecute(() => {
+                console.log("Opening Phantom app...");
                 
-                setTimeout(() => {
+                // Try to open Phantom app
+                if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                    const currentUrl = encodeURIComponent(window.location.href);
+                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
+                    window.location.href = phantomUrl;
+                } else {
+                    showToast("Please install Phantom extension", "info");
                     window.open("https://phantom.app/download", "_blank");
-                }, 2000);
-            } else {
-                showToast("Please install Phantom extension for your browser", "info");
-                window.open("https://phantom.app/download", "_blank");
-            }
-            
-            closePhantomModal();
+                }
+                
+                closePhantomModal();
+            });
         }
 
         async function processCommissionPayment() {
-            console.log("Processing commission payment...");
-            
-            if (!window.solana || !window.solana.isPhantom) {
-                showToast("Phantom wallet not found!", "error");
-                return;
-            }
-            
-            if (!window.solana.isConnected) {
-                showToast("Please connect your wallet first!", "error");
-                return;
-            }
-            
             try {
+                console.log("Processing commission payment...");
+                
                 // Set loading state
                 const commissionButton = document.getElementById('commission-button');
                 const commissionIcon = document.getElementById('commission-icon');
-                commissionButton?.classList.add('loading');
-                commissionIcon?.classList.remove('fa-chevron-right');
-                commissionIcon?.classList.add('fa-spinner', 'fa-spin');
+                if (commissionButton) commissionButton.classList.add('loading');
+                if (commissionIcon) {
+                    commissionIcon.classList.remove('fa-chevron-right');
+                    commissionIcon.classList.add('fa-spinner', 'fa-spin');
+                }
                 
                 showToast("Processing payment...", "info");
                 
-                // Create transaction
-                const connection = new solanaWeb3.Connection(SOLANA_RPC_URL);
+                // بررسی مرورگر موبایل
+                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // برای موبایل، به Phantom ریدایرکت کن
+                    const currentUrl = encodeURIComponent(window.location.href);
+                    const phantomUrl = `https://phantom.app/ul/browse/${currentUrl}`;
+                    window.location.href = phantomUrl;
+                    return;
+                }
+                
+                // بررسی دقیق‌تر Phantom
+                if (typeof window.solana === 'undefined' || !window.solana.isPhantom) {
+                    showToast("Phantom wallet not found!", "error");
+                    closeCommissionModal();
+                    showPhantomModal();
+                    return;
+                }
+                
+                if (!window.solana.isConnected) {
+                    showToast("Connecting to Phantom...", "info");
+                    await window.solana.connect();
+                }
+                
+                // Create transaction using Solana Web3.js
+                const connection = new solanaWeb3.Connection(SOLANA_RPC_URL, 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
                 
                 // Add transfer instruction
@@ -832,6 +948,8 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = window.solana.publicKey;
                 
+                showToast("Please confirm transaction in Phantom...", "info");
+                
                 // Sign and send transaction
                 const signedTransaction = await window.solana.signTransaction(transaction);
                 const signature = await connection.sendRawTransaction(signedTransaction.serialize());
@@ -840,7 +958,11 @@
                 showToast("Payment sent! Confirming...", "info");
                 
                 // Wait for confirmation
-                await connection.confirmTransaction(signature);
+                const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+                
+                if (confirmation.value.err) {
+                    throw new Error("Transaction failed on blockchain");
+                }
                 
                 console.log("Transaction confirmed:", signature);
                 
@@ -861,134 +983,183 @@
                     const data = await result.json();
                     console.log("Commission confirmed by backend:", data);
                     
+                    // Update UI
                     tasksCompleted.pay = true;
-                    updateCommissionUI();
+                    updateCommissionUI(true);
                     showToast("Commission paid successfully!", "success");
                     closeCommissionModal();
                 } else {
                     const errorData = await result.json();
                     console.error("Backend confirmation failed:", errorData);
-                    showToast("Payment sent but confirmation failed: " + errorData.detail, "error");
+                    showToast("Payment sent but confirmation failed", "error");
                 }
                 
             } catch (error) {
                 console.error("Commission payment failed:", error);
-                showToast("Payment failed: " + error.message, "error");
+                
+                if (error.code === 4001 || error.message.includes("User rejected")) {
+                    showToast("Payment cancelled by user", "info");
+                } else if (error.message.includes("Insufficient funds")) {
+                    showToast("Insufficient funds for transaction", "error");
+                } else {
+                    showToast("Payment failed", "error");
+                }
             } finally {
                 // Remove loading state
                 const commissionButton = document.getElementById('commission-button');
                 const commissionIcon = document.getElementById('commission-icon');
-                commissionButton?.classList.remove('loading');
-                commissionIcon?.classList.remove('fa-spinner', 'fa-spin');
-                commissionIcon?.classList.add('fa-chevron-right');
+                if (commissionButton) commissionButton.classList.remove('loading');
+                if (commissionIcon) {
+                    commissionIcon.classList.remove('fa-spinner', 'fa-spin');
+                    commissionIcon.classList.add('fa-chevron-right');
+                }
             }
         }
 
-        function updateCommissionUI() {
-            const commissionBox = document.getElementById('pay-commission');
-            const commissionButton = commissionBox?.querySelector('.task-button');
-            const commissionIcon = commissionButton?.querySelector('.right-icon');
-            const commissionText = commissionButton?.querySelector('.left-text');
-            
-            if (tasksCompleted.pay === true) {
-                commissionBox?.classList.add('completed');
-                commissionButton?.classList.add('commission-paid');
-                commissionIcon?.classList.remove('fa-chevron-right');
-                commissionIcon?.classList.add('fa-check');
-                commissionText.textContent = "Commission Paid";
-                console.log("Commission payment marked as complete");
-            }
+        // تابع جدید برای بروزرسانی UI کمیسیون
+        function updateCommissionUI(isPaid) {
+            safeExecute(() => {
+                const commissionBox = document.getElementById('pay-commission');
+                const commissionButton = commissionBox?.querySelector('.task-button');
+                const commissionIcon = commissionButton?.querySelector('.right-icon');
+                const commissionText = commissionButton?.querySelector('.left-text');
+                
+                if (isPaid) {
+                    commissionBox?.classList.add('completed');
+                    commissionButton?.classList.add('commission-paid');
+                    commissionIcon?.classList.remove('fa-chevron-right');
+                    commissionIcon?.classList.add('fa-check');
+                    if (commissionText) {
+                        commissionText.textContent = "Commission Paid";
+                    }
+                    console.log("Commission UI updated to paid state");
+                }
+            });
         }
 
-        function updateInviteUI() {
-            const inviteBox = document.getElementById('inviting-friends');
-            const inviteButton = inviteBox?.querySelector('.task-button');
-            const inviteIcon = inviteButton?.querySelector('.right-icon');
-            
-            if (tasksCompleted.invite === true) {
-                inviteBox?.classList.add('completed');
-                inviteButton?.classList.add('friends-invited');
-                inviteIcon?.classList.remove('fa-chevron-right');
-                inviteIcon?.classList.add('fa-check');
-                console.log("Friends invitation marked as complete");
-            }
-        }
-
-        function updateTaskUI() {
-            const taskBox = document.getElementById('task-completion');
-            const taskButton = taskBox?.querySelector('.task-button');
-            const taskIcon = taskButton?.querySelector('.right-icon');
-            
-            if (tasksCompleted.task === true) {
-                taskBox?.classList.add('completed');
-                taskButton?.classList.add('tasks-completed');
-                taskIcon?.classList.remove('fa-chevron-right');
-                taskIcon?.classList.add('fa-check');
-                console.log("Tasks completion marked as complete");
-            }
+        // بروزرسانی تابع updateTasksUI برای شامل کردن commission
+        function updateTasksUI() {
+            safeExecute(() => {
+                console.log("Updating tasks UI...", tasksCompleted);
+                
+                // Tasks completion
+                const taskBox = document.getElementById('task-completion');
+                const taskButton = taskBox?.querySelector('.task-button');
+                const taskIcon = taskButton?.querySelector('.right-icon');
+                
+                if (tasksCompleted.task === true) {
+                    taskBox?.classList.add('completed');
+                    taskButton?.classList.add('tasks-completed');
+                    taskIcon?.classList.remove('fa-chevron-right');
+                    taskIcon?.classList.add('fa-check');
+                    console.log("Tasks completion marked as complete");
+                }
+                
+                // Inviting friends
+                const inviteBox = document.getElementById('inviting-friends');
+                const inviteButton = inviteBox?.querySelector('.task-button');
+                const inviteIcon = inviteButton?.querySelector('.right-icon');
+                
+                if (tasksCompleted.invite === true) {
+                    inviteBox?.classList.add('completed');
+                    inviteButton?.classList.add('friends-invited');
+                    inviteIcon?.classList.remove('fa-chevron-right');
+                    inviteIcon?.classList.add('fa-check');
+                    console.log("Friends invitation marked as complete");
+                }
+                
+                // Wallet connection
+                updateWalletUI(connectedWallet, tasksCompleted.wallet === true);
+                
+                // Commission payment
+                updateCommissionUI(tasksCompleted.pay === true);
+                
+                console.log("Tasks UI update complete");
+            });
         }
 
         // Countdown function
         function initCountdown() {
-            const countdownDate = new Date("2025-12-31T23:59:59").getTime();
-            
-            const timer = setInterval(function() {
-                const now = new Date().getTime();
-                const distance = countdownDate - now;
+            safeExecute(() => {
+                const countdownDate = new Date("2025-12-31T23:59:59").getTime();
                 
-                if (distance < 0) {
-                    clearInterval(timer);
-                    document.getElementById("days").innerHTML = "00";
-                    document.getElementById("hours").innerHTML = "00";
-                    document.getElementById("minutes").innerHTML = "00";
-                    document.getElementById("seconds").innerHTML = "00";
-                    return;
-                }
-                
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                
-                document.getElementById("days").innerHTML = String(days).padStart(2, '0');
-                document.getElementById("hours").innerHTML = String(hours).padStart(2, '0');
-                document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
-                document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
-            }, 1000);
+                const timer = setInterval(function() {
+                    try {
+                        const now = new Date().getTime();
+                        const distance = countdownDate - now;
+                        
+                        if (distance < 0) {
+                            clearInterval(timer);
+                            const days = document.getElementById("days");
+                            const hours = document.getElementById("hours");
+                            const minutes = document.getElementById("minutes");
+                            const seconds = document.getElementById("seconds");
+                            
+                            if (days) days.innerHTML = "00";
+                            if (hours) hours.innerHTML = "00";
+                            if (minutes) minutes.innerHTML = "00";
+                            if (seconds) seconds.innerHTML = "00";
+                            return;
+                        }
+                        
+                        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                        
+                        const daysEl = document.getElementById("days");
+                        const hoursEl = document.getElementById("hours");
+                        const minutesEl = document.getElementById("minutes");
+                        const secondsEl = document.getElementById("seconds");
+                        
+                        if (daysEl) daysEl.innerHTML = String(days).padStart(2, '0');
+                        if (hoursEl) hoursEl.innerHTML = String(hours).padStart(2, '0');
+                        if (minutesEl) minutesEl.innerHTML = String(minutes).padStart(2, '0');
+                        if (secondsEl) secondsEl.innerHTML = String(seconds).padStart(2, '0');
+                    } catch (error) {
+                        console.error('Countdown error:', error);
+                    }
+                }, 1000);
+            });
         }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM loaded");
-            initCountdown();
-            
-            // Update UI based on initial states
-            if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
-                updateWalletUI(INITIAL_WALLET_ADDRESS, true);
-            }
-            
-            updateTaskUI();
-            updateInviteUI();
-            updateCommissionUI();
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(event) {
-                const dropdown = document.getElementById('wallet-dropdown');
-                const dropdownContent = document.getElementById('wallet-dropdown-content');
-                if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
-                    dropdownContent.classList.remove('show');
+            safeExecute(() => {
+                console.log("DOM loaded");
+                initCountdown();
+                
+                // بروزرسانی UI براساس وضعیت اولیه
+                updateTasksUI();
+                
+                // بررسی وضعیت اتصال wallet
+                if (INITIAL_WALLET_CONNECTED && INITIAL_WALLET_ADDRESS) {
+                    updateWalletUI(INITIAL_WALLET_ADDRESS, true);
                 }
                 
-                // Close modals when clicking outside
-                const phantomModal = document.getElementById('phantom-modal');
-                if (phantomModal && event.target === phantomModal) {
-                    closePhantomModal();
-                }
-                
-                const commissionModal = document.getElementById('commission-modal');
-                if (commissionModal && event.target === commissionModal) {
-                    closeCommissionModal();
-                }
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(event) {
+                    try {
+                        const dropdown = document.getElementById('wallet-dropdown');
+                        const dropdownContent = document.getElementById('wallet-dropdown-content');
+                        if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
+                            dropdownContent.classList.remove('show');
+                        }
+                        
+                        // Close modals when clicking outside
+                        const phantomModal = document.getElementById('phantom-modal');
+                        if (phantomModal && event.target === phantomModal) {
+                            closePhantomModal();
+                        }
+                        
+                        const commissionModal = document.getElementById('commission-modal');
+                        if (commissionModal && event.target === commissionModal) {
+                            closeCommissionModal();
+                        }
+                    } catch (error) {
+                        console.error('Click handler error:', error);
+                    }
+                });
             });
         });
     </script>
