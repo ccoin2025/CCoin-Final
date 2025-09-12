@@ -29,7 +29,7 @@ async def wallet_browser_connect_old(request: Request):
 async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
     """بررسی وضعیت اتصال wallet"""
     try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
         if user and user.wallet_address:
             return JSONResponse({
                 "connected": True,
@@ -55,7 +55,7 @@ async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
 async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
     """بررسی وضعیت تسک‌ها و دعوت دوستان"""
     try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
         if not user:
             return JSONResponse({
                 "tasks_completed": False,
@@ -87,7 +87,7 @@ async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
 async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
     """بررسی وضعیت پرداخت کمیسیون"""
     try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
         if user and user.commission_paid:
             return JSONResponse({
                 "paid": True,
@@ -117,13 +117,12 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
     """ایجاد درخواست پرداخت کمیسیون"""
     try:
         data = await request.json()
-        telegram_id = data.get("telegram_id")
-        wallet_address = data.get("wallet_address")
+        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
 
-        if not telegram_id or not wallet_address:
+        if not telegram_id:
             return JSONResponse({
                 "success": False,
-                "error": "Missing telegram_id or wallet_address"
+                "error": "Missing telegram_id"
             })
 
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -139,15 +138,25 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
                 "error": "Commission already paid"
             })
 
+        if not user.wallet_address:
+            return JSONResponse({
+                "success": False,
+                "error": "Wallet not connected"
+            })
+
         # مبلغ کمیسیون (مثلاً 0.01 SOL)
         commission_amount = 0.01  # SOL
         recipient_address = os.getenv("ADMIN_WALLET", "So11111111111111111111111111111111111111112")
+
+        # URL callback برای بازگشت از Phantom
+        callback_url = f"{request.base_url}commission/callback?telegram_id={telegram_id}"
 
         return JSONResponse({
             "success": True,
             "amount": commission_amount,
             "recipient": recipient_address,
-            "reference": telegram_id
+            "reference": telegram_id,
+            "callback_url": callback_url
         })
 
     except Exception as e:
@@ -156,6 +165,15 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
             "success": False,
             "error": f"Server error: {str(e)}"
         })
+
+@router.get("/commission/browser/pay")
+async def commission_browser_pay(request: Request):
+    """صفحه پرداخت کمیسیون در مرورگر خارجی"""
+    telegram_id = request.query_params.get("telegram_id")
+    return templates.TemplateResponse("commission_browser_pay.html", {
+        "request": request,
+        "telegram_id": telegram_id
+    })
 
 @router.get("/commission/callback")
 async def commission_callback(request: Request, db: Session = Depends(get_db)):
@@ -172,7 +190,7 @@ async def commission_callback(request: Request, db: Session = Depends(get_db)):
                 "telegram_id": telegram_id
             })
 
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
         if not user:
             return templates.TemplateResponse("commission_callback.html", {
                 "request": request,
@@ -216,7 +234,7 @@ async def save_wallet(request: Request, db: Session = Depends(get_db)):
     """ذخیره آدرس wallet - بهبود یافته"""
     try:
         data = await request.json()
-        telegram_id = data.get("telegram_id")
+        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
         wallet_address = data.get("wallet_address")
 
         if not telegram_id or not wallet_address:
@@ -260,7 +278,7 @@ async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
     """قطع اتصال wallet"""
     try:
         data = await request.json()
-        telegram_id = data.get("telegram_id")
+        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
 
         if not telegram_id:
             return JSONResponse({
@@ -330,7 +348,7 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
 
         # موفقیت - ذخیره اطلاعات
         if telegram_id and phantom_encryption_public_key:
-            user = db.query(User).filter(User.telegram_id == telegram_id).first()
+            user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
             if user:
                 try:
                     # Phantom public key معمولاً در phantom_encryption_public_key یا data قرار دارد
