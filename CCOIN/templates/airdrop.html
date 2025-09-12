@@ -414,14 +414,14 @@
             <div id="task-completion" class="task-box">
                 <button onclick="handleTaskCompletion()" class="task-button">
                     <span class="left-text">Tasks Completion</span>
-                    <i class="fas fa-chevron-right right-icon" id="tasks-icon"></i>
+                    <i class="fas fa-chevron-right right-icon"></i>
                 </button>
             </div>
 
             <div id="inviting-friends" class="task-box">
                 <button onclick="handleInviteCheck()" class="task-button">
                     <span class="left-text">Inviting Friends</span>
-                    <i class="fas fa-chevron-right right-icon" id="friends-icon"></i>
+                    <i class="fas fa-chevron-right right-icon"></i>
                 </button>
             </div>
 
@@ -455,15 +455,8 @@
             <!-- پرداخت کمیسیون -->
             <div id="pay-commission" class="task-box">
                 <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
-                    <span class="left-text">Pay for Commission (0.01 SOL)</span>
+                    <span class="left-text">Pay for Commission</span>
                     <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
-                </button>
-            </div>
-
-            <div class="airdrop-box">
-                <button class="airdrop-btn" onclick="claimAirdrop()">
-                    <i class="fas fa-gift"></i>
-                    Claim Airdrop
                 </button>
             </div>
         </div>
@@ -636,7 +629,7 @@
             }
         }
 
-        // Update wallet UI
+        // Update wallet UI - اصلاح شده
         function updateWalletUI(data) {
             const walletButton = document.getElementById('wallet-button-text');
             const walletIcon = document.getElementById('wallet-icon');
@@ -644,7 +637,8 @@
             const walletAddress = document.getElementById('wallet-address-display');
 
             if (data.connected && data.address) {
-                walletButton.textContent = `Connected: ${data.address.substring(0, 8)}...${data.address.substring(data.address.length - 6)}`;
+                // فقط متن "Wallet Connected" نمایش داده شود
+                walletButton.textContent = 'Wallet Connected';
                 walletIcon.className = 'fas fa-check right-icon';
                 walletIcon.style.color = '#28a745';
                 walletBox.classList.add('completed');
@@ -688,7 +682,7 @@
             }
         }
 
-        // Update commission UI
+        // Update commission UI - اصلاح شده
         function updateCommissionUI(data) {
             const commissionButton = document.querySelector('#pay-commission .task-button');
             const commissionText = document.querySelector('#pay-commission .left-text');
@@ -696,13 +690,13 @@
             const commissionBox = document.getElementById('pay-commission');
 
             if (data.paid) {
-                commissionText.textContent = 'Commission Paid ✓';
+                commissionText.textContent = 'Commission Paid';
                 commissionIcon.className = 'fas fa-check right-icon';
                 commissionIcon.style.color = '#28a745';
                 commissionBox.classList.add('completed');
                 commissionButton.disabled = true;
             } else {
-                commissionText.textContent = 'Pay for Commission (0.01 SOL)';
+                commissionText.textContent = 'Pay for Commission';
                 commissionIcon.className = 'fas fa-chevron-right right-icon';
                 commissionIcon.style.color = '';
                 commissionBox.classList.remove('completed');
@@ -710,7 +704,7 @@
             }
         }
 
-        // Handle task completion - اصلاح شده
+        // Handle task completion
         function handleTaskCompletion() {
             if (window.Telegram?.WebApp) {
                 window.Telegram.WebApp.openLink('/earn');
@@ -719,7 +713,7 @@
             }
         }
 
-        // Handle invite check - اصلاح شده
+        // Handle invite check
         function handleInviteCheck() {
             if (window.Telegram?.WebApp) {
                 window.Telegram.WebApp.openLink('/friends');
@@ -728,7 +722,7 @@
             }
         }
 
-        // Handle wallet dropdown toggle - اصلاح شده
+        // Handle wallet dropdown toggle
         function toggleWalletDropdown() {
             if (walletConnected) {
                 const dropdown = document.getElementById('wallet-dropdown-content');
@@ -741,15 +735,14 @@
                     }
                 });
             } else {
-                // اگر کیف پول متصل نیست، modal را نمایش دهید
                 showPhantomModal();
             }
         }
 
-        // Handle commission payment - تابع جدید اضافه شده
+        // Handle commission payment
         function handleCommissionPayment() {
             if (commissionPaid) {
-                return; // قبلاً پرداخت شده
+                return;
             }
             showCommissionModal();
         }
@@ -826,33 +819,6 @@
             closeCommissionModal();
         }
 
-        // اضافه کردن این تابع به script های موجود
-       function handleCommissionPayment() {
-           showCommissionModal();
-       }
-
-        // Claim airdrop
-        function claimAirdrop() {
-            if (!walletConnected) {
-                alert('Please connect your wallet first!');
-                return;
-            }
-            if (!tasksCompleted) {
-                alert('Please complete at least one task first!');
-                return;
-            }
-            if (!friendsInvited) {
-                alert('Please invite at least one friend first!');
-                return;
-            }
-            if (!commissionPaid) {
-                alert('Please pay the commission first!');
-                return;
-            }
-
-            alert('Airdrop claim feature coming soon!');
-        }
-
         // Check URL parameters for callback handling
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('wallet_connected') === 'true') {
@@ -861,7 +827,6 @@
         if (urlParams.get('commission_paid') === 'true') {
             checkCommissionStatus();
         }
-        
     </script>
 </body>
 </html>
