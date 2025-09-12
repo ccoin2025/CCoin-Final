@@ -11,8 +11,17 @@ import os
 router = APIRouter()
 templates = Jinja2Templates(directory="CCOIN/templates")
 
-@router.get("/wallet-browser-connect")
+@router.get("/wallet/browser/connect")
 async def wallet_browser_connect(request: Request):
+    """صفحه اتصال کیف پول در مرورگر خارجی"""
+    telegram_id = request.query_params.get("telegram_id")
+    return templates.TemplateResponse("wallet_browser_connect.html", {
+        "request": request,
+        "telegram_id": telegram_id
+    })
+
+@router.get("/wallet-browser-connect")
+async def wallet_browser_connect_old(request: Request):
     """صفحه اتصال کیف پول - ساده‌شده"""
     return templates.TemplateResponse("wallet_browser_connect.html", {"request": request})
 
@@ -38,6 +47,38 @@ async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
         return JSONResponse({
             "connected": False,
             "address": None,
+            "success": False,
+            "error": str(e)
+        })
+
+@router.get("/api/tasks/status")
+async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت تسک‌ها و دعوت دوستان"""
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            return JSONResponse({
+                "tasks_completed": False,
+                "friends_invited": False,
+                "success": True
+            })
+        
+        # بررسی تکمیل تسک‌ها
+        tasks_completed = any(task.completed for task in user.tasks) if user.tasks else False
+        
+        # بررسی دعوت دوستان
+        friends_invited = len(user.referrals) > 0 if user.referrals else False
+        
+        return JSONResponse({
+            "tasks_completed": tasks_completed,
+            "friends_invited": friends_invited,
+            "success": True
+        })
+    except Exception as e:
+        print(f"Error checking tasks status: {e}")
+        return JSONResponse({
+            "tasks_completed": False,
+            "friends_invited": False,
             "success": False,
             "error": str(e)
         })
@@ -78,7 +119,7 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
         data = await request.json()
         telegram_id = data.get("telegram_id")
         wallet_address = data.get("wallet_address")
-        
+
         if not telegram_id or not wallet_address:
             return JSONResponse({
                 "success": False,
@@ -101,7 +142,7 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
         # مبلغ کمیسیون (مثلاً 0.01 SOL)
         commission_amount = 0.01  # SOL
         recipient_address = os.getenv("ADMIN_WALLET", "So11111111111111111111111111111111111111112")
-        
+
         return JSONResponse({
             "success": True,
             "amount": commission_amount,
@@ -122,7 +163,7 @@ async def commission_callback(request: Request, db: Session = Depends(get_db)):
     try:
         telegram_id = request.query_params.get("telegram_id")
         signature = request.query_params.get("signature")
-        
+
         if not telegram_id:
             return templates.TemplateResponse("commission_callback.html", {
                 "request": request,
@@ -146,7 +187,7 @@ async def commission_callback(request: Request, db: Session = Depends(get_db)):
             user.commission_payment_date = datetime.utcnow()
             user.commission_transaction_hash = signature
             db.commit()
-            
+
             return templates.TemplateResponse("commission_callback.html", {
                 "request": request,
                 "success": True,
@@ -177,7 +218,7 @@ async def save_wallet(request: Request, db: Session = Depends(get_db)):
         data = await request.json()
         telegram_id = data.get("telegram_id")
         wallet_address = data.get("wallet_address")
-        
+
         if not telegram_id or not wallet_address:
             return JSONResponse({
                 "success": False,
@@ -220,7 +261,7 @@ async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
     try:
         data = await request.json()
         telegram_id = data.get("telegram_id")
-        
+
         if not telegram_id:
             return JSONResponse({
                 "success": False,
@@ -263,13 +304,13 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
     try:
         # دریافت پارامترهای بازگشتی از Phantom
         telegram_id = request.query_params.get("telegram_id")
-        
+
         # پارامترهای موفقیت
         phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
         nonce = request.query_params.get("nonce")
         data = request.query_params.get("data")
         session = request.query_params.get("session")
-        
+
         # پارامترهای خطا
         error_code = request.query_params.get("errorCode")
         error_message = request.query_params.get("errorMessage")
@@ -294,23 +335,23 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
                 try:
                     # Phantom public key معمولاً در phantom_encryption_public_key یا data قرار دارد
                     wallet_address = phantom_encryption_public_key
-                    
+
                     # اگر data موجود است، سعی کنید decode کنید
                     if data and nonce:
                         # برای پیاده‌سازی کامل، باید data را decrypt کنید
                         # فعلاً از phantom_encryption_public_key استفاده می‌کنیم
                         print(f"Encrypted data received: {data}")
-                    
+
                     user.wallet_address = wallet_address
                     db.commit()
-                    
+
                     return templates.TemplateResponse("wallet_callback.html", {
                         "request": request,
                         "success": True,
                         "wallet_address": wallet_address,
                         "telegram_id": telegram_id
                     })
-                    
+
                 except Exception as decode_error:
                     print(f"Decode error: {decode_error}")
                     return templates.TemplateResponse("wallet_callback.html", {
@@ -319,7 +360,7 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
                         "error": f"Failed to process wallet data: {str(decode_error)}",
                         "telegram_id": telegram_id
                     })
-        
+
         # پارامترهای ناقص
         return templates.TemplateResponse("wallet_callback.html", {
             "request": request,
@@ -327,7 +368,7 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
             "error": "Incomplete connection data received",
             "telegram_id": telegram_id
         })
-        
+
     except Exception as e:
         print(f"Callback error: {e}")
         return templates.TemplateResponse("wallet_callback.html", {
