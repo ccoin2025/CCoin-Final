@@ -492,6 +492,69 @@
             }
         }
 
+        // بررسی وضعیت تسک‌ها و دعوت دوستان
+        async function checkTasksStatus() {
+            try {
+                const response = await fetch(`/api/tasks/status?telegram_id=${USER_ID}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.tasks_completed) {
+                        setTaskCompleted('task-completion', 'Tasks Completion');
+                    }
+                    
+                    if (data.friends_invited) {
+                        setTaskCompleted('inviting-friends', 'Inviting Friends');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking tasks status:', error);
+            }
+        }
+
+        // بررسی وضعیت کمیسیون
+        async function checkCommissionStatus() {
+            try {
+                const response = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
+                const data = await response.json();
+                
+                if (data.success && data.paid) {
+                    setCommissionPaid();
+                }
+            } catch (error) {
+                console.error('Error checking commission status:', error);
+            }
+        }
+
+        // تنظیم وضعیت کامل شده برای تسک
+        function setTaskCompleted(taskId, taskText) {
+            const taskBox = document.getElementById(taskId);
+            const taskButton = taskBox.querySelector('.task-button');
+            const leftText = taskButton.querySelector('.left-text');
+            const rightIcon = taskButton.querySelector('.right-icon');
+            
+            leftText.textContent = taskText;
+            rightIcon.className = 'fas fa-check right-icon';
+            rightIcon.style.color = '#28a745';
+            
+            taskBox.classList.add('completed');
+            taskButton.classList.add('tasks-completed');
+        }
+
+        // تنظیم وضعیت پرداخت شده برای کمیسیون
+        function setCommissionPaid() {
+            const buttonText = document.getElementById('commission-button-text');
+            const buttonIcon = document.getElementById('commission-icon');
+            const button = document.getElementById('commission-button');
+            const taskBox = document.getElementById('pay-commission');
+            
+            buttonText.textContent = 'Commission Paid';
+            buttonIcon.className = 'fas fa-check right-icon';
+            buttonIcon.style.color = '#28a745';
+            button.classList.add('commission-paid');
+            taskBox.classList.add('completed');
+        }
+
         // تنظیم وضعیت متصل برای کیف پول
         function setWalletConnected(address) {
             isWalletConnected = true;
@@ -659,13 +722,15 @@
 
         // مدیریت سایر تسک‌ها
         async function handleTaskCompletion() {
-            // کد مربوط به تکمیل تسک‌ها
             showToast('Checking task completion...', 'info');
+            // هدایت به صفحه تسک‌ها
+            window.location.href = '/earn';
         }
 
         async function handleInviteCheck() {
-            // کد مربوط به دعوت دوستان
             showToast('Checking friend invitations...', 'info');
+            // هدایت به صفحه دوستان
+            window.location.href = '/friends';
         }
 
         async function payCommission() {
@@ -690,23 +755,20 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ telegram_id: USER_ID })
+                    body: JSON.stringify({ 
+                        telegram_id: USER_ID,
+                        wallet_address: currentWalletAddress
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
                     // پرداخت موفق
-                    buttonText.textContent = 'Commission Paid';
-                    buttonIcon.className = 'fas fa-check right-icon';
-                    buttonIcon.style.color = '#28a745';
-                    button.classList.remove('loading');
-                    button.classList.add('commission-paid');
-                    document.getElementById('pay-commission').classList.add('completed');
-                    
+                    setCommissionPaid();
                     showToast('Commission paid successfully!', 'success');
                 } else {
-                    throw new Error(data.message || 'Payment failed');
+                    throw new Error(data.error || 'Payment failed');
                 }
             } catch (error) {
                 console.error('Commission payment error:', error);
@@ -753,8 +815,14 @@
 
         // راه‌اندازی اولیه
         document.addEventListener('DOMContentLoaded', function() {
-            // بررسی اتصال کیف پول
+            // بررسی وضعیت کیف پول
             checkWalletConnection();
+            
+            // بررسی وضعیت تسک‌ها
+            checkTasksStatus();
+            
+            // بررسی وضعیت کمیسیون
+            checkCommissionStatus();
             
             // شروع شمارش معکوس
             startCountdown();
@@ -769,7 +837,11 @@
         // مدیریت بازگشت از صفحه اتصال کیف پول
         window.addEventListener('focus', function() {
             // بررسی مجدد وضعیت اتصال هنگام بازگشت به صفحه
-            setTimeout(checkWalletConnection, 1000);
+            setTimeout(() => {
+                checkWalletConnection();
+                checkTasksStatus();
+                checkCommissionStatus();
+            }, 1000);
         });
     </script>
 </body>
