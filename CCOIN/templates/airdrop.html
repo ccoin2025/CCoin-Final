@@ -826,6 +826,11 @@
             closeCommissionModal();
         }
 
+        // اضافه کردن این تابع به script های موجود
+       function handleCommissionPayment() {
+           showCommissionModal();
+       }
+
         // Claim airdrop
         function claimAirdrop() {
             if (!walletConnected) {
@@ -856,6 +861,7 @@
         if (urlParams.get('commission_paid') === 'true') {
             checkCommissionStatus();
         }
+        
     </script>
 </body>
 </html>
