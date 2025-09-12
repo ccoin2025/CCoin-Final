@@ -6,8 +6,6 @@
     <title>Pay Commission</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://unpkg.com/bs58@4.0.1/index.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -105,23 +103,48 @@
 
                 payBtn.textContent = 'Opening Phantom App...';
 
-                // ایجاد deeplink ساده برای Phantom
-                const amount = Math.floor(paymentData.amount * 1000000000); // تبدیل SOL به lamports
-                const recipientAddress = paymentData.recipient;
-                const callbackUrl = paymentData.callback_url;
-
-                // پارامترهای ساده برای Phantom deeplink
-                const params = new URLSearchParams({
-                    cluster: 'devnet',
-                    redirect_link: callbackUrl
+                // ایجاد تراکنش کامل برای Phantom
+                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+                const amount = Math.floor(paymentData.amount * solanaWeb3.LAMPORTS_PER_SOL); // 0.01 SOL
+                
+                // آدرس گیرنده
+                const recipientPubkey = new solanaWeb3.PublicKey(paymentData.recipient);
+                const senderPubkey = new solanaWeb3.PublicKey('11111111111111111111111111111112'); // placeholder
+                
+                // ایجاد instruction
+                const transferInstruction = solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: senderPubkey,
+                    toPubkey: recipientPubkey,
+                    lamports: amount
                 });
 
-                // استفاده از universal link برای بهتر کار کردن
-                const phantomUrl = `https://phantom.app/ul/v1/browse/${encodeURIComponent(`solana:${recipientAddress}?amount=${amount}&reference=${USER_ID}&redirect=${encodeURIComponent(callbackUrl)}`)}`;
+                // ایجاد تراکنش
+                const transaction = new solanaWeb3.Transaction().add(transferInstruction);
+                
+                // دریافت recent blockhash
+                const { blockhash } = await connection.getLatestBlockhash();
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = senderPubkey;
 
-                console.log('Opening Phantom with URL:', phantomUrl);
+                // Serialize کردن تراکنش
+                const serializedTx = transaction.serialize({
+                    requireAllSignatures: false,
+                    verifySignatures: false
+                });
 
-                // مستقیماً با Phantom deeplink
+                // تبدیل به base64
+                const base64Transaction = btoa(String.fromCharCode(...serializedTx));
+
+                // ایجاد Phantom URL با تراکنش واقعی
+                const phantomUrl = `phantom://v1/signAndSendTransaction?` + 
+                    `dapp_encryption_public_key=temp_key&` +
+                    `nonce=temp_nonce&` +
+                    `redirect_link=${encodeURIComponent(paymentData.callback_url)}&` +
+                    `payload=${encodeURIComponent(base64Transaction)}`;
+
+                console.log('Opening Phantom with transaction:', phantomUrl);
+
+                // هدایت به Phantom
                 setTimeout(() => {
                     window.location.href = phantomUrl;
                 }, 500);
@@ -164,7 +187,7 @@
             } catch (error) {
                 console.error('Check payment error:', error);
                 
-                // اگر بعد از 30 ثانیه هنوز پرداخت تایید نشد
+                // timeout after 30 seconds
                 setTimeout(() => {
                     showStatus('error', '🔍 Payment verification timeout. Please try again.');
                     resetPayment();
@@ -187,7 +210,7 @@
             status.style.display = 'block';
         }
 
-        // بررسی پارامترهای URL برای نتیجه پرداخت
+        // Check URL params for callback results
         function checkUrlParams() {
             const urlParams = new URLSearchParams(window.location.search);
             const signature = urlParams.get('signature');
@@ -219,7 +242,6 @@
                 });
             }
 
-            // بررسی پارامترهای URL
             checkUrlParams();
         });
     </script>
