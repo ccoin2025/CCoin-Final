@@ -380,3 +380,19 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
         print(f"Commission confirmation error: {e}")
         raise HTTPException(status_code=500, detail=f"Transaction confirmation failed: {str(e)}")
 
+
+@router.get("/check_wallet_status")
+async def check_wallet_status(request: Request, db: Session = Depends(get_db)):
+    user = await get_current_user(request, db)
+    return JSONResponse({
+        "connected": user.wallet_address is not None,
+        "wallet_address": user.wallet_address
+    })
+
+@router.get("/check_commission_status")
+async def check_commission_status(request: Request, db: Session = Depends(get_db)):
+    user = await get_current_user(request, db)
+    return JSONResponse({
+        "paid": user.commission_paid
+    })
+
