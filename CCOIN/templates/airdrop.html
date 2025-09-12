@@ -608,15 +608,16 @@
     <script>
         // Set global variables for JavaScript
         window.APP_CONFIG = {
-            USER_ID: {{ request.session.get('telegram_id', 'null') }},
-            SOLANA_RPC_URL: "{{ config.SOLANA_RPC }}",
-            COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT }},
-            ADMIN_WALLET: "{{ config.ADMIN_WALLET }}",
-            INITIAL_TASKS_COMPLETED: {{ tasks_completed|tojson }},
-            INITIAL_INVITED_FRIENDS: {{ invited|tojson }},
-            INITIAL_WALLET_CONNECTED: {{ wallet_connected|tojson }},
-            INITIAL_COMMISSION_PAID: {{ commission_paid|tojson }},
-            INITIAL_WALLET_ADDRESS: "{{ user_wallet_address }}"
+            window.APP_CONFIG = {
+            USER_ID: "{{ user.telegram_id if user else 'Guest' }}",
+            SOLANA_RPC_URL: "https://api.devnet.solana.com",
+            COMMISSION_AMOUNT: 0.01,
+            ADMIN_WALLET: "{{ admin_wallet or '' }}",
+            INITIAL_TASKS_COMPLETED: {{ user.tasks_completed|lower if user else 'false' }},
+            INITIAL_INVITED_FRIENDS: {{ (user.invited_friends_count >= 5)|lower if user else 'false' }},
+            INITIAL_WALLET_CONNECTED: {{ (user.wallet_address != None)|lower if user else 'false' }},
+            INITIAL_COMMISSION_PAID: {{ user.commission_paid|lower if user else 'false' }},
+            INITIAL_WALLET_ADDRESS: "{{ user.wallet_address if user and user.wallet_address else '' }}"
         };
     </script>
     <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
