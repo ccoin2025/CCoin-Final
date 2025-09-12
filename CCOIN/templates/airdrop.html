@@ -169,7 +169,7 @@
             font-weight: bold;
         }
 
-        /* تنظیم spacing برای برابر کردن فاصله همه دکمه‌ها */
+        /* تنظیم spacing برای فاصله برابر همه دکمه‌ها */
         .task-box {
             margin-bottom: 15px;
             position: relative;
@@ -451,37 +451,27 @@
             </div>
         </div>
 
-        <!-- فوتر اصلاح شده با ساختار bottom-nav -->
-        <div class="bottom-nav">
-            <a href="/leaders" class="nav-link">
-                <div class="nav-icon">
-                    <i class="fas fa-medal"></i>
-                </div>
-                <div class="nav-text">Leaders</div>
+        <!-- فوتر اصلی - همان ساختار قدیمی -->
+        <div class="footer-icons">
+            <a href="/leaders" class="footer-btn">
+                <i class="fas fa-medal"></i>
+                <span>Leaders</span>
             </a>
-            <a href="/friends" class="nav-link">
-                <div class="nav-icon">
-                    <i class="fas fa-user-friends"></i>
-                </div>
-                <div class="nav-text">Friends</div>
+            <a href="/friends" class="footer-btn">
+                <i class="fas fa-user-friends"></i>
+                <span>Friends</span>
             </a>
-            <a href="/home" class="nav-link">
-                <div class="nav-icon">
-                    <i class="fas fa-home"></i>
-                </div>
-                <div class="nav-text">Home</div>
+            <a href="/home" class="footer-btn">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
             </a>
-            <a href="/earn" class="nav-link">
-                <div class="nav-icon">
-                    <i class="fas fa-coins"></i>
-                </div>
-                <div class="nav-text">Earn</div>
+            <a href="/earn" class="footer-btn">
+                <i class="fas fa-coins"></i>
+                <span>Earn</span>
             </a>
-            <a href="/airdrop" class="nav-link active">
-                <div class="nav-icon">
-                    <i class="fas fa-rocket"></i>
-                </div>
-                <div class="nav-text">Airdrop</div>
+            <a href="/airdrop" class="footer-btn active">
+                <i class="fas fa-rocket"></i>
+                <span>AirDrop</span>
             </a>
         </div>
     </div>
@@ -571,12 +561,12 @@
             }
         }
 
-        // تنظیم وضعیت تکمیل شده برای تسک - اصلاح شده
+        // تنظیم وضعیت تکمیل شده برای تسک - با پارامتر iconId اصلاح شده
         function setTaskCompleted(taskId, completedText, iconId) {
             const taskBox = document.getElementById(taskId);
             const button = taskBox.querySelector('.task-button');
             const leftText = taskBox.querySelector('.left-text');
-            const rightIcon = document.getElementById(iconId);
+            const rightIcon = iconId ? document.getElementById(iconId) : taskBox.querySelector('.right-icon');
             
             leftText.textContent = completedText;
             rightIcon.className = 'fas fa-check right-icon';
@@ -585,7 +575,7 @@
             taskBox.classList.add('completed');
         }
 
-        // تنظیم وضعیت متصل برای کیف پول
+        // تنظیم وضعیت متصل برای کیف پول - بدون نمایش آدرس در دکمه
         function setWalletConnected(address) {
             isWalletConnected = true;
             currentWalletAddress = address;
@@ -596,10 +586,10 @@
             const walletBox = document.getElementById('connect-wallet');
             const addressDropdown = document.getElementById('wallet-address-dropdown');
             
-            // تغییر متن دکمه - بدون نمایش آدرس
+            // تغییر متن دکمه - فقط "Wallet Connected"
             buttonText.textContent = 'Wallet Connected';
             
-            // تغییر آیکون به چک
+            // تغییر آیکون به چک سبز
             walletIcon.className = 'fas fa-check right-icon';
             walletIcon.style.color = '#28a745';
             
@@ -690,93 +680,15 @@
             }
         }
 
-        // پرداخت کمیسیون - اصلاح شده برای تراکنش واقعی
+        // پرداخت کمیسیون - برگشت به روش اصلی با مودال
         async function payCommission() {
             if (!isWalletConnected) {
                 showToast('Please connect your wallet first', 'error');
                 return;
             }
 
-            const commissionButton = document.getElementById('commission-button');
-            const commissionText = document.getElementById('commission-button-text');
-            const commissionIcon = document.getElementById('commission-icon');
-            
-            try {
-                // تغییر وضعیت دکمه
-                commissionButton.classList.add('loading');
-                commissionText.textContent = 'Processing Payment...';
-                
-                // درخواست اطلاعات پرداخت از سرور
-                const response = await fetch('/api/commission/pay', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        telegram_id: USER_ID, 
-                        wallet_address: currentWalletAddress 
-                    })
-                });
-                
-                const paymentData = await response.json();
-                
-                if (!paymentData.success) {
-                    throw new Error(paymentData.error || 'Payment request failed');
-                }
-                
-                // ایجاد URL برای Phantom با تراکنش واقعی
-                const phantomUrl = `phantom://v1/signAndSendTransaction?` + 
-                    `dapp_encryption_public_key=${paymentData.dapp_key || 'dapp_key'}&` +
-                    `nonce=${paymentData.nonce || Date.now()}&` +
-                    `redirect_link=${encodeURIComponent(window.location.href)}&` +
-                    `transaction=${paymentData.transaction_data}`;
-                
-                // باز کردن Phantom
-                if (window.Telegram?.WebApp) {
-                    window.Telegram.WebApp.openLink(phantomUrl);
-                } else {
-                    window.location.href = phantomUrl;
-                }
-                
-                // شروع بررسی وضعیت پرداخت
-                setTimeout(checkCommissionStatusLoop, 3000);
-                
-            } catch (error) {
-                console.error('Commission payment error:', error);
-                showToast(`Payment failed: ${error.message}`, 'error');
-                
-                // بازگردانی وضعیت دکمه
-                commissionButton.classList.remove('loading');
-                commissionText.textContent = 'Pay for Commission';
-            }
-        }
-
-        // تابع بررسی مداوم وضعیت کمیسیون
-        function checkCommissionStatusLoop() {
-            const checkInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
-                    const data = await response.json();
-                    
-                    if (data.paid) {
-                        clearInterval(checkInterval);
-                        setTaskCompleted('pay-commission', 'Commission Paid', 'commission-icon');
-                        showToast('Commission paid successfully!', 'success');
-                    }
-                } catch (error) {
-                    console.error('Error checking commission status:', error);
-                }
-            }, 2000);
-            
-            // توقف بررسی بعد از 60 ثانیه
-            setTimeout(() => {
-                clearInterval(checkInterval);
-                const commissionButton = document.getElementById('commission-button');
-                const commissionText = document.getElementById('commission-button-text');
-                
-                commissionButton.classList.remove('loading');
-                commissionText.textContent = 'Pay for Commission';
-            }, 60000);
+            // نمایش مودال پرداخت - نه تراکنش مستقیم
+            showCommissionModal();
         }
 
         // قطع اتصال کیف پول
@@ -885,16 +797,14 @@
             }
         }
 
-        // شمارش معکوس برای Airdrop - اصلاح شده برای 20 روز آینده
+        // شمارش معکوس برای Airdrop
         function startCountdown() {
-            // تاریخ هدف: 20 روز از الان
-            const targetDate = new Date();
-            targetDate.setDate(targetDate.getDate() + 20);
-            targetDate.setHours(23, 59, 59, 999);
+            // تاریخ هدف (31 دسامبر 2025)
+            const targetDate = new Date('2025-12-31 23:59:59').getTime();
             
             const countdownInterval = setInterval(() => {
                 const now = new Date().getTime();
-                const distance = targetDate.getTime() - now;
+                const distance = targetDate - now;
                 
                 if (distance < 0) {
                     clearInterval(countdownInterval);
