@@ -169,7 +169,7 @@
             font-weight: bold;
         }
 
-        /* تنظیم spacing برای جلوگیری از تداخل با باکس بعدی */
+        /* تنظیم spacing برای جلوگیری از تداخل با باکس بعدی - فاصله برابر */
         .task-box {
             margin-bottom: 15px;
             position: relative;
@@ -196,13 +196,12 @@
             z-index: 1;
         }
 
-        /* اضافه کردن margin برای جدا کردن dropdown از باکس بعدی */
-        #connect-wallet {
-            margin-bottom: 20px;
-        }
-
+        /* برابر کردن فاصله تمام دکمه‌ها */
+        #task-completion,
+        #inviting-friends,
+        #connect-wallet,
         #pay-commission {
-            margin-top: 5px;
+            margin-bottom: 15px;
         }
 
         /* استایل برای دکمه commission در حالت loading */
@@ -414,14 +413,14 @@
             <div id="task-completion" class="task-box">
                 <button onclick="handleTaskCompletion()" class="task-button">
                     <span class="left-text">Tasks Completion</span>
-                    <i class="fas fa-chevron-right right-icon"></i>
+                    <i class="fas fa-chevron-right right-icon" id="tasks-icon"></i>
                 </button>
             </div>
 
             <div id="inviting-friends" class="task-box">
                 <button onclick="handleInviteCheck()" class="task-button">
                     <span class="left-text">Inviting Friends</span>
-                    <i class="fas fa-chevron-right right-icon"></i>
+                    <i class="fas fa-chevron-right right-icon" id="friends-icon"></i>
                 </button>
             </div>
 
@@ -494,27 +493,37 @@
         </div>
     </div>
 
-    <!-- Navigation -->
-    <div class="navigation">
-        <a href="/home" class="nav-item">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
+    <!-- Navigation - فوتر اصلاح شده از فایل شما -->
+    <div class="bottom-nav">
+        <a href="/home" class="nav-link">
+            <div class="nav-icon">
+                <i class="fas fa-home"></i>
+            </div>
+            <div class="nav-text">Home</div>
         </a>
-        <a href="/earn" class="nav-item">
-            <i class="fas fa-tasks"></i>
-            <span>Earn</span>
+        <a href="/earn" class="nav-link">
+            <div class="nav-icon">
+                <i class="fas fa-tasks"></i>
+            </div>
+            <div class="nav-text">Earn</div>
         </a>
-        <a href="/friends" class="nav-item">
-            <i class="fas fa-users"></i>
-            <span>Friends</span>
+        <a href="/friends" class="nav-link">
+            <div class="nav-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="nav-text">Friends</div>
         </a>
-        <a href="/airdrop" class="nav-item active">
-            <i class="fas fa-parachute-box"></i>
-            <span>Airdrop</span>
+        <a href="/airdrop" class="nav-link active">
+            <div class="nav-icon">
+                <i class="fas fa-parachute-box"></i>
+            </div>
+            <div class="nav-text">Airdrop</div>
         </a>
-        <a href="/leaders" class="nav-item">
-            <i class="fas fa-trophy"></i>
-            <span>Leaders</span>
+        <a href="/leaders" class="nav-link">
+            <div class="nav-icon">
+                <i class="fas fa-trophy"></i>
+            </div>
+            <div class="nav-text">Leaders</div>
         </a>
     </div>
 
@@ -629,7 +638,7 @@
             }
         }
 
-        // Update wallet UI - اصلاح شده
+        // Update wallet UI
         function updateWalletUI(data) {
             const walletButton = document.getElementById('wallet-button-text');
             const walletIcon = document.getElementById('wallet-icon');
@@ -637,7 +646,6 @@
             const walletAddress = document.getElementById('wallet-address-display');
 
             if (data.connected && data.address) {
-                // فقط متن "Wallet Connected" نمایش داده شود
                 walletButton.textContent = 'Wallet Connected';
                 walletIcon.className = 'fas fa-check right-icon';
                 walletIcon.style.color = '#28a745';
@@ -652,7 +660,7 @@
             }
         }
 
-        // Update tasks UI
+        // Update tasks UI - اصلاح شده برای نمایش تیک سبز
         function updateTasksUI(data) {
             const tasksIcon = document.getElementById('tasks-icon');
             const friendsIcon = document.getElementById('friends-icon');
@@ -682,7 +690,7 @@
             }
         }
 
-        // Update commission UI - اصلاح شده
+        // Update commission UI - اصلاح شده برای نمایش تیک سبز
         function updateCommissionUI(data) {
             const commissionButton = document.querySelector('#pay-commission .task-button');
             const commissionText = document.querySelector('#pay-commission .left-text');
