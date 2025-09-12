@@ -435,16 +435,16 @@
                     </button>
 
                     <!-- منوی کشویی -->
-                    <div id="wallet-dropdown-content" class="wallet-dropdown-content">
+                    <div class="wallet-dropdown-content" id="wallet-dropdown-content">
                         <div class="wallet-info-dropdown">
-                            <div><strong>✅ Connected Wallet:</strong></div>
-                            <div id="wallet-address-dropdown" class="wallet-address-dropdown"></div>
+                            <div>Connected Wallet:</div>
+                            <div class="wallet-address-dropdown" id="wallet-address-display"></div>
                             <div class="wallet-actions-dropdown">
-                                <button onclick="changeWallet()" class="wallet-action-btn change-btn">
-                                    🔄 Change
+                                <button class="wallet-action-btn change-btn" onclick="changeWallet()">
+                                    <i class="fas fa-exchange-alt"></i> Change
                                 </button>
-                                <button onclick="disconnectWallet()" class="wallet-action-btn disconnect-btn">
-                                    🚫 Disconnect
+                                <button class="wallet-action-btn disconnect-btn" onclick="disconnectWallet()">
+                                    <i class="fas fa-times"></i> Disconnect
                                 </button>
                             </div>
                         </div>
@@ -452,70 +452,72 @@
                 </div>
             </div>
 
+            <!-- پرداخت کمیسیون -->
             <div id="pay-commission" class="task-box">
-                <button onclick="payCommission()" class="task-button" id="commission-button">
-                    <span class="left-text" id="commission-button-text">Pay for the Commission</span>
+                <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
+                    <span class="left-text">Pay for Commission</span>
                     <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
                 </button>
             </div>
         </div>
-
-        <div class="footer-icons">
-            <a href="/leaders" class="footer-btn">
-                <i class="fas fa-medal"></i>
-                <span>Leaders</span>
-            </a>
-            <a href="/friends" class="footer-btn">
-                <i class="fas fa-user-friends"></i>
-                <span>Friends</span>
-            </a>
-            <a href="/home" class="footer-btn">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
-            </a>
-            <a href="/earn" class="footer-btn">
-                <i class="fas fa-coins"></i>
-                <span>Earn</span>
-            </a>
-            <a href="/airdrop" class="footer-btn active">
-                <i class="fas fa-rocket"></i>
-                <span>AirDrop</span>
-            </a>
-        </div>
     </div>
 
-    <!-- Phantom Connection Modal -->
-    <div id="phantom-modal" class="phantom-modal">
+    <!-- Phantom Modal -->
+    <div class="phantom-modal" id="phantom-modal">
         <div class="phantom-modal-content">
-            <h3>Connect to Phantom Wallet</h3>
-            <p>To continue, you need to connect your Phantom wallet. Click the button below to open Phantom app.</p>
+            <h3>Connect Phantom Wallet</h3>
+            <p>You'll be redirected to external browser to connect your Phantom wallet securely.</p>
             <div class="phantom-modal-buttons">
-                <button onclick="openPhantomApp()" class="phantom-modal-btn primary">
-                    🦄 Open Phantom App
+                <button class="phantom-modal-btn primary" onclick="redirectToWalletConnect()">
+                    Continue to External Browser
                 </button>
-                <button onclick="closePhantomModal()" class="phantom-modal-btn secondary">
+                <button class="phantom-modal-btn secondary" onclick="closePhantomModal()">
                     Cancel
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Commission Payment Modal -->
-    <div id="commission-modal" class="commission-modal">
+    <!-- Commission Modal -->
+    <div class="commission-modal" id="commission-modal">
         <div class="commission-modal-content">
-            <h3>💰 Pay Commission</h3>
-            <p>You need to pay a small commission (0.01 SOL) to complete the airdrop process.</p>
+            <h3>Pay Commission</h3>
+            <p>You'll be redirected to external browser to pay the commission securely.</p>
             <div class="phantom-modal-buttons">
-                <button onclick="openCommissionPayment()" class="phantom-modal-btn primary">
-                    💳 Pay for Commission
+                <button class="phantom-modal-btn primary" onclick="redirectToCommissionPayment()">
+                    Continue to External Browser
                 </button>
-                <button onclick="closeCommissionModal()" class="phantom-modal-btn secondary">
+                <button class="phantom-modal-btn secondary" onclick="closeCommissionModal()">
                     Cancel
                 </button>
             </div>
         </div>
     </div>
-    
+
+    <!-- Navigation -->
+    <div class="navigation">
+        <a href="/home" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="nav-item">
+            <i class="fas fa-tasks"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/friends" class="nav-item">
+            <i class="fas fa-users"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/airdrop" class="nav-item active">
+            <i class="fas fa-parachute-box"></i>
+            <span>Airdrop</span>
+        </a>
+        <a href="/leaders" class="nav-item">
+            <i class="fas fa-trophy"></i>
+            <span>Leaders</span>
+        </a>
+    </div>
+
     <script>
         // Get user ID from Telegram Web App or URL
         const USER_ID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 
