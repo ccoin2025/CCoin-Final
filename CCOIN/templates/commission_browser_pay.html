@@ -6,20 +6,18 @@
     <title>Pay Commission</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/bs58@4.0.1/index.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #000; color: #fff; min-height: 100vh;
             display: flex; align-items: center; justify-content: center; padding: 20px;
         }
-
         .container { text-align: center; max-width: 400px; width: 100%; }
         .logo { width: 80px; height: 80px; background: #ffa500; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #000; }
         h1 { font-size: 24px; margin-bottom: 10px; font-weight: 600; }
         .subtitle { color: #999; margin-bottom: 30px; font-size: 16px; }
-
         .pay-btn {
             background: #ffa500; color: #000; border: none; padding: 15px 30px; border-radius: 10px;
             font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 20px;
@@ -27,16 +25,13 @@
         }
         .pay-btn:hover { background: #ff8c00; transform: translateY(-2px); }
         .pay-btn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
-
         .amount-info {
             background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
             padding: 20px; margin: 20px 0;
         }
-
         .status { margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
         .status.success { background: #1a5f1a; color: #90ee90; border: 1px solid #228b22; }
         .status.error { background: #5f1a1a; color: #ffb3b3; border: 1px solid #dc3545; }
-
         .loading { display: none; margin-top: 20px; }
         .spinner { width: 20px; height: 20px; border: 2px solid #333; border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -103,48 +98,38 @@
 
                 payBtn.textContent = 'Opening Phantom App...';
 
-                // ایجاد تراکنش کامل برای Phantom
-                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
-                const amount = Math.floor(paymentData.amount * solanaWeb3.LAMPORTS_PER_SOL); // 0.01 SOL
-                
-                // آدرس گیرنده
+                // ایجاد تراکنش واقعی
+                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
                 const recipientPubkey = new solanaWeb3.PublicKey(paymentData.recipient);
-                const senderPubkey = new solanaWeb3.PublicKey('11111111111111111111111111111112'); // placeholder
-                
-                // ایجاد instruction
-                const transferInstruction = solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: senderPubkey,
-                    toPubkey: recipientPubkey,
-                    lamports: amount
-                });
+                const amountLamports = Math.floor(paymentData.amount * solanaWeb3.LAMPORTS_PER_SOL);
 
-                // ایجاد تراکنش
-                const transaction = new solanaWeb3.Transaction().add(transferInstruction);
-                
-                // دریافت recent blockhash
+                // ایجاد تراکنش انتقال
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: new solanaWeb3.PublicKey('11111111111111111111111111111111'), // placeholder
+                        toPubkey: recipientPubkey,
+                        lamports: amountLamports,
+                    })
+                );
+
                 const { blockhash } = await connection.getLatestBlockhash();
                 transaction.recentBlockhash = blockhash;
-                transaction.feePayer = senderPubkey;
+                transaction.feePayer = new solanaWeb3.PublicKey('11111111111111111111111111111111');
 
-                // Serialize کردن تراکنش
-                const serializedTx = transaction.serialize({
-                    requireAllSignatures: false,
-                    verifySignatures: false
-                });
+                // سریالایز کردن تراکنش
+                const serializedTransaction = transaction.serialize({ requireAllSignatures: false });
+                const base64Transaction = bs58.encode(serializedTransaction);
 
-                // تبدیل به base64
-                const base64Transaction = btoa(String.fromCharCode(...serializedTx));
-
-                // ایجاد Phantom URL با تراکنش واقعی
+                // Phantom deeplink با تراکنش واقعی
                 const phantomUrl = `phantom://v1/signAndSendTransaction?` + 
-                    `dapp_encryption_public_key=temp_key&` +
-                    `nonce=temp_nonce&` +
+                    `dapp_encryption_public_key=phantom&` +
+                    `nonce=1&` +
                     `redirect_link=${encodeURIComponent(paymentData.callback_url)}&` +
-                    `payload=${encodeURIComponent(base64Transaction)}`;
+                    `transaction=${base64Transaction}`;
 
                 console.log('Opening Phantom with transaction:', phantomUrl);
 
-                // هدایت به Phantom
+                // باز کردن Phantom
                 setTimeout(() => {
                     window.location.href = phantomUrl;
                 }, 500);
@@ -173,11 +158,12 @@
                 if (data.paid) {
                     showStatus('success', '✅ Payment completed successfully!');
                     
+                    // فقط در صورت موفقیت ریدایرکت شود
                     setTimeout(() => {
                         if (window.Telegram?.WebApp) {
                             window.Telegram.WebApp.close();
                         } else {
-                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
+                            window.location.href = `/airdrop?commission_paid=true&telegram_id=${USER_ID}`;
                         }
                     }, 2000);
                 } else {
@@ -210,7 +196,7 @@
             status.style.display = 'block';
         }
 
-        // Check URL params for callback results
+        // بررسی پارامترهای URL برای نتیجه پرداخت
         function checkUrlParams() {
             const urlParams = new URLSearchParams(window.location.search);
             const signature = urlParams.get('signature');
@@ -222,7 +208,7 @@
                     if (window.Telegram?.WebApp) {
                         window.Telegram.WebApp.close();
                     } else {
-                        window.location.href = `/airdrop?telegram_id=${USER_ID}`;
+                        window.location.href = `/airdrop?commission_paid=true&telegram_id=${USER_ID}`;
                     }
                 }, 2000);
             } else if (errorCode) {
