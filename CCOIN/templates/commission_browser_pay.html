@@ -74,24 +74,6 @@
                        'guest';
 
         let isProcessing = false;
-        let dappKeyPair = null;
-
-        // تولید کلید جفت برای رمزنگاری
-        function generateDappKeyPair() {
-            dappKeyPair = nacl.box.keyPair();
-            return bs58.encode(dappKeyPair.publicKey);
-        }
-
-        // رمزگذاری payload
-        function encryptPayload(payload, sharedSecret) {
-            const nonce = nacl.randomBytes(24);
-            const encryptedPayload = nacl.box.after(
-                new TextEncoder().encode(JSON.stringify(payload)),
-                nonce,
-                sharedSecret
-            );
-            return [nonce, encryptedPayload];
-        }
 
         async function payCommission() {
             if (isProcessing) return;
@@ -121,67 +103,24 @@
                     throw new Error(paymentData.error);
                 }
 
-                // ایجاد کلید برای رمزنگاری
-                const dappPublicKey = generateDappKeyPair();
+                payBtn.textContent = 'Opening Phantom App...';
+
+                // ایجاد deeplink ساده برای Phantom
                 const amount = Math.floor(paymentData.amount * 1000000000); // تبدیل SOL به lamports
                 const recipientAddress = paymentData.recipient;
+                const callbackUrl = paymentData.callback_url;
 
-                payBtn.textContent = 'Creating Transaction...';
-
-                // ایجاد تراکنش SOL transfer
-                const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
-                
-                // فرض می‌کنیم کیف پول کاربر از session یا localStorage بیاید
-                const userWalletPublicKey = localStorage.getItem('phantom_public_key') || 'PLACEHOLDER_WALLET';
-                
-                const transaction = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: new solanaWeb3.PublicKey(userWalletPublicKey),
-                        toPubkey: new solanaWeb3.PublicKey(recipientAddress),
-                        lamports: amount
-                    })
-                );
-
-                // دریافت recent blockhash
-                const { blockhash } = await connection.getRecentBlockhash();
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = new solanaWeb3.PublicKey(userWalletPublicKey);
-
-                // Serialize transaction
-                const serializedTransaction = transaction.serialize({
-                    requireAllSignatures: false,
-                    verifySignatures: false
-                });
-
-                // ایجاد payload برای Phantom
-                const payload = {
-                    session: localStorage.getItem('phantom_session') || 'temp_session',
-                    transaction: bs58.encode(serializedTransaction)
-                };
-
-                // ایجاد شناسه یکتا برای این تراکنش
-                const nonce = nacl.randomBytes(24);
-
-                // Callback URL برای بازگشت
-                const callbackUrl = `${window.location.origin}/commission/callback?telegram_id=${USER_ID}`;
-
-                // پارامترهای Deep Link
+                // پارامترهای ساده برای Phantom deeplink
                 const params = new URLSearchParams({
-                    dapp_encryption_public_key: dappPublicKey,
                     cluster: 'devnet',
-                    app_url: window.location.origin,
-                    redirect_link: callbackUrl,
-                    nonce: bs58.encode(nonce),
-                    payload: bs58.encode(new TextEncoder().encode(JSON.stringify(payload)))
+                    redirect_link: callbackUrl
                 });
 
-                // استفاده از signTransaction به جای signAndSendTransaction
-                const phantomUrl = `phantom://v1/signTransaction?${params.toString()}`;
+                // استفاده از universal link برای بهتر کار کردن
+                const phantomUrl = `https://phantom.app/ul/v1/browse/${encodeURIComponent(`solana:${recipientAddress}?amount=${amount}&reference=${USER_ID}&redirect=${encodeURIComponent(callbackUrl)}`)}`;
 
                 console.log('Opening Phantom with URL:', phantomUrl);
 
-                payBtn.textContent = 'Opening Phantom App...';
-                
                 // مستقیماً با Phantom deeplink
                 setTimeout(() => {
                     window.location.href = phantomUrl;
