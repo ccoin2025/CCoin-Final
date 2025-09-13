@@ -6,7 +6,7 @@
     <title>Pay Commission</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/bs58@4.0.1/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/index.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -68,6 +68,19 @@
 
         let isProcessing = false;
 
+        // Fix: Ensure bs58 is properly loaded
+        function ensureBS58() {
+            if (typeof bs58 === 'undefined') {
+                if (typeof window.bs58 !== 'undefined') {
+                    window.bs58 = window.bs58;
+                    return true;
+                }
+                console.error('BS58 library not loaded');
+                return false;
+            }
+            return true;
+        }
+
         async function payCommission() {
             if (isProcessing) return;
 
@@ -80,6 +93,11 @@
                 payBtn.disabled = true;
                 payBtn.textContent = 'Preparing Payment...';
                 status.style.display = 'none';
+
+                // Check if bs58 is available
+                if (!ensureBS58()) {
+                    throw new Error('BS58 library not available');
+                }
 
                 // درخواست اطلاعات پرداخت از سرور
                 const response = await fetch('/api/commission/pay', {
@@ -116,9 +134,35 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = new solanaWeb3.PublicKey('11111111111111111111111111111111');
 
-                // سریالایز کردن تراکنش
-                const serializedTransaction = transaction.serialize({ requireAllSignatures: false });
-                const base64Transaction = bs58.encode(serializedTransaction);
+                // Fix: Proper transaction serialization for Phantom
+                let serializedTransaction;
+                try {
+                    // Use serializeMessage instead of serialize for unsigned transaction
+                    const message = transaction.compileMessage();
+                    serializedTransaction = message.serialize();
+                } catch (error) {
+                    console.error('Transaction compilation error:', error);
+                    // Fallback: try different serialization
+                    serializedTransaction = transaction.serialize({ requireAllSignatures: false });
+                }
+
+                // Fix: Proper BS58 encoding
+                let base64Transaction;
+                try {
+                    if (typeof bs58 === 'function') {
+                        base64Transaction = bs58(serializedTransaction);
+                    } else if (bs58.encode) {
+                        base64Transaction = bs58.encode(serializedTransaction);
+                    } else if (bs58.default && bs58.default.encode) {
+                        base64Transaction = bs58.default.encode(serializedTransaction);
+                    } else {
+                        throw new Error('BS58 encode function not available');
+                    }
+                } catch (bs58Error) {
+                    console.error('BS58 encoding error:', bs58Error);
+                    // Fallback to base64
+                    base64Transaction = btoa(String.fromCharCode.apply(null, serializedTransaction));
+                }
 
                 // Phantom deeplink با تراکنش واقعی
                 const phantomUrl = `phantom://v1/signAndSendTransaction?` + 
@@ -131,7 +175,16 @@
 
                 // باز کردن Phantom
                 setTimeout(() => {
-                    window.location.href = phantomUrl;
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        // In Telegram, use openLink for external apps
+                        if (window.Telegram.WebApp.openLink) {
+                            window.Telegram.WebApp.openLink(phantomUrl);
+                        } else {
+                            window.location.href = phantomUrl;
+                        }
+                    } else {
+                        window.location.href = phantomUrl;
+                    }
                 }, 500);
 
                 // نمایش حالت انتظار
