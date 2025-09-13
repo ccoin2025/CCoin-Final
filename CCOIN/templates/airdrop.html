@@ -496,16 +496,133 @@
         // Global configuration - این باید از سرور تنظیم شود
         window.APP_CONFIG = {
             USER_ID: "{{ user.telegram_id }}",
-            SOLANA_RPC_URL: "{{ solana_rpc_url }}",
-            COMMISSION_AMOUNT: {{ commission_amount }},
+            SOLANA_RPC_URL: "https://api.devnet.solana.com",
+            COMMISSION_AMOUNT: 0.01,
             ADMIN_WALLET: "{{ admin_wallet }}",
-            INITIAL_TASKS_COMPLETED: {{ user.tasks_completed|lower }},
-            INITIAL_INVITED_FRIENDS: {{ user.invited_friends|lower }},
-            INITIAL_WALLET_CONNECTED: {{ user.wallet_connected|lower }},
-            INITIAL_COMMISSION_PAID: {{ user.commission_paid|lower }},
+            INITIAL_TASKS_COMPLETED: {{ user.tasks_completed | tojson }},
+            INITIAL_INVITED_FRIENDS: {{ user.invited_friends | tojson }},
+            INITIAL_WALLET_CONNECTED: {{ user.wallet_connected | tojson }},
+            INITIAL_COMMISSION_PAID: {{ user.commission_paid | tojson }},
             INITIAL_WALLET_ADDRESS: "{{ user.wallet_address or '' }}"
         };
+
+        // Check URL parameters for Phantom callback
+        function checkPhantomCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const phantomAction = urlParams.get('phantom_action');
+            const signature = urlParams.get('signature');
+            const publicKey = urlParams.get('public_key');
+            const errorCode = urlParams.get('errorCode');
+            const commissionPaid = urlParams.get('commission_paid');
+
+            if (phantomAction === 'connect' && publicKey) {
+                // Wallet connected via deeplink
+                handleWalletConnected(publicKey);
+            } else if (phantomAction === 'sign' && signature) {
+                // Transaction signed via deeplink
+                handleTransactionSigned(signature);
+            } else if (commissionPaid === 'true') {
+                // Commission payment completed
+                handleCommissionPaid();
+            } else if (errorCode) {
+                showToast(`Connection failed: ${errorCode}`, "error");
+            }
+        }
+
+        async function handleWalletConnected(publicKey) {
+            try {
+                const response = await fetch('/airdrop/connect_wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        wallet: publicKey
+                    })
+                });
+
+                if (response.ok) {
+                    connectedWallet = publicKey;
+                    tasksCompleted.wallet = true;
+                    updateWalletUI();
+                    updateTasksUI();
+                    showToast("Wallet connected successfully!", "success");
+                } else {
+                    throw new Error("Failed to save wallet connection");
+                }
+            } catch (error) {
+                console.error("Error saving wallet connection:", error);
+                showToast("Failed to save wallet connection", "error");
+            }
+        }
+
+        async function handleTransactionSigned(signature) {
+            try {
+                const response = await fetch('/airdrop/verify_commission', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        signature: signature
+                    })
+                });
+
+                if (response.ok) {
+                    tasksCompleted.pay = true;
+                    updateTasksUI();
+                    showToast("Commission paid successfully!", "success");
+                } else {
+                    throw new Error("Failed to verify commission payment");
+                }
+            } catch (error) {
+                console.error("Error verifying commission:", error);
+                showToast("Failed to verify commission payment", "error");
+            }
+        }
+
+        function handleCommissionPaid() {
+            tasksCompleted.pay = true;
+            updateTasksUI();
+            showToast("Commission payment verified!", "success");
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Telegram WebApp
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+            }
+
+            // Check for Phantom callbacks
+            checkPhantomCallback();
+
+            // Initialize countdown timer
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+
+            // Initialize UI based on current state
+            updateTasksUI();
+            if (tasksCompleted.wallet && connectedWallet) {
+                updateWalletUI();
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.querySelector('.wallet-dropdown-content');
+            const walletButton = document.querySelector('#connect-wallet .task-button');
+            
+            if (dropdown && dropdown.classList.contains('show')) {
+                if (!walletButton.contains(event.target) && !dropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            }
+        });
     </script>
+
+    <!-- Load the external JavaScript file -->
     <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
