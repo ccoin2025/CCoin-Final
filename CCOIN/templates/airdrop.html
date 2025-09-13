@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- اضافه کردن bs58 library -->
+    <script src="https://unpkg.com/bs58@5.0.0/index.min.js"></script>
 
     <style>
         /* استایل منوی کشویی کیف پول */
@@ -780,21 +782,31 @@
             }
         });
 
-        // مدیریت سایر تسک‌ها
+        // Navigation داخلی - اصلاح شده برای عدم باز کردن مرورگر خارجی
+        function navigateInternal(path) {
+            // نمایش loading
+            showToast('Loading...', 'info');
+            
+            // تغییر URL بدون refresh
+            window.location.hash = '#' + path;
+            
+            // redirect داخلی به route مربوطه
+            setTimeout(() => {
+                window.location.href = `${path}?telegram_id=${USER_ID}`;
+            }, 500);
+        }
+
+        // مدیریت تسک‌ها - اصلاح شده برای navigation داخلی
         async function handleTaskCompletion() {
-            showToast('Checking task completion...', 'info');
-            // اینجا می‌توانید redirect به صفحه تسک‌ها کنید
-            if (window.Telegram?.WebApp) {
-                window.Telegram.WebApp.openLink(`/earn?telegram_id=${USER_ID}`);
-            }
+            showToast('Redirecting to Tasks...', 'info');
+            // navigation داخلی به جای openLink
+            navigateInternal('/earn');
         }
 
         async function handleInviteCheck() {
-            showToast('Checking friend invitations...', 'info');
-            // اینجا می‌توانید redirect به صفحه دوستان کنید
-            if (window.Telegram?.WebApp) {
-                window.Telegram.WebApp.openLink(`/friends?telegram_id=${USER_ID}`);
-            }
+            showToast('Redirecting to Friends...', 'info');
+            // navigation داخلی به جای openLink
+            navigateInternal('/friends');
         }
 
         // شمارش معکوس برای Airdrop
