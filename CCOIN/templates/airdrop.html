@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <!-- اصلاح bs58 library -->
+    <!-- اضافه کردن bs58 library -->
     <script src="https://cdn.jsdelivr.net/npm/bs58@latest/index.js"></script>
 
     <style>
@@ -472,7 +472,7 @@
                 <span>Earn</span>
             </a>
             <a href="/airdrop" class="footer-btn active">
-                <i class="fas fa-gift"></i>
+                <i class="fas fa-parachute-box"></i>
                 <span>Airdrop</span>
             </a>
         </div>
@@ -804,9 +804,10 @@
             window.location.href = `/wallet/browser/connect?telegram_id=${userId}`;
         }
 
-        async function disconnectWallet() {
-            try {
-                const response = await fetch('/api/wallet/disconnect', {
+        function disconnectWallet() {
+            if (confirm('Are you sure you want to disconnect your wallet?')) {
+                // ارسال درخواست disconnect به سرور
+                fetch('/api/wallet/disconnect', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -814,65 +815,20 @@
                     body: JSON.stringify({
                         telegram_id: window.APP_CONFIG.USER_ID
                     })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // بروزرسانی UI
+                        location.reload();
+                    } else {
+                        showToast('Failed to disconnect wallet', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Disconnect error:', error);
+                    showToast('Error disconnecting wallet', 'error');
                 });
-
-                if (response.ok) {
-                    showToast('Wallet disconnected successfully!', 'success');
-                    // بازنشانی UI
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                } else {
-                    throw new Error('Failed to disconnect wallet');
-                }
-            } catch (error) {
-                console.error('Disconnect error:', error);
-                showToast('Failed to disconnect wallet', 'error');
-            }
-        }
-
-        // Commission payment function
-        function payCommission() {
-            const { INITIAL_WALLET_CONNECTED, INITIAL_COMMISSION_PAID } = window.APP_CONFIG;
-            
-            if (INITIAL_COMMISSION_PAID) {
-                showToast('Commission already paid!', 'info');
-                return;
-            }
-            
-            if (!INITIAL_WALLET_CONNECTED) {
-                showToast('Please connect your wallet first!', 'error');
-                return;
-            }
-            
-            // نمایش مودال کمیسیون
-            showCommissionModal();
-        }
-
-        // Countdown timer function
-        function updateCountdown() {
-            // Set the target date (30 days from now for example)
-            const targetDate = new Date();
-            targetDate.setDate(targetDate.getDate() + 30);
-            
-            const now = new Date().getTime();
-            const distance = targetDate.getTime() - now;
-            
-            if (distance > 0) {
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                
-                document.getElementById('days').textContent = days.toString().padStart(2, '0');
-                document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
-                document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
-                document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
-            } else {
-                document.getElementById('days').textContent = '00';
-                document.getElementById('hours').textContent = '00';
-                document.getElementById('minutes').textContent = '00';
-                document.getElementById('seconds').textContent = '00';
             }
         }
     </script>
