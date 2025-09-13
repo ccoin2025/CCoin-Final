@@ -6,8 +6,7 @@
     <title>Pay Commission</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <!-- اصلاح URL کتابخانه bs58 -->
-    <script src="https://cdn.jsdelivr.net/npm/bs58@6.0.0/dist/index.min.js"></script>
+    <script src="https://unpkg.com/bs58@4.0.1/index.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -36,51 +35,7 @@
         .loading { display: none; margin-top: 20px; }
         .spinner { width: 20px; height: 20px; border: 2px solid #333; border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .debug-info { 
-            background: #1a1a1a; border: 1px solid #333; border-radius: 5px; 
-            padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px; 
-            text-align: left; color: #ccc; 
-        }
     </style>
-
-    <!-- تست بارگذاری کتابخانه‌ها -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🔍 Checking libraries in commission page...');
-            
-            // اضافه کردن debug info به صفحه
-            const debugInfo = document.createElement('div');
-            debugInfo.className = 'debug-info';
-            debugInfo.innerHTML = '<strong>Library Status:</strong><br>';
-            
-            if (typeof solanaWeb3 !== 'undefined') {
-                console.log('✅ Solana Web3 library loaded');
-                debugInfo.innerHTML += '✅ Solana Web3: Loaded<br>';
-            } else {
-                console.error('❌ Solana Web3 library not loaded');
-                debugInfo.innerHTML += '❌ Solana Web3: Not loaded<br>';
-            }
-            
-            if (typeof bs58 !== 'undefined') {
-                console.log('✅ bs58 library loaded');
-                debugInfo.innerHTML += '✅ bs58: Loaded<br>';
-                // تست عملکرد
-                try {
-                    const testEncode = bs58.encode(new Uint8Array([1, 2, 3, 4]));
-                    console.log('✅ bs58 encode test passed:', testEncode);
-                    debugInfo.innerHTML += `✅ bs58 test: ${testEncode}<br>`;
-                } catch (error) {
-                    console.error('❌ bs58 encode test failed:', error);
-                    debugInfo.innerHTML += `❌ bs58 test failed: ${error.message}<br>`;
-                }
-            } else {
-                console.error('❌ bs58 library not loaded');
-                debugInfo.innerHTML += '❌ bs58: Not loaded<br>';
-            }
-            
-            document.querySelector('.container').appendChild(debugInfo);
-        });
-    </script>
 </head>
 <body>
     <div class="container">
@@ -113,16 +68,6 @@
 
         let isProcessing = false;
 
-        // تابع چک کردن bs58 library
-        function ensureBs58() {
-            if (typeof bs58 === 'undefined') {
-                console.error('❌ bs58 library not loaded in commission page');
-                throw new Error('bs58 library not loaded');
-            }
-            console.log('✅ bs58 library verified in commission page');
-            return bs58;
-        }
-
         async function payCommission() {
             if (isProcessing) return;
 
@@ -131,10 +76,6 @@
             const status = document.getElementById('status');
 
             try {
-                // چک کردن bs58 library
-                const bs58Library = ensureBs58();
-                console.log("✅ bs58 library verified for commission payment");
-
                 isProcessing = true;
                 payBtn.disabled = true;
                 payBtn.textContent = 'Preparing Payment...';
@@ -175,11 +116,9 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = new solanaWeb3.PublicKey('11111111111111111111111111111111');
 
-                // سریالایز کردن تراکنش با bs58 library
+                // سریالایز کردن تراکنش
                 const serializedTransaction = transaction.serialize({ requireAllSignatures: false });
-                const base64Transaction = bs58Library.encode(serializedTransaction);
-
-                console.log('✅ Transaction serialized successfully with bs58');
+                const base64Transaction = bs58.encode(serializedTransaction);
 
                 // Phantom deeplink با تراکنش واقعی
                 const phantomUrl = `phantom://v1/signAndSendTransaction?` + 
