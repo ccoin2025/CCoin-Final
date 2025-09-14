@@ -14,6 +14,10 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), ".
 async def commission_payment_page(request: Request, telegram_id: str, db: Session = Depends(get_db)):
     """صفحه پرداخت commission در مرورگر خارجی"""
     
+    print(f"Debug: ADMIN_WALLET = {ADMIN_WALLET}")  # برای debug
+    print(f"Debug: COMMISSION_AMOUNT = {COMMISSION_AMOUNT}")  # برای debug
+    print(f"Debug: telegram_id = {telegram_id}")  # برای debug
+    
     # بررسی کاربر
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
@@ -25,6 +29,10 @@ async def commission_payment_page(request: Request, telegram_id: str, db: Sessio
     
     if not user.wallet_address:
         raise HTTPException(status_code=400, detail="Wallet not connected")
+    
+    # اطمینان از اینکه ADMIN_WALLET تعریف شده
+    if not ADMIN_WALLET or ADMIN_WALLET == "" or ADMIN_WALLET == "YOUR_SOLANA_WALLET_ADDRESS_HERE":
+        raise HTTPException(status_code=500, detail="Admin wallet not configured")
     
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
