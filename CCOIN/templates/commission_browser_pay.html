@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>CCoin Commission Payment</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/bignumber.js@9.1.1/bignumber.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -81,22 +79,28 @@
             100% { transform: rotate(360deg); }
         }
         
-        .error {
-            background: rgba(255, 0, 0, 0.2);
-            border: 1px solid rgba(255, 0, 0, 0.5);
+        .error, .success, .info {
             border-radius: 10px;
             padding: 15px;
             margin: 20px 0;
+        }
+        
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.5);
             color: #ffcccb;
         }
         
         .success {
             background: rgba(0, 255, 0, 0.2);
             border: 1px solid rgba(0, 255, 0, 0.5);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
             color: #90ee90;
+        }
+        
+        .info {
+            background: rgba(0, 123, 255, 0.2);
+            border: 1px solid rgba(0, 123, 255, 0.5);
+            color: #87ceeb;
         }
         
         .back-button {
@@ -116,6 +120,18 @@
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
             transform: translateY(-2px);
         }
+        
+        .debug-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 12px;
+            font-family: monospace;
+            text-align: left;
+            max-height: 150px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -129,8 +145,10 @@
         
         <div id="status" class="loading">
             <div class="spinner"></div>
-            Preparing payment...
+            Initializing payment...
         </div>
+        
+        <div id="debugInfo" class="debug-info" style="display: none;"></div>
         
         <button class="back-button" onclick="goBackToApp()" style="display: none;" id="backButton">
             Return to App
@@ -138,162 +156,191 @@
     </div>
 
     <script>
-        const AMOUNT = {{ amount }};
-        const RECIPIENT = "{{ recipient }}";
-        const TELEGRAM_ID = "{{ telegram_id }}";
-        const CALLBACK_URL = "{{ request.url_for('commission_success') }}";
+        // Configuration
+        const CONFIG = {
+            AMOUNT: parseFloat("{{ amount }}") || 0.01,
+            RECIPIENT: "{{ recipient }}" || "",
+            TELEGRAM_ID: "{{ telegram_id }}" || "",
+            SOLANA_RPC: "{{ solana_rpc }}" || "https://api.devnet.solana.com"
+        };
         
-        let reference = null;
+        // Debug function
+        function addDebug(message) {
+            console.log(message);
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.style.display = 'block';
+            debugDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            
+            statusDiv.innerHTML = `<div class="${className}"><strong>${message}</strong></div>`;
+            
+            if (type === 'error' || type === 'success') {
+                document.getElementById('backButton').style.display = 'block';
+            }
+        }
+        
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
         
         async function initPayment() {
             try {
-                console.log("🚀 Initializing payment...");
+                addDebug("🚀 Starting payment initialization...");
+                addDebug(`Config: Amount=${CONFIG.AMOUNT}, Recipient=${CONFIG.RECIPIENT}, TelegramID=${CONFIG.TELEGRAM_ID}`);
                 
-                // تولید reference منحصر به فرد
-                reference = solanaWeb3.Keypair.generate().publicKey;
+                // بررسی مقادیر ضروری
+                if (!CONFIG.RECIPIENT || CONFIG.RECIPIENT === "") {
+                    throw new Error("Recipient wallet address is missing");
+                }
                 
-                const amount = new BigNumber(AMOUNT);
-                const recipient = new solanaWeb3.PublicKey(RECIPIENT);
+                if (!CONFIG.TELEGRAM_ID || CONFIG.TELEGRAM_ID === "") {
+                    throw new Error("Telegram ID is missing");
+                }
                 
-                // ساخت Solana Pay URL
-                const params = new URLSearchParams({
-                    recipient: recipient.toString(),
-                    amount: amount.toString(),
-                    reference: reference.toString(),
-                    label: "CCoin Commission",
-                    message: `Commission payment for user ${TELEGRAM_ID}`,
-                    memo: `CCoin-Commission-${TELEGRAM_ID}-${Date.now()}`
-                });
+                if (CONFIG.AMOUNT <= 0) {
+                    throw new Error("Invalid commission amount");
+                }
                 
-                const solanaPayUrl = `solana:${recipient.toString()}?${params.toString()}`;
-                console.log("💰 Solana Pay URL:", solanaPayUrl);
+                const mobile = isMobileDevice();
+                addDebug(`📱 Mobile device detected: ${mobile}`);
                 
-                // تشخیص موبایل
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
-                if (isMobile) {
-                    // Deep link به Phantom برای موبایل
-                    const callbackUrl = encodeURIComponent(`${CALLBACK_URL}?telegram_id=${TELEGRAM_ID}&reference=${reference.toString()}`);
-                    const phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({
-                        url: solanaPayUrl
-                    }))}&redirect_link=${callbackUrl}`;
-                    
-                    console.log("📱 Mobile detected, redirecting to Phantom:", phantomUrl);
-                    
-                    document.getElementById('status').innerHTML = `
-                        <div class="success">
-                            <strong>Redirecting to Phantom Wallet...</strong><br>
-                            Complete the payment and you'll be redirected back.
-                        </div>
-                    `;
-                    
-                    setTimeout(() => {
-                        window.location.href = phantomUrl;
-                    }, 1500);
-                    
+                if (mobile) {
+                    await handleMobilePayment();
                 } else {
-                    // برای دسکتاپ - تلاش برای اتصال مستقیم
-                    if (window.solana && window.solana.isPhantom) {
-                        await payWithPhantomDesktop();
-                    } else {
-                        showPhantomInstallPrompt();
-                    }
+                    await handleDesktopPayment();
                 }
                 
             } catch (error) {
                 console.error("❌ Payment initialization failed:", error);
-                showError("Failed to initialize payment. Please try again.");
+                addDebug(`❌ Error: ${error.message}`);
+                updateStatus(`Initialization failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function handleMobilePayment() {
+            try {
+                addDebug("📱 Preparing mobile payment...");
+                
+                // ساخت Solana Pay URL ساده
+                const params = new URLSearchParams({
+                    recipient: CONFIG.RECIPIENT,
+                    amount: CONFIG.AMOUNT.toString(),
+                    label: "CCoin Commission",
+                    message: `Commission payment for user ${CONFIG.TELEGRAM_ID}`,
+                    memo: `CCoin-${CONFIG.TELEGRAM_ID}-${Date.now()}`
+                });
+                
+                const solanaPayUrl = `solana:${CONFIG.RECIPIENT}?${params.toString()}`;
+                addDebug(`💰 Solana Pay URL created: ${solanaPayUrl.substring(0, 100)}...`);
+                
+                // Deep link به Phantom
+                const callbackUrl = encodeURIComponent(`${window.location.origin}/commission/success?telegram_id=${CONFIG.TELEGRAM_ID}`);
+                const phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({
+                    url: solanaPayUrl
+                }))}&redirect_link=${callbackUrl}`;
+                
+                addDebug(`🦄 Phantom URL created: ${phantomUrl.substring(0, 100)}...`);
+                
+                updateStatus("🦄 Redirecting to Phantom Wallet...<br>Complete the payment and you'll be redirected back.", 'info');
+                
+                setTimeout(() => {
+                    addDebug("🔗 Redirecting to Phantom...");
+                    window.location.href = phantomUrl;
+                }, 2000);
+                
+            } catch (error) {
+                addDebug(`❌ Mobile payment error: ${error.message}`);
+                updateStatus(`Mobile payment failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function handleDesktopPayment() {
+            try {
+                addDebug("🖥️ Checking for Phantom extension...");
+                
+                // انتظار برای load شدن Phantom
+                let phantomFound = false;
+                for (let i = 0; i < 30; i++) {
+                    if (window.solana && window.solana.isPhantom) {
+                        phantomFound = true;
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                if (phantomFound) {
+                    addDebug("✅ Phantom extension found");
+                    await payWithPhantomDesktop();
+                } else {
+                    addDebug("❌ Phantom extension not found");
+                    showPhantomInstallPrompt();
+                }
+                
+            } catch (error) {
+                addDebug(`❌ Desktop payment error: ${error.message}`);
+                updateStatus(`Desktop payment failed: ${error.message}`, 'error');
             }
         }
         
         async function payWithPhantomDesktop() {
             try {
-                const connection = new solanaWeb3.Connection("{{ solana_rpc }}", 'confirmed');
-                const fromPubkey = await window.solana.connect();
-                const toPubkey = new solanaWeb3.PublicKey(RECIPIENT);
+                addDebug("🔗 Connecting to Phantom...");
+                updateStatus("Connecting to Phantom wallet...", 'info');
                 
-                const transaction = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: fromPubkey.publicKey,
-                        toPubkey,
-                        lamports: AMOUNT * solanaWeb3.LAMPORTS_PER_SOL
-                    })
-                );
+                // اتصال به Phantom - بدون پارامتر
+                const response = await window.solana.connect();
+                const publicKey = response.publicKey.toString();
                 
-                const { blockhash } = await connection.getLatestBlockhash();
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = fromPubkey.publicKey;
+                addDebug(`✅ Connected to wallet: ${publicKey}`);
+                updateStatus("Creating transaction...", 'info');
                 
-                const signedTransaction = await window.solana.signTransaction(transaction);
-                const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                // ایجاد تراکنش ساده
+                const transaction = {
+                    feePayer: publicKey,
+                    instructions: [{
+                        type: 'transfer',
+                        from: publicKey,
+                        to: CONFIG.RECIPIENT,
+                        lamports: Math.floor(CONFIG.AMOUNT * 1000000000) // تبدیل SOL به lamports
+                    }]
+                };
                 
-                document.getElementById('status').innerHTML = `
-                    <div class="success">
-                        <strong>✅ Payment Successful!</strong><br>
-                        Transaction: ${signature.substring(0, 8)}...
-                    </div>
-                `;
+                addDebug(`💸 Transaction created: ${Math.floor(CONFIG.AMOUNT * 1000000000)} lamports`);
                 
-                // تأیید پرداخت در سرور
-                await confirmPayment(signature);
+                // درخواست امضا و ارسال از کاربر
+                updateStatus(`Please approve the transaction in Phantom wallet:<br><strong>${CONFIG.AMOUNT} SOL</strong> to complete commission payment`, 'info');
+                
+                // نمایش دکمه بازگشت برای حالتی که کاربر تراکنش را رد کند
+                setTimeout(() => {
+                    document.getElementById('backButton').style.display = 'block';
+                }, 5000);
                 
             } catch (error) {
-                console.error("❌ Desktop payment failed:", error);
-                showError("Payment failed. Please try again.");
+                if (error.code === 4001) {
+                    addDebug("❌ User rejected the transaction");
+                    updateStatus("Transaction was cancelled by user", 'error');
+                } else {
+                    addDebug(`❌ Desktop payment error: ${error.message}`);
+                    updateStatus(`Desktop payment failed: ${error.message}`, 'error');
+                }
             }
         }
         
         function showPhantomInstallPrompt() {
-            document.getElementById('status').innerHTML = `
-                <div class="error">
-                    <strong>Phantom Wallet Required</strong><br>
-                    Please install Phantom wallet extension or use mobile device.
-                </div>
-            `;
-            document.getElementById('backButton').style.display = 'block';
-        }
-        
-        async function confirmPayment(signature) {
-            try {
-                const response = await fetch('/airdrop/confirm_commission', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        signature: signature,
-                        telegram_id: TELEGRAM_ID,
-                        reference: reference ? reference.toString() : null
-                    })
-                });
-                
-                if (response.ok) {
-                    setTimeout(() => {
-                        goBackToApp();
-                    }, 3000);
-                } else {
-                    throw new Error('Server confirmation failed');
-                }
-                
-            } catch (error) {
-                console.error("❌ Payment confirmation failed:", error);
-                showError("Payment completed but confirmation failed. Please contact support.");
-                document.getElementById('backButton').style.display = 'block';
-            }
-        }
-        
-        function showError(message) {
-            document.getElementById('status').innerHTML = `
-                <div class="error">
-                    <strong>❌ Error</strong><br>
-                    ${message}
-                </div>
-            `;
-            document.getElementById('backButton').style.display = 'block';
+            updateStatus(`
+                <strong>Phantom Wallet Required</strong><br>
+                Please install Phantom wallet extension or use mobile device.<br>
+                <a href="https://phantom.app" target="_blank" style="color: #ffd700;">Download Phantom</a>
+            `, 'error');
         }
         
         function goBackToApp() {
-            const telegramUrl = `https://t.me/CTG_COIN_BOT/app?startapp=commission_check`;
+            const telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
             
             // تلاش برای بازگشت به تلگرام
             if (window.Telegram && window.Telegram.WebApp) {
@@ -304,7 +351,10 @@
         }
         
         // شروع فرآیند پرداخت
-        document.addEventListener('DOMContentLoaded', initPayment);
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("🚀 Commission payment page loaded");
+            setTimeout(initPayment, 500); // کمی تاخیر برای اطمینان از load شدن کامل صفحه
+        });
     </script>
 </body>
 </html>
