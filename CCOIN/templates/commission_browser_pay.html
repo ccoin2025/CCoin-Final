@@ -195,7 +195,7 @@
                 return {
                     telegram_id: params.telegram_id || '',
                     amount: 0.01,
-                    recipient: "YOUR_ADMIN_WALLET_ADDRESS", // اینجا آدرس واقعی کیف پول خود را قرار دهید
+                    recipient: "5YFFCvmi2f4ZWZYUWWBuMSmmjXrYA1QptaTaLG8vi15K", // اینجا آدرس واقعی کیف پول خود را قرار دهید
                     solana_rpc: "https://api.devnet.solana.com"
                 };
             }
@@ -284,20 +284,56 @@
                 const solanaPayUrl = `solana:${CONFIG.recipient}?${params.toString()}`;
                 addDebug(`💰 Solana Pay URL created: ${solanaPayUrl.substring(0, 100)}...`);
                 
-                // Deep link به Phantom
-                const callbackUrl = encodeURIComponent(`${window.location.origin}/commission/success?telegram_id=${CONFIG.telegram_id}`);
+                // Deep link به Phantom - بدون redirect_link
                 const phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({
                     url: solanaPayUrl
-                }))}&redirect_link=${callbackUrl}`;
+                }))}`;
                 
                 addDebug(`🦄 Phantom URL created: ${phantomUrl.substring(0, 100)}...`);
                 
-                updateStatus("🦄 Redirecting to Phantom Wallet...<br>Complete the payment and you'll be redirected back.", 'info');
+                updateStatus("🦄 Click to open Phantom Wallet<br><button onclick=\"openPhantom()\" class=\"back-button\" style=\"margin-top:10px;\">Open Phantom</button>", 'info');
                 
-                setTimeout(() => {
-                    addDebug("🔗 Redirecting to Phantom...");
-                    window.location.href = phantomUrl;
-                }, 2000);
+                // تعریف تابع openPhantom برای کلیک دستی
+                window.openPhantom = function() {
+                    addDebug("🔗 Opening Phantom...");
+                    updateStatus("🦄 Phantom opened. Complete the payment and click 'I Paid' below.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Paid</button>", 'info');
+                    
+                    // باز کردن Phantom در tab جدید
+                    window.open(phantomUrl, '_blank');
+                };
+                
+                // تعریف تابع بررسی وضعیت پرداخت
+                window.checkPaymentStatus = async function() {
+                    try {
+                        updateStatus("⏳ Verifying payment...", 'info');
+                        
+                        const response = await fetch('/commission/confirm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                telegram_id: CONFIG.telegram_id,
+                                amount: CONFIG.amount,
+                                signature: 'manual_confirmation_' + Date.now() // برای تست
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            updateStatus("✅ Payment confirmed! Redirecting back to app...", 'success');
+                            setTimeout(() => {
+                                const successUrl = `${window.location.origin}/commission/success?telegram_id=${CONFIG.telegram_id}`;
+                                window.location.href = successUrl;
+                            }, 2000);
+                        } else {
+                            throw new Error('Payment verification failed');
+                        }
+                        
+                    } catch (error) {
+                        addDebug(`❌ Payment verification error: ${error.message}`);
+                        updateStatus("❌ Payment verification failed. Please try again.", 'error');
+                    }
+                };
                 
             } catch (error) {
                 addDebug(`❌ Mobile payment error: ${error.message}`);
@@ -335,41 +371,78 @@
         
         async function payWithPhantomDesktop() {
             try {
-                addDebug("🔗 Connecting to Phantom...");
-                updateStatus("Connecting to Phantom wallet...", 'info');
+                addDebug("🦄 Starting Phantom desktop payment...");
+                updateStatus("🦄 Click to pay with Phantom<br><button onclick=\"startPhantomDesktopPayment()\" class=\"back-button\" style=\"margin-top:10px;\">Pay with Phantom</button>", 'info');
                 
-                // اتصال به Phantom
-                const response = await window.solana.connect();
-                const publicKey = response.publicKey.toString();
-                
-                addDebug(`✅ Connected to wallet: ${publicKey}`);
-                updateStatus("Creating transaction...", 'info');
-                
-                // درخواست امضا و ارسال از کاربر
-                updateStatus(`Please approve the transaction in Phantom wallet:<br><strong>${CONFIG.amount} SOL</strong> to complete commission payment`, 'info');
-                
-                // نمایش دکمه بازگشت برای حالتی که کاربر تراکنش را رد کند
-                setTimeout(() => {
-                    document.getElementById('backButton').style.display = 'block';
-                }, 5000);
+                window.startPhantomDesktopPayment = async function() {
+                    try {
+                        updateStatus("⏳ Processing payment...", 'info');
+                        
+                        // اتصال به Phantom
+                        const resp = await window.solana.connect();
+                        addDebug(`✅ Connected to Phantom: ${resp.publicKey.toString()}`);
+                        
+                        // ساخت transaction
+                        const { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } = window.solanaWeb3;
+                        const connection = new Connection(CONFIG.solana_rpc);
+                        
+                        const transaction = new Transaction().add(
+                            SystemProgram.transfer({
+                                fromPubkey: resp.publicKey,
+                                toPubkey: new PublicKey(CONFIG.recipient),
+                                lamports: CONFIG.amount * LAMPORTS_PER_SOL
+                            })
+                        );
+                        
+                        transaction.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
+                        transaction.feePayer = resp.publicKey;
+                        
+                        // ارسال transaction
+                        const signed = await window.solana.signTransaction(transaction);
+                        const signature = await connection.sendRawTransaction(signed.serialize());
+                        
+                        addDebug(`✅ Transaction sent: ${signature}`);
+                        
+                        // تأیید transaction
+                        await connection.confirmTransaction(signature);
+                        
+                        // ارسال تأیید به سرور
+                        const response = await fetch('/commission/confirm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                telegram_id: CONFIG.telegram_id,
+                                signature: signature,
+                                amount: CONFIG.amount
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            updateStatus("✅ Payment confirmed! Redirecting...", 'success');
+                            setTimeout(() => {
+                                const successUrl = `${window.location.origin}/commission/success?telegram_id=${CONFIG.telegram_id}&signature=${signature}`;
+                                window.location.href = successUrl;
+                            }, 2000);
+                        } else {
+                            throw new Error('Server confirmation failed');
+                        }
+                        
+                    } catch (error) {
+                        addDebug(`❌ Desktop payment error: ${error.message}`);
+                        updateStatus(`Payment failed: ${error.message}`, 'error');
+                    }
+                };
                 
             } catch (error) {
-                if (error.code === 4001) {
-                    addDebug("❌ User rejected the transaction");
-                    updateStatus("Transaction was cancelled by user", 'error');
-                } else {
-                    addDebug(`❌ Desktop payment error: ${error.message}`);
-                    updateStatus(`Desktop payment failed: ${error.message}`, 'error');
-                }
+                addDebug(`❌ Desktop payment setup error: ${error.message}`);
+                updateStatus(`Desktop payment setup failed: ${error.message}`, 'error');
             }
         }
         
         function showPhantomInstallPrompt() {
-            updateStatus(`
-                <strong>Phantom Wallet Required</strong><br>
-                Please install Phantom wallet extension or use mobile device.<br>
-                <a href="https://phantom.app" target="_blank" style="color: #ffd700;">Download Phantom</a>
-            `, 'error');
+            updateStatus(`🦄 Phantom wallet not found<br>Please install Phantom browser extension<br><a href="https://phantom.app/" target="_blank" style="color: #ffd700;">Download Phantom</a><br><br>Or use mobile device for easier payment`, 'error');
         }
         
         function goBackToApp() {
@@ -383,11 +456,20 @@
             }
         }
         
-        // شروع فرآیند پرداخت
+        // اجرای اولیه
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("🚀 Commission payment page loaded");
-            setTimeout(initPayment, 500);
+            addDebug("🚀 Commission payment page loaded");
+            
+            // شروع فرآیند پرداخت
+            initPayment();
         });
+        
+        // Load Solana Web3.js برای desktop
+        if (!isMobileDevice()) {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js';
+            document.head.appendChild(script);
+        }
     </script>
 </body>
 </html>
