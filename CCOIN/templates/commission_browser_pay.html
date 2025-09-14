@@ -138,7 +138,7 @@
     <div class="payment-container">
         <div class="logo">🪙</div>
         <h1>CCoin Commission</h1>
-        <div class="amount">{{ amount }} SOL</div>
+        <div class="amount" id="displayAmount">0.01 SOL</div>
         <div class="description">
             Please complete the payment to unlock your airdrop tokens
         </div>
@@ -156,13 +156,53 @@
     </div>
 
     <script>
-        // Configuration
-        const CONFIG = {
-            AMOUNT: parseFloat("{{ amount }}") || 0.01,
-            RECIPIENT: "{{ recipient }}" || "",
-            TELEGRAM_ID: "{{ telegram_id }}" || "",
-            SOLANA_RPC: "{{ solana_rpc }}" || "https://api.devnet.solana.com"
-        };
+        // گرفتن مقادیر از URL parameters
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return {
+                telegram_id: urlParams.get('telegram_id') || '',
+                amount: parseFloat(urlParams.get('amount')) || 0.01,
+                recipient: urlParams.get('recipient') || ''
+            };
+        }
+        
+        // دریافت مقادیر از backend API
+        async function fetchPaymentConfig() {
+            try {
+                const params = getUrlParams();
+                if (!params.telegram_id) {
+                    throw new Error("Telegram ID missing from URL");
+                }
+                
+                const response = await fetch(`/airdrop/commission_status?telegram_id=${params.telegram_id}`);
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return {
+                    telegram_id: params.telegram_id,
+                    amount: data.commission_amount || 0.01,
+                    recipient: data.admin_wallet || '',
+                    solana_rpc: "https://api.devnet.solana.com"
+                };
+                
+            } catch (error) {
+                // Fallback: اگر API کار نکرد، از مقادیر پیش‌فرض استفاده کن
+                console.warn("API fetch failed, using fallback config:", error.message);
+                
+                const params = getUrlParams();
+                return {
+                    telegram_id: params.telegram_id || '',
+                    amount: 0.01,
+                    recipient: "YOUR_ADMIN_WALLET_ADDRESS", // اینجا آدرس واقعی کیف پول خود را قرار دهید
+                    solana_rpc: "https://api.devnet.solana.com"
+                };
+            }
+        }
+        
+        // Configuration - حالا از API دریافت می‌شود
+        let CONFIG = {};
         
         // Debug function
         function addDebug(message) {
@@ -191,18 +231,24 @@
         async function initPayment() {
             try {
                 addDebug("🚀 Starting payment initialization...");
-                addDebug(`Config: Amount=${CONFIG.AMOUNT}, Recipient=${CONFIG.RECIPIENT}, TelegramID=${CONFIG.TELEGRAM_ID}`);
+                
+                // دریافت configuration
+                CONFIG = await fetchPaymentConfig();
+                addDebug(`Config loaded: Amount=${CONFIG.amount}, Recipient=${CONFIG.recipient}, TelegramID=${CONFIG.telegram_id}`);
+                
+                // به‌روزرسانی نمایش مبلغ
+                document.getElementById('displayAmount').textContent = `${CONFIG.amount} SOL`;
                 
                 // بررسی مقادیر ضروری
-                if (!CONFIG.RECIPIENT || CONFIG.RECIPIENT === "") {
-                    throw new Error("Recipient wallet address is missing");
+                if (!CONFIG.recipient || CONFIG.recipient === "" || CONFIG.recipient === "YOUR_ADMIN_WALLET_ADDRESS") {
+                    throw new Error("Admin wallet address not configured properly");
                 }
                 
-                if (!CONFIG.TELEGRAM_ID || CONFIG.TELEGRAM_ID === "") {
+                if (!CONFIG.telegram_id || CONFIG.telegram_id === "") {
                     throw new Error("Telegram ID is missing");
                 }
                 
-                if (CONFIG.AMOUNT <= 0) {
+                if (CONFIG.amount <= 0) {
                     throw new Error("Invalid commission amount");
                 }
                 
@@ -228,18 +274,18 @@
                 
                 // ساخت Solana Pay URL ساده
                 const params = new URLSearchParams({
-                    recipient: CONFIG.RECIPIENT,
-                    amount: CONFIG.AMOUNT.toString(),
+                    recipient: CONFIG.recipient,
+                    amount: CONFIG.amount.toString(),
                     label: "CCoin Commission",
-                    message: `Commission payment for user ${CONFIG.TELEGRAM_ID}`,
-                    memo: `CCoin-${CONFIG.TELEGRAM_ID}-${Date.now()}`
+                    message: `Commission payment for user ${CONFIG.telegram_id}`,
+                    memo: `CCoin-${CONFIG.telegram_id}-${Date.now()}`
                 });
                 
-                const solanaPayUrl = `solana:${CONFIG.RECIPIENT}?${params.toString()}`;
+                const solanaPayUrl = `solana:${CONFIG.recipient}?${params.toString()}`;
                 addDebug(`💰 Solana Pay URL created: ${solanaPayUrl.substring(0, 100)}...`);
                 
                 // Deep link به Phantom
-                const callbackUrl = encodeURIComponent(`${window.location.origin}/commission/success?telegram_id=${CONFIG.TELEGRAM_ID}`);
+                const callbackUrl = encodeURIComponent(`${window.location.origin}/commission/success?telegram_id=${CONFIG.telegram_id}`);
                 const phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({
                     url: solanaPayUrl
                 }))}&redirect_link=${callbackUrl}`;
@@ -292,28 +338,15 @@
                 addDebug("🔗 Connecting to Phantom...");
                 updateStatus("Connecting to Phantom wallet...", 'info');
                 
-                // اتصال به Phantom - بدون پارامتر
+                // اتصال به Phantom
                 const response = await window.solana.connect();
                 const publicKey = response.publicKey.toString();
                 
                 addDebug(`✅ Connected to wallet: ${publicKey}`);
                 updateStatus("Creating transaction...", 'info');
                 
-                // ایجاد تراکنش ساده
-                const transaction = {
-                    feePayer: publicKey,
-                    instructions: [{
-                        type: 'transfer',
-                        from: publicKey,
-                        to: CONFIG.RECIPIENT,
-                        lamports: Math.floor(CONFIG.AMOUNT * 1000000000) // تبدیل SOL به lamports
-                    }]
-                };
-                
-                addDebug(`💸 Transaction created: ${Math.floor(CONFIG.AMOUNT * 1000000000)} lamports`);
-                
                 // درخواست امضا و ارسال از کاربر
-                updateStatus(`Please approve the transaction in Phantom wallet:<br><strong>${CONFIG.AMOUNT} SOL</strong> to complete commission payment`, 'info');
+                updateStatus(`Please approve the transaction in Phantom wallet:<br><strong>${CONFIG.amount} SOL</strong> to complete commission payment`, 'info');
                 
                 // نمایش دکمه بازگشت برای حالتی که کاربر تراکنش را رد کند
                 setTimeout(() => {
@@ -353,7 +386,7 @@
         // شروع فرآیند پرداخت
         document.addEventListener('DOMContentLoaded', function() {
             console.log("🚀 Commission payment page loaded");
-            setTimeout(initPayment, 500); // کمی تاخیر برای اطمینان از load شدن کامل صفحه
+            setTimeout(initPayment, 500);
         });
     </script>
 </body>
