@@ -201,7 +201,7 @@
             }
         }
         
-        // Configuration - حالا از API دریافت می‌شود
+        // Configuration
         let CONFIG = {};
         
         // Debug function
@@ -224,13 +224,9 @@
             }
         }
         
-        function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-        
         async function initPayment() {
             try {
-                addDebug("🚀 Starting payment initialization...");
+                addDebug("🚀 Starting mobile payment initialization...");
                 
                 // دریافت configuration
                 CONFIG = await fetchPaymentConfig();
@@ -252,14 +248,7 @@
                     throw new Error("Invalid commission amount");
                 }
                 
-                const mobile = isMobileDevice();
-                addDebug(`📱 Mobile device detected: ${mobile}`);
-                
-                if (mobile) {
-                    await handleMobilePayment();
-                } else {
-                    await handleDesktopPayment();
-                }
+                await handleMobilePayment();
                 
             } catch (error) {
                 console.error("❌ Payment initialization failed:", error);
@@ -274,19 +263,38 @@
                 
                 const reference = "CCoin-" + CONFIG.telegram_id + "-" + Date.now();
                 
-                // روش Phantom Universal Link
-                const phantomUrl = `https://phantom.app/ul/v1/pay?recipient=${encodeURIComponent(CONFIG.recipient)}&amount=${CONFIG.amount}&label=${encodeURIComponent("CCoin Commission")}&message=${encodeURIComponent("Commission payment")}&memo=${encodeURIComponent(reference)}`;
+                // روش مستقیم Solana Pay URL
+                const solanaPayUrl = `solana:${CONFIG.recipient}?amount=${CONFIG.amount}&spl-token=So11111111111111111111111111111111111111112&reference=${reference}&label=${encodeURIComponent("CCoin Commission")}&message=${encodeURIComponent("Commission payment for CCoin airdrop")}`;
                 
-                addDebug(`🦄 Phantom Universal Link: ${phantomUrl.substring(0, 100)}...`);
+                addDebug(`💰 Solana Pay URL: ${solanaPayUrl}`);
                 
-                updateStatus("🦄 Click to open Phantom Wallet<br><button onclick=\"openPhantom()\" class=\"back-button\" style=\"margin-top:10px;\">Pay 0.01 SOL</button>", 'info');
+                // Deep link مستقیم Phantom
+                const phantomDirectUrl = `phantom://v1/pay?url=${encodeURIComponent(solanaPayUrl)}`;
+                
+                addDebug(`🦄 Phantom Direct URL: ${phantomDirectUrl}`);
+                
+                updateStatus(`🦄 Click to open Phantom Wallet<br><button onclick="openPhantom()" class="back-button" style="margin-top:10px;">🦄 Pay ${CONFIG.amount} SOL</button>`, 'info');
                 
                 window.openPhantom = function() {
-                    addDebug("🔗 Opening Phantom with Universal Link...");
-                    updateStatus("🦄 Opening Phantom App...<br>You should see a transaction to approve.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Completed Payment</button>", 'info');
+                    addDebug("🔗 Opening Phantom with direct deep link...");
+                    updateStatus("🦄 Opening Phantom App...<br>Complete the transaction and return here.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Completed Payment</button>", 'info');
                     
-                    // استفاده از Universal Link
-                    window.location.href = phantomUrl;
+                    // تلاش برای باز کردن Phantom
+                    try {
+                        // روش 1: Deep link مستقیم
+                        window.location.href = phantomDirectUrl;
+                        
+                        // روش 2: اگر deep link کار نکرد، universal link
+                        setTimeout(() => {
+                            const universalUrl = `https://phantom.app/ul/v1/pay?recipient=${CONFIG.recipient}&amount=${CONFIG.amount}&label=CCoin%20Commission&message=Commission%20payment`;
+                            addDebug(`🔗 Fallback to universal link: ${universalUrl}`);
+                            window.location.href = universalUrl;
+                        }, 3000);
+                        
+                    } catch (error) {
+                        addDebug(`❌ Failed to open Phantom: ${error.message}`);
+                        updateStatus("❌ Failed to open Phantom. Please install Phantom app.", 'error');
+                    }
                 };
                 
                 window.checkPaymentStatus = async function() {
@@ -328,114 +336,9 @@
             }
         }
         
-        async function handleDesktopPayment() {
-            try {
-                addDebug("🖥️ Checking for Phantom extension...");
-                
-                // انتظار برای load شدن Phantom
-                let phantomFound = false;
-                for (let i = 0; i < 30; i++) {
-                    if (window.solana && window.solana.isPhantom) {
-                        phantomFound = true;
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                if (phantomFound) {
-                    addDebug("✅ Phantom extension found");
-                    await payWithPhantomDesktop();
-                } else {
-                    addDebug("❌ Phantom extension not found");
-                    showPhantomInstallPrompt();
-                }
-                
-            } catch (error) {
-                addDebug(`❌ Desktop payment error: ${error.message}`);
-                updateStatus(`Desktop payment failed: ${error.message}`, 'error');
-            }
-        }
-        
-        async function payWithPhantomDesktop() {
-            try {
-                addDebug("🦄 Starting Phantom desktop payment...");
-                updateStatus("🦄 Click to pay with Phantom<br><button onclick=\"startPhantomDesktopPayment()\" class=\"back-button\" style=\"margin-top:10px;\">Pay with Phantom</button>", 'info');
-                
-                window.startPhantomDesktopPayment = async function() {
-                    try {
-                        updateStatus("⏳ Processing payment...", 'info');
-                        
-                        // اتصال به Phantom
-                        const resp = await window.solana.connect();
-                        addDebug(`✅ Connected to Phantom: ${resp.publicKey.toString()}`);
-                        
-                        // ساخت transaction
-                        const { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } = window.solanaWeb3;
-                        const connection = new Connection(CONFIG.solana_rpc);
-                        
-                        const transaction = new Transaction().add(
-                            SystemProgram.transfer({
-                                fromPubkey: resp.publicKey,
-                                toPubkey: new PublicKey(CONFIG.recipient),
-                                lamports: CONFIG.amount * LAMPORTS_PER_SOL
-                            })
-                        );
-                        
-                        transaction.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
-                        transaction.feePayer = resp.publicKey;
-                        
-                        // ارسال transaction
-                        const signed = await window.solana.signTransaction(transaction);
-                        const signature = await connection.sendRawTransaction(signed.serialize());
-                        
-                        addDebug(`✅ Transaction sent: ${signature}`);
-                        
-                        // تأیید transaction
-                        await connection.confirmTransaction(signature);
-                        
-                        // ارسال تأیید به سرور
-                        const response = await fetch('/commission/confirm', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                telegram_id: CONFIG.telegram_id,
-                                signature: signature,
-                                amount: CONFIG.amount
-                            })
-                        });
-                        
-                        if (response.ok) {
-                            updateStatus("✅ Payment confirmed! Redirecting...", 'success');
-                            setTimeout(() => {
-                                const successUrl = `${window.location.origin}/commission/success?telegram_id=${CONFIG.telegram_id}&signature=${signature}`;
-                                window.location.href = successUrl;
-                            }, 2000);
-                        } else {
-                            throw new Error('Server confirmation failed');
-                        }
-                        
-                    } catch (error) {
-                        addDebug(`❌ Desktop payment error: ${error.message}`);
-                        updateStatus(`Payment failed: ${error.message}`, 'error');
-                    }
-                };
-                
-            } catch (error) {
-                addDebug(`❌ Desktop payment setup error: ${error.message}`);
-                updateStatus(`Desktop payment setup failed: ${error.message}`, 'error');
-            }
-        }
-        
-        function showPhantomInstallPrompt() {
-            updateStatus(`🦄 Phantom wallet not found<br>Please install Phantom browser extension<br><a href="https://phantom.app/" target="_blank" style="color: #ffd700;">Download Phantom</a><br><br>Or use mobile device for easier payment`, 'error');
-        }
-        
         function goBackToApp() {
             const telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
             
-            // تلاش برای بازگشت به تلگرام
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.openTelegramLink(telegramUrl);
             } else {
@@ -445,18 +348,9 @@
         
         // اجرای اولیه
         document.addEventListener('DOMContentLoaded', function() {
-            addDebug("🚀 Commission payment page loaded");
-            
-            // شروع فرآیند پرداخت
+            addDebug("🚀 Mobile commission payment page loaded");
             initPayment();
         });
-        
-        // Load Solana Web3.js برای desktop
-        if (!isMobileDevice()) {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js';
-            document.head.appendChild(script);
-        }
     </script>
 </body>
 </html>
