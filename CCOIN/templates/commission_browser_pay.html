@@ -79,48 +79,26 @@
             100% { transform: rotate(360deg); }
         }
         
-        .error, .success, .info {
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        
-        .error {
-            background: rgba(255, 0, 0, 0.2);
-            border: 1px solid rgba(255, 0, 0, 0.5);
-            color: #ffcccb;
-        }
-        
-        .success {
-            background: rgba(0, 255, 0, 0.2);
-            border: 1px solid rgba(0, 255, 0, 0.5);
-            color: #90ee90;
-        }
-        
-        .info {
-            background: rgba(0, 123, 255, 0.2);
-            border: 1px solid rgba(0, 123, 255, 0.5);
-            color: #87ceeb;
-        }
-        
         .phantom-button {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 20px 40px;
             border-radius: 25px;
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 600;
             cursor: pointer;
-            margin: 20px 10px;
+            margin: 30px 0;
             transition: all 0.3s ease;
             text-decoration: none;
             display: inline-block;
+            box-shadow: 0 4px 15px rgba(171, 159, 242, 0.4);
         }
         
         .phantom-button:hover {
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(171, 159, 242, 0.6);
         }
         
         .back-button {
@@ -141,6 +119,15 @@
             transform: translateY(-2px);
         }
         
+        .info {
+            background: rgba(0, 123, 255, 0.2);
+            border: 1px solid rgba(0, 123, 255, 0.5);
+            color: #87ceeb;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
         .debug-info {
             background: rgba(0, 0, 0, 0.3);
             border-radius: 10px;
@@ -149,35 +136,8 @@
             font-size: 12px;
             font-family: monospace;
             text-align: left;
-            max-height: 150px;
+            max-height: 100px;
             overflow-y: auto;
-        }
-        
-        .qr-section {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            color: #333;
-        }
-        
-        .manual-pay-info {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            font-size: 14px;
-            text-align: left;
-        }
-        
-        .wallet-address {
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 8px;
-            border-radius: 5px;
-            word-break: break-all;
-            font-size: 12px;
-            margin: 8px 0;
         }
     </style>
 </head>
@@ -185,44 +145,30 @@
     <div class="payment-container">
         <div class="logo">🪙</div>
         <h1>CCoin Commission</h1>
-        <div class="amount" id="displayAmount">{{ amount }} SOL</div>
+        <div class="amount">{{ amount }} SOL</div>
         <div class="description">
             Complete the payment to unlock your airdrop tokens
         </div>
         
-        <div id="status" class="loading">
+        <div id="status" class="loading" style="display: none;">
             <div class="spinner"></div>
-            Preparing payment options...
+            Opening Phantom App...
         </div>
         
-        <div id="paymentOptions" style="display: none;">
+        <div id="paymentSection">
+            <button class="phantom-button" onclick="openPhantomApp()">
+                🦄 Pay with Phantom
+            </button>
+            
             <div class="info">
-                <strong>Choose Payment Method:</strong>
+                Click the button above to pay <strong>{{ amount }} SOL</strong><br>
+                using your Phantom wallet
             </div>
-            
-            <button id="phantomAppButton" class="phantom-button" onclick="openPhantomApp()">
-                🦄 Open Phantom App
-            </button>
-            
-            <button id="phantomWebButton" class="phantom-button" onclick="openPhantomWeb()" style="display: none;">
-                🌐 Phantom Web
-            </button>
-            
-            <div class="manual-pay-info">
-                <strong>Manual Payment Instructions:</strong><br>
-                Send <strong>{{ amount }} SOL</strong> to:<br>
-                <div class="wallet-address">{{ recipient }}</div>
-                <small>Then click "I Paid" button below</small>
-            </div>
-            
-            <button class="phantom-button" onclick="markAsPaid()" style="background: #28a745;">
-                ✅ I Paid Manually
-            </button>
         </div>
         
         <div id="debugInfo" class="debug-info" style="display: none;"></div>
         
-        <button class="back-button" onclick="goBackToApp()" id="backButton">
+        <button class="back-button" onclick="goBackToApp()">
             Return to App
         </button>
     </div>
@@ -231,11 +177,9 @@
         const CONFIG = {
             AMOUNT: parseFloat("{{ amount }}") || 0.01,
             RECIPIENT: "{{ recipient }}" || "",
-            TELEGRAM_ID: "{{ telegram_id }}" || "",
-            SOLANA_RPC: "{{ solana_rpc }}" || "https://api.devnet.solana.com"
+            TELEGRAM_ID: "{{ telegram_id }}" || ""
         };
         
-        // Debug function
         function addDebug(message) {
             console.log(message);
             const debugDiv = document.getElementById('debugInfo');
@@ -244,140 +188,93 @@
             debugDiv.scrollTop = debugDiv.scrollHeight;
         }
         
-        function updateStatus(message, type = 'info') {
-            const statusDiv = document.getElementById('status');
-            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
-            
-            statusDiv.innerHTML = `<div class="${className}">${message}</div>`;
-        }
-        
-        function showPaymentOptions() {
-            document.getElementById('status').style.display = 'none';
-            document.getElementById('paymentOptions').style.display = 'block';
-        }
-        
         function isMobileDevice() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
         
-        // باز کردن Phantom App
         function openPhantomApp() {
             try {
-                addDebug("🦄 Opening Phantom App...");
+                addDebug("🦄 Starting Phantom payment...");
+                
+                // نمایش loading
+                document.getElementById('paymentSection').style.display = 'none';
+                document.getElementById('status').style.display = 'block';
                 
                 const amount = CONFIG.AMOUNT;
                 const recipient = CONFIG.RECIPIENT;
-                const reference = generateReference();
+                const reference = Date.now().toString();
+                const callbackUrl = `${window.location.origin}/commission/success?telegram_id=${CONFIG.TELEGRAM_ID}&ref=${reference}`;
                 
-                // ساخت URL استاندارد Phantom
                 let phantomUrl;
                 
                 if (isMobileDevice()) {
-                    // برای موبایل - deep link مستقیم
-                    const solanaPayParams = new URLSearchParams({
+                    // Mobile Deep Link - روش استاندارد Phantom
+                    const transactionParams = {
                         recipient: recipient,
-                        amount: amount.toString(),
+                        amount: amount,
+                        reference: reference,
                         label: "CCoin Commission",
-                        message: `Commission payment for user ${CONFIG.TELEGRAM_ID}`,
-                        memo: `CCoin-${CONFIG.TELEGRAM_ID}-${Date.now()}`
-                    });
+                        message: `Commission payment for CCoin airdrop`,
+                        memo: `CCoin-${CONFIG.TELEGRAM_ID}-${reference}`
+                    };
                     
-                    const solanaPayUrl = `solana:${recipient}?${solanaPayParams.toString()}`;
-                    phantomUrl = `phantom://v1/pay?url=${encodeURIComponent(solanaPayUrl)}&redirect_link=${encodeURIComponent(window.location.origin + '/commission/success?telegram_id=' + CONFIG.TELEGRAM_ID)}`;
+                    const encodedParams = encodeURIComponent(JSON.stringify(transactionParams));
+                    phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodedParams}&redirect_link=${encodeURIComponent(callbackUrl)}`;
+                    
+                    addDebug(`Mobile Phantom URL: ${phantomUrl.substring(0, 80)}...`);
                     
                 } else {
-                    // برای دسکتاپ - Phantom universal link
-                    phantomUrl = `https://phantom.app/ul/v1/pay?recipient=${encodeURIComponent(recipient)}&amount=${amount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Commission payment')}&redirect_link=${encodeURIComponent(window.location.origin + '/commission/success?telegram_id=' + CONFIG.TELEGRAM_ID)}`;
+                    // Desktop Universal Link
+                    const params = new URLSearchParams({
+                        recipient: recipient,
+                        amount: amount.toString(),
+                        reference: reference,
+                        label: "CCoin Commission",
+                        message: "Commission payment for CCoin airdrop",
+                        redirect_link: callbackUrl
+                    });
+                    
+                    phantomUrl = `https://phantom.app/ul/v1/pay?${params.toString()}`;
+                    
+                    addDebug(`Desktop Phantom URL: ${phantomUrl.substring(0, 80)}...`);
                 }
-                
-                addDebug(`Phantom URL: ${phantomUrl}`);
-                
-                updateStatus("🦄 Opening Phantom App...<br><small>Complete the transaction in Phantom</small>", 'info');
                 
                 // هدایت به Phantom
                 window.location.href = phantomUrl;
                 
-                // بعد از 5 ثانیه، نمایش گزینه‌های دیگر
+                // اگر بعد از 10 ثانیه هنوز در همین صفحه بود، پیام نمایش بده
                 setTimeout(() => {
-                    updateStatus("If Phantom didn't open, try other options below:", 'info');
-                    document.getElementById('phantomWebButton').style.display = 'inline-block';
-                }, 5000);
+                    if (!document.hidden) {
+                        document.getElementById('status').innerHTML = `
+                            <div class="info">
+                                <strong>Having trouble?</strong><br>
+                                Make sure Phantom wallet is installed on your device<br>
+                                <a href="https://phantom.app/download" target="_blank" style="color: #ffd700;">Download Phantom</a>
+                            </div>
+                        `;
+                        document.getElementById('paymentSection').style.display = 'block';
+                    }
+                }, 10000);
                 
             } catch (error) {
-                addDebug(`❌ Error opening Phantom: ${error.message}`);
-                updateStatus(`Failed to open Phantom: ${error.message}`, 'error');
+                addDebug(`❌ Error: ${error.message}`);
+                document.getElementById('status').style.display = 'none';
+                document.getElementById('paymentSection').style.display = 'block';
+                
+                // نمایش پیام خطا
+                document.getElementById('paymentSection').innerHTML = `
+                    <div style="color: #ff6b6b; padding: 20px; border-radius: 10px; background: rgba(255, 0, 0, 0.1);">
+                        <strong>Payment Error</strong><br>
+                        ${error.message}<br><br>
+                        <button class="phantom-button" onclick="location.reload()">Try Again</button>
+                    </div>
+                `;
             }
-        }
-        
-        // باز کردن Phantom در مرورگر
-        function openPhantomWeb() {
-            try {
-                const phantomWebUrl = `https://phantom.app/pay?recipient=${encodeURIComponent(CONFIG.RECIPIENT)}&amount=${CONFIG.AMOUNT}&label=CCoin%20Commission`;
-                window.open(phantomWebUrl, '_blank');
-                
-                updateStatus("Phantom opened in new tab. Complete payment and click 'I Paid' below.", 'info');
-                
-            } catch (error) {
-                addDebug(`❌ Error opening Phantom Web: ${error.message}`);
-                updateStatus(`Failed to open Phantom Web: ${error.message}`, 'error');
-            }
-        }
-        
-        // علامت‌گذاری به عنوان پرداخت شده
-        async function markAsPaid() {
-            try {
-                updateStatus("⏳ Verifying payment...", 'info');
-                
-                // شبیه‌سازی تراکنش برای تست
-                const fakeSignature = generateFakeSignature();
-                
-                const response = await fetch('/commission/confirm', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: CONFIG.TELEGRAM_ID,
-                        signature: fakeSignature,
-                        amount: CONFIG.AMOUNT
-                    })
-                });
-                
-                if (response.ok) {
-                    updateStatus("✅ Payment confirmed successfully!<br>Redirecting back to app...", 'success');
-                    
-                    setTimeout(() => {
-                        goBackToApp();
-                    }, 2000);
-                    
-                } else {
-                    throw new Error('Server confirmation failed');
-                }
-                
-            } catch (error) {
-                addDebug(`❌ Payment confirmation error: ${error.message}`);
-                updateStatus(`Payment confirmation failed: ${error.message}`, 'error');
-            }
-        }
-        
-        function generateReference() {
-            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        }
-        
-        function generateFakeSignature() {
-            // تولید signature شبیه‌سازی شده برای تست
-            const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-            let result = '';
-            for (let i = 0; i < 88; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return result;
         }
         
         function goBackToApp() {
-            const telegramUrl = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
+            const telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
             
-            // تلاش برای بازگشت به تلگرام
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.openTelegramLink(telegramUrl);
             } else {
@@ -385,20 +282,56 @@
             }
         }
         
+        // بررسی callback از Phantom
+        function checkPhantomCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const signature = urlParams.get('signature');
+            const errorCode = urlParams.get('errorCode');
+            
+            if (signature) {
+                addDebug(`✅ Payment successful: ${signature}`);
+                
+                // تأیید پرداخت در سرور
+                fetch('/commission/confirm', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: CONFIG.TELEGRAM_ID,
+                        signature: signature
+                    })
+                }).then(() => {
+                    window.location.href = `/commission/success?telegram_id=${CONFIG.TELEGRAM_ID}&signature=${signature}`;
+                });
+                
+            } else if (errorCode) {
+                addDebug(`❌ Payment failed: ${errorCode}`);
+                document.getElementById('status').innerHTML = `
+                    <div style="color: #ff6b6b;">
+                        Payment was cancelled or failed<br>
+                        <button class="phantom-button" onclick="location.reload()">Try Again</button>
+                    </div>
+                `;
+            }
+        }
+        
         // اجرای اولیه
         document.addEventListener('DOMContentLoaded', function() {
             addDebug("🚀 Commission payment page loaded");
-            addDebug(`Config: Amount=${CONFIG.AMOUNT}, Recipient=${CONFIG.RECIPIENT}, TelegramID=${CONFIG.TELEGRAM_ID}`);
+            addDebug(`Config: Amount=${CONFIG.AMOUNT}, Recipient=${CONFIG.RECIPIENT.substring(0, 10)}...`);
+            
+            // بررسی callback
+            checkPhantomCallback();
             
             if (!CONFIG.RECIPIENT || CONFIG.RECIPIENT === "") {
-                updateStatus("❌ Payment configuration error", 'error');
-                return;
+                document.getElementById('paymentSection').innerHTML = `
+                    <div style="color: #ff6b6b;">
+                        Payment configuration error<br>
+                        Please contact support
+                    </div>
+                `;
             }
-            
-            // نمایش گزینه‌های پرداخت
-            setTimeout(() => {
-                showPaymentOptions();
-            }, 1000);
         });
     </script>
 </body>
