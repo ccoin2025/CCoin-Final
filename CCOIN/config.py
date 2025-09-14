@@ -6,7 +6,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")  # اضافه کردن username Bot
 TELEGRAM_CHANNEL_USERNAME = os.getenv("TELEGRAM_CHANNEL_USERNAME")
-SOLANA_RPC = os.getenv("SOLANA_RPC")
+SOLANA_RPC = os.getenv("SOLANA_RPC", "https://api.devnet.solana.com")
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
 SECRET_KEY = os.getenv("SECRET_KEY")
 REDIS_URL = os.getenv("REDIS_URL")
