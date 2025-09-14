@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
-from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet
+from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
 from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
@@ -277,7 +277,7 @@ app.include_router(about.router, prefix="/about")
 app.include_router(usertasks.router, prefix="/usertasks")
 app.include_router(users.router, prefix="/users")
 app.include_router(wallet.router)
-
+app.include_router(commission.router, prefix="/commission")
 
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
 scheduler.add_job(check_social_tasks, "interval", hours=24)
