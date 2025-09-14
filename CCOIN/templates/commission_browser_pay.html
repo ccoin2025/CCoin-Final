@@ -138,7 +138,7 @@
     <div class="payment-container">
         <div class="logo">🪙</div>
         <h1>CCoin Commission</h1>
-        <div class="amount" id="displayAmount">0.1 SOL</div>
+        <div class="amount" id="displayAmount">0.01 SOL</div>
         <div class="description">
             Please complete the payment to unlock your airdrop tokens
         </div>
@@ -156,13 +156,53 @@
     </div>
 
     <script>
-        // Configuration با مقادیر ثابت برای تست
-        let CONFIG = {
-            telegram_id: "",
-            amount: 0.1, // از config شما
-            recipient: "5YFFCvmi2f4ZWZYUWWBuMSmmjXrYA1QptaTaLG8vi15K", // از config شما
-            solana_rpc: "https://api.devnet.solana.com"
-        };
+        // گرفتن مقادیر از URL parameters
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return {
+                telegram_id: urlParams.get('telegram_id') || '',
+                amount: parseFloat(urlParams.get('amount')) || 0.01,
+                recipient: urlParams.get('recipient') || ''
+            };
+        }
+        
+        // دریافت مقادیر از backend API
+        async function fetchPaymentConfig() {
+            try {
+                const params = getUrlParams();
+                if (!params.telegram_id) {
+                    throw new Error("Telegram ID missing from URL");
+                }
+                
+                const response = await fetch(`/airdrop/commission_status?telegram_id=${params.telegram_id}`);
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return {
+                    telegram_id: params.telegram_id,
+                    amount: data.commission_amount || 0.01,
+                    recipient: data.admin_wallet || '',
+                    solana_rpc: "https://api.devnet.solana.com"
+                };
+                
+            } catch (error) {
+                // Fallback: اگر API کار نکرد، از مقادیر پیش‌فرض استفاده کن
+                console.warn("API fetch failed, using fallback config:", error.message);
+                
+                const params = getUrlParams();
+                return {
+                    telegram_id: params.telegram_id || '',
+                    amount: 0.01,
+                    recipient: "YOUR_ADMIN_WALLET_ADDRESS", // اینجا آدرس واقعی کیف پول خود را قرار دهید
+                    solana_rpc: "https://api.devnet.solana.com"
+                };
+            }
+        }
+        
+        // Configuration
+        let CONFIG = {};
         
         // Debug function
         function addDebug(message) {
@@ -186,16 +226,27 @@
         
         async function initPayment() {
             try {
-                addDebug("🚀 Starting payment initialization...");
+                addDebug("🚀 Starting mobile payment initialization...");
                 
-                // گرفتن telegram_id از URL
-                const urlParams = new URLSearchParams(window.location.search);
-                CONFIG.telegram_id = urlParams.get('telegram_id') || 'test_user';
-                
-                addDebug(`Config: Amount=${CONFIG.amount}, Recipient=${CONFIG.recipient}, TelegramID=${CONFIG.telegram_id}`);
+                // دریافت configuration
+                CONFIG = await fetchPaymentConfig();
+                addDebug(`Config loaded: Amount=${CONFIG.amount}, Recipient=${CONFIG.recipient}, TelegramID=${CONFIG.telegram_id}`);
                 
                 // به‌روزرسانی نمایش مبلغ
                 document.getElementById('displayAmount').textContent = `${CONFIG.amount} SOL`;
+                
+                // بررسی مقادیر ضروری
+                if (!CONFIG.recipient || CONFIG.recipient === "" || CONFIG.recipient === "YOUR_ADMIN_WALLET_ADDRESS") {
+                    throw new Error("Admin wallet address not configured properly");
+                }
+                
+                if (!CONFIG.telegram_id || CONFIG.telegram_id === "") {
+                    throw new Error("Telegram ID is missing");
+                }
+                
+                if (CONFIG.amount <= 0) {
+                    throw new Error("Invalid commission amount");
+                }
                 
                 await handleMobilePayment();
                 
@@ -212,48 +263,39 @@
                 
                 const reference = "CCoin-" + CONFIG.telegram_id + "-" + Date.now();
                 
-                updateStatus(`
-                    🦄 Choose Payment Method:<br>
-                    <button onclick="tryMethod1()" class="back-button" style="margin:5px;">Method 1: Simple</button><br>
-                    <button onclick="tryMethod2()" class="back-button" style="margin:5px;">Method 2: Universal</button><br>
-                    <button onclick="tryMethod3()" class="back-button" style="margin:5px;">Method 3: Direct</button>
-                `, 'info');
+                // روش مستقیم Solana Pay URL
+                const solanaPayUrl = `solana:${CONFIG.recipient}?amount=${CONFIG.amount}&spl-token=So11111111111111111111111111111111111111112&reference=${reference}&label=${encodeURIComponent("CCoin Commission")}&message=${encodeURIComponent("Commission payment for CCoin airdrop")}`;
                 
-                // روش 1: ساده
-                window.tryMethod1 = function() {
-                    const url = `https://phantom.app/ul/v1/pay?recipient=${CONFIG.recipient}&amount=${CONFIG.amount}`;
-                    addDebug(`Method 1 URL: ${url}`);
-                    window.location.href = url;
-                    showReturnButton();
+                addDebug(`💰 Solana Pay URL: ${solanaPayUrl}`);
+                
+                // Deep link مستقیم Phantom
+                const phantomDirectUrl = `phantom://v1/pay?url=${encodeURIComponent(solanaPayUrl)}`;
+                
+                addDebug(`🦄 Phantom Direct URL: ${phantomDirectUrl}`);
+                
+                updateStatus(`🦄 Click to open Phantom Wallet<br><button onclick="openPhantom()" class="back-button" style="margin-top:10px;">🦄 Pay ${CONFIG.amount} SOL</button>`, 'info');
+                
+                window.openPhantom = function() {
+                    addDebug("🔗 Opening Phantom with direct deep link...");
+                    updateStatus("🦄 Opening Phantom App...<br>Complete the transaction and return here.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Completed Payment</button>", 'info');
+                    
+                    // تلاش برای باز کردن Phantom
+                    try {
+                        // روش 1: Deep link مستقیم
+                        window.location.href = phantomDirectUrl;
+                        
+                        // روش 2: اگر deep link کار نکرد، universal link
+                        setTimeout(() => {
+                            const universalUrl = `https://phantom.app/ul/v1/pay?recipient=${CONFIG.recipient}&amount=${CONFIG.amount}&label=CCoin%20Commission&message=Commission%20payment`;
+                            addDebug(`🔗 Fallback to universal link: ${universalUrl}`);
+                            window.location.href = universalUrl;
+                        }, 3000);
+                        
+                    } catch (error) {
+                        addDebug(`❌ Failed to open Phantom: ${error.message}`);
+                        updateStatus("❌ Failed to open Phantom. Please install Phantom app.", 'error');
+                    }
                 };
-                
-                // روش 2: کامل
-                window.tryMethod2 = function() {
-                    const url = `https://phantom.app/ul/v1/pay?recipient=${encodeURIComponent(CONFIG.recipient)}&amount=${CONFIG.amount}&label=${encodeURIComponent("CCoin Commission")}&message=${encodeURIComponent("Commission payment")}`;
-                    addDebug(`Method 2 URL: ${url}`);
-                    window.location.href = url;
-                    showReturnButton();
-                };
-                
-                // روش 3: Solana Pay
-                window.tryMethod3 = function() {
-                    const solanaUrl = `solana:${CONFIG.recipient}?amount=${CONFIG.amount}&label=CCoin`;
-                    const phantomUrl = `phantom://v1/pay?url=${encodeURIComponent(solanaUrl)}`;
-                    addDebug(`Method 3 Solana URL: ${solanaUrl}`);
-                    addDebug(`Method 3 Phantom URL: ${phantomUrl}`);
-                    window.location.href = phantomUrl;
-                    showReturnButton();
-                };
-                
-                function showReturnButton() {
-                    setTimeout(() => {
-                        updateStatus(`
-                            🦄 Phantom should have opened.<br>
-                            Complete the transaction and return here.<br>
-                            <button onclick="checkPaymentStatus()" class="back-button" style="margin-top:10px; background:#28a745;">✅ I Completed Payment</button>
-                        `, 'info');
-                    }, 2000);
-                }
                 
                 window.checkPaymentStatus = async function() {
                     try {
