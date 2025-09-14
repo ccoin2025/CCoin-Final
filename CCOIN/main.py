@@ -338,3 +338,13 @@ def shutdown():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/commission/pay")
+async def commission_payment_page(request: Request, telegram_id: str):
+    """External payment page برای پرداخت commission"""
+    return templates.TemplateResponse("commission_payment.html", {
+        "request": request,
+        "telegram_id": telegram_id,
+        "amount": COMMISSION_AMOUNT,
+        "recipient": ADMIN_WALLET
+    })
