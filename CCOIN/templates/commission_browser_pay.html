@@ -272,37 +272,23 @@
             try {
                 addDebug("📱 Preparing mobile payment...");
                 
-                // ساخت Solana Pay URL ساده
-                const params = new URLSearchParams({
-                    recipient: CONFIG.recipient,
-                    amount: CONFIG.amount.toString(),
-                    label: "CCoin Commission",
-                    message: `Commission payment for user ${CONFIG.telegram_id}`,
-                    memo: `CCoin-${CONFIG.telegram_id}-${Date.now()}`
-                });
+                const reference = "CCoin-" + CONFIG.telegram_id + "-" + Date.now();
                 
-                const solanaPayUrl = `solana:${CONFIG.recipient}?${params.toString()}`;
-                addDebug(`💰 Solana Pay URL created: ${solanaPayUrl.substring(0, 100)}...`);
+                // روش Phantom Universal Link
+                const phantomUrl = `https://phantom.app/ul/v1/pay?recipient=${encodeURIComponent(CONFIG.recipient)}&amount=${CONFIG.amount}&label=${encodeURIComponent("CCoin Commission")}&message=${encodeURIComponent("Commission payment")}&memo=${encodeURIComponent(reference)}`;
                 
-                // Deep link به Phantom - بدون redirect_link
-                const phantomUrl = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({
-                    url: solanaPayUrl
-                }))}`;
+                addDebug(`🦄 Phantom Universal Link: ${phantomUrl.substring(0, 100)}...`);
                 
-                addDebug(`🦄 Phantom URL created: ${phantomUrl.substring(0, 100)}...`);
+                updateStatus("🦄 Click to open Phantom Wallet<br><button onclick=\"openPhantom()\" class=\"back-button\" style=\"margin-top:10px;\">Pay 0.01 SOL</button>", 'info');
                 
-                updateStatus("🦄 Click to open Phantom Wallet<br><button onclick=\"openPhantom()\" class=\"back-button\" style=\"margin-top:10px;\">Open Phantom</button>", 'info');
-                
-                // تعریف تابع openPhantom برای کلیک دستی
                 window.openPhantom = function() {
-                    addDebug("🔗 Opening Phantom...");
-                    updateStatus("🦄 Phantom opened. Complete the payment and click 'I Paid' below.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Paid</button>", 'info');
+                    addDebug("🔗 Opening Phantom with Universal Link...");
+                    updateStatus("🦄 Opening Phantom App...<br>You should see a transaction to approve.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">✅ I Completed Payment</button>", 'info');
                     
-                    // باز کردن Phantom در tab جدید
-                    window.open(phantomUrl, '_blank');
+                    // استفاده از Universal Link
+                    window.location.href = phantomUrl;
                 };
                 
-                // تعریف تابع بررسی وضعیت پرداخت
                 window.checkPaymentStatus = async function() {
                     try {
                         updateStatus("⏳ Verifying payment...", 'info');
@@ -315,7 +301,8 @@
                             body: JSON.stringify({
                                 telegram_id: CONFIG.telegram_id,
                                 amount: CONFIG.amount,
-                                signature: 'manual_confirmation_' + Date.now() // برای تست
+                                reference: reference,
+                                signature: 'manual_confirmation_' + Date.now()
                             })
                         });
                         
@@ -331,7 +318,7 @@
                         
                     } catch (error) {
                         addDebug(`❌ Payment verification error: ${error.message}`);
-                        updateStatus("❌ Payment verification failed. Please try again.", 'error');
+                        updateStatus("❌ Payment verification failed. Please try again.<br><button onclick=\"checkPaymentStatus()\" class=\"back-button\" style=\"margin-top:10px; background:#28a745;\">Try Again</button>", 'error');
                     }
                 };
                 
