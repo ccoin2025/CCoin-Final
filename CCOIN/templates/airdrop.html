@@ -499,11 +499,11 @@
             SOLANA_RPC_URL: "https://api.devnet.solana.com",
             COMMISSION_AMOUNT: 0.01,
             ADMIN_WALLET: "{{ admin_wallet }}",
-            INITIAL_TASKS_COMPLETED: {{ user.tasks_completed | tojson }},
-            INITIAL_INVITED_FRIENDS: {{ user.invited_friends | tojson }},
-            INITIAL_WALLET_CONNECTED: {{ user.wallet_connected | tojson }},
-            INITIAL_COMMISSION_PAID: {{ user.commission_paid | tojson }},
-            INITIAL_WALLET_ADDRESS: "{{ user.wallet_address or '' }}"
+            INITIAL_TASKS_COMPLETED: {{ tasks_completed | default(false) | tojson }},
+            INITIAL_INVITED_FRIENDS: {{ invited_friends | default(false) | tojson }},
+            INITIAL_WALLET_CONNECTED: {{ wallet_connected | default(false) | tojson }},
+            INITIAL_COMMISSION_PAID: {{ commission_paid | default(false) | tojson }},
+            INITIAL_WALLET_ADDRESS: "{{ wallet_address or '' }}"
         };
 
         // Check URL parameters for Phantom callback
