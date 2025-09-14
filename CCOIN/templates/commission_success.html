@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Payment Successful - CCoin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Urbanist', sans-serif;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .success-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .success-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: bounce 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes bounce {
+            0% { transform: translateY(0px); }
+            100% { transform: translateY(-10px); }
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 800;
+        }
+        
+        .message {
+            font-size: 18px;
+            margin-bottom: 30px;
+            line-height: 1.5;
+            opacity: 0.9;
+        }
+        
+        .transaction {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        
+        .return-button {
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .return-button:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
+        
+        .countdown {
+            font-size: 14px;
+            opacity: 0.7;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-icon">✅</div>
+        <h1>Payment Successful!</h1>
+        <div class="message">{{ success_message }}</div>
+        
+        {% if signature %}
+        <div class="transaction">
+            <strong>Transaction:</strong><br>
+            {{ signature[:16] }}...{{ signature[-16:] }}
+        </div>
+        {% endif %}
+        
+        <button class="return-button" onclick="returnToApp()">
+            Return to CCoin App
+        </button>
+        
+        <div class="countdown" id="countdown">
+            Automatically returning in <span id="timer">5</span> seconds...
+        </div>
+    </div>
+
+    <script>
+        let timeLeft = 5;
+        const timer = document.getElementById('timer');
+        
+        function updateTimer() {
+            timer.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                returnToApp();
+            } else {
+                timeLeft--;
+                setTimeout(updateTimer, 1000);
+            }
+        }
+        
+        function returnToApp() {
+            const telegramUrl = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openTelegramLink(telegramUrl);
+            } else {
+                window.location.href = telegramUrl;
+            }
+        }
+        
+        // شروع شمارش معکوس
+        updateTimer();
+    </script>
+</body>
+</html>
