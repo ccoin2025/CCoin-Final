@@ -223,10 +223,11 @@ async function connectWallet() {
     }
 }
 
-// **اصلاح اصلی: اتصال مستقیم wallet**
+// **اصلاح اصلی: اتصال مستقیم wallet با debug کامل**
 async function connectWalletDirect() {
     try {
         console.log("🔗 Starting direct wallet connection...");
+        console.log("🔍 Current Phantom provider:", phantomProvider);
         
         // پاک کردن اتصالات قبلی
         if (phantomProvider && phantomProvider.isConnected) {
@@ -234,20 +235,60 @@ async function connectWalletDirect() {
             await phantomProvider.disconnect();
         }
         
-        // اتصال جدید با force
-        console.log("🦄 Connecting to Phantom...");
-        const response = await phantomProvider.connect({ onlyIfTrusted: false });
+        // بررسی وضعیت قبل از اتصال
+        console.log("📊 Phantom status before connection:");
+        console.log("- isConnected:", phantomProvider.isConnected);
+        console.log("- publicKey:", phantomProvider.publicKey?.toString() || 'null');
+        
+        // درخواست اتصال جدید
+        console.log("🦄 Requesting fresh connection from Phantom...");
+        const response = await phantomProvider.connect({ 
+            onlyIfTrusted: false,
+            force: true  // اجبار به نمایش popup
+        });
+        
+        console.log("📋 Full Phantom response:", response);
+        console.log("🔑 Response publicKey:", response?.publicKey?.toString() || 'undefined');
         
         if (!response || !response.publicKey) {
-            throw new Error('Failed to get public key from Phantom');
+            throw new Error('Failed to get public key from Phantom response');
         }
         
-        // دریافت آدرس واقعی
-        const realWalletAddress = response.publicKey.toString();
-        console.log("✅ Connected to wallet:", realWalletAddress);
+        // بررسی تمام accounts ممکن
+        if (phantomProvider.publicKey) {
+            console.log("🏦 Phantom provider publicKey:", phantomProvider.publicKey.toString());
+        }
+        
+        // دریافت آدرس از response
+        const responseWalletAddress = response.publicKey.toString();
+        console.log("✅ Address from response:", responseWalletAddress);
+        
+        // دریافت آدرس از provider
+        const providerWalletAddress = phantomProvider.publicKey?.toString();
+        console.log("✅ Address from provider:", providerWalletAddress);
+        
+        // انتخاب آدرس صحیح
+        let realWalletAddress = responseWalletAddress;
+        
+        // اگر دو آدرس متفاوت هستند، از کاربر بپرسید
+        if (providerWalletAddress && responseWalletAddress !== providerWalletAddress) {
+            console.warn("⚠️ Address mismatch detected!");
+            console.warn("Response address:", responseWalletAddress);
+            console.warn("Provider address:", providerWalletAddress);
+            
+            // نمایش هر دو آدرس به کاربر
+            const userChoice = confirm(`Two different addresses detected:\n\n1. ${responseWalletAddress}\n2. ${providerWalletAddress}\n\nClick OK for address 1, Cancel for address 2`);
+            
+            realWalletAddress = userChoice ? responseWalletAddress : providerWalletAddress;
+        }
+        
+        console.log("🎯 Final selected address:", realWalletAddress);
         
         // بروزرسانی متغیر global
         connectedWallet = realWalletAddress;
+        
+        // نمایش آدرس در console برای verification
+        console.log("🔍 Please verify this is your correct Phantom address:", realWalletAddress);
         
         // ارسال به سرور
         console.log("📤 Sending wallet address to server...");
@@ -277,10 +318,24 @@ async function connectWalletDirect() {
         updateWalletUI();
         updateTasksUI();
         
-        showToast("Wallet connected successfully!", "success");
+        showToast(`Wallet connected: ${realWalletAddress.slice(0,4)}...${realWalletAddress.slice(-4)}`, "success");
+        
+        // نمایش آدرس کامل برای verification
+        setTimeout(() => {
+            alert(`Connected wallet address:\n${realWalletAddress}\n\nPlease verify this matches your Phantom wallet address.`);
+        }, 1000);
         
     } catch (error) {
         console.error("❌ Wallet connection failed:", error);
+        
+        // نمایش جزئیات خطا
+        console.error("Error details:", {
+            message: error.message,
+            stack: error.stack,
+            phantomProvider: phantomProvider,
+            isPhantomConnected: phantomProvider?.isConnected,
+            phantomPublicKey: phantomProvider?.publicKey?.toString()
+        });
         
         // reset کردن متغیرها
         connectedWallet = null;
@@ -290,6 +345,52 @@ async function connectWalletDirect() {
         updateWalletUI();
         
         showToast(`Wallet connection failed: ${error.message}`, "error");
+    }
+}
+
+// تابع جدید برای تغییر account در Phantom
+async function switchPhantomAccount() {
+    try {
+        console.log("🔄 Requesting account switch...");
+        
+        if (!phantomProvider) {
+            throw new Error("Phantom not available");
+        }
+        
+        // disconnect و reconnect برای نمایش popup انتخاب account
+        await phantomProvider.disconnect();
+        
+        // کمی صبر کنیم
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // اتصال مجدد که باید popup account selector را نشان دهد
+        const response = await phantomProvider.connect({ onlyIfTrusted: false });
+        
+        if (response && response.publicKey) {
+            const newAddress = response.publicKey.toString();
+            console.log("🎯 New account selected:", newAddress);
+            
+            connectedWallet = newAddress;
+            
+            // ارسال به سرور
+            await fetch('/airdrop/connect_wallet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    telegram_id: USER_ID,
+                    wallet_address: newAddress
+                })
+            });
+            
+            updateWalletUI();
+            showToast(`Switched to: ${newAddress.slice(0,4)}...${newAddress.slice(-4)}`, "success");
+        }
+        
+    } catch (error) {
+        console.error("❌ Account switch failed:", error);
+        showToast("Failed to switch account", "error");
     }
 }
 
@@ -352,7 +453,7 @@ async function payCommission() {
     }
 }
 
-// **باقی توابع بدون تغییر**
+// **باقی توابع**
 function toggleWalletDropdown() {
     const dropdown = document.querySelector('.wallet-dropdown-content');
     if (dropdown) {
@@ -375,7 +476,12 @@ function updateWalletUI() {
         // نمایش آدرس در dropdown
         const addressElement = document.getElementById('wallet-address-dropdown');
         if (addressElement && connectedWallet) {
-            addressElement.textContent = connectedWallet;
+            addressElement.innerHTML = `
+                ${connectedWallet}<br>
+                <button onclick="switchPhantomAccount()" style="margin-top:10px; padding:5px 10px; background:#AB9FF2; color:white; border:none; border-radius:5px; cursor:pointer;">
+                    Switch Account
+                </button>
+            `;
         }
         
         // نمایش dropdown content
@@ -526,3 +632,4 @@ window.connectWallet = connectWallet;
 window.payCommission = payCommission;
 window.handleWalletConnection = handleWalletConnection;
 window.hidePhantomModal = hidePhantomModal;
+window.switchPhantomAccount = switchPhantomAccount;
