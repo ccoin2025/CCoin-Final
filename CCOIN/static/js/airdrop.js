@@ -84,66 +84,6 @@ function updateCountdown() {
     }
 }
 
-// Enhanced Phantom detection با reset کامل
-async function detectPhantomWallet(forceReset = false) {
-    console.log("🔍 Starting Phantom detection...", forceReset ? "(FORCED RESET)" : "");
-    
-    if (forceReset) {
-        phantomProvider = null;
-        phantomDetected = false;
-    }
-    
-    // بررسی window.phantom (روش جدید)
-    if (window.phantom?.solana?.isPhantom) {
-        console.log("✅ Phantom detected via window.phantom.solana");
-        phantomDetected = true;
-        return window.phantom.solana;
-    }
-    
-    // بررسی window.solana (روش قدیمی)
-    if (window.solana?.isPhantom) {
-        console.log("✅ Phantom detected via window.solana (legacy)");
-        phantomDetected = true;
-        return window.solana;
-    }
-    
-    // انتظار برای load شدن
-    console.log("⏳ Waiting for Phantom extension to load...");
-    for (let i = 0; i < 50; i++) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        if (window.phantom?.solana?.isPhantom) {
-            console.log("✅ Phantom detected after waiting");
-            phantomDetected = true;
-            return window.phantom.solana;
-        }
-        if (window.solana?.isPhantom) {
-            console.log("✅ Phantom detected (legacy) after waiting");
-            phantomDetected = true;
-            return window.solana;
-        }
-    }
-    
-    console.log("❌ Phantom wallet not found after waiting");
-    phantomDetected = false;
-    return null;
-}
-
-async function getPhantomProvider(forceReset = false) {
-    if (forceReset || !phantomProvider || !phantomDetected) {
-        phantomProvider = await detectPhantomWallet(forceReset);
-    }
-    return phantomProvider;
-}
-
-// تابع برای تولید encryption key
-function generateEncryptionKey() {
-    // تولید یک کلید ساده برای encryption (اختیاری)
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return btoa(String.fromCharCode.apply(null, array)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
-}
-
 // **اصلاح شده: تشخیص محیط Telegram**
 function isTelegramEnvironment() {
     return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
@@ -184,216 +124,68 @@ function openExternalLink(url) {
     }
 }
 
-// **اصلاح شده: هدایت مستقیم بدون مودال واسطه**
-function redirectToPhantomApp(deeplink) {
-    console.log("🦄 Redirecting directly to Phantom:", deeplink);
-    // هدایت مستقیم بدون هیچ تاخیر یا مودال
-    openExternalLink(deeplink);
-    // نمایش پیام موفقیت
-    showToast("Redirecting to Phantom wallet...", "info");
-}
-
-// Wallet connection handler
+// **بازطراحی کامل: اتصال wallet مثل commission payment**
 async function handleWalletConnection() {
-    if (!tasksCompleted.wallet) {
-        await connectWallet();
-    } else {
-        toggleWalletDropdown();
+    // اگر wallet متصل است، فقط نمایش اطلاعات
+    if (tasksCompleted.wallet) {
+        showToast(`Already connected: ${connectedWallet.slice(0,6)}...${connectedWallet.slice(-6)}`, "info");
+        return;
     }
+    
+    // شروع فرآیند اتصال
+    await connectWallet();
 }
 
-// **اصلاح شده: اتصال مستقیم کیف پول**
+// **بازطراحی کامل: اتصال wallet با external browser مثل commission**
 async function connectWallet() {
-    console.log("🔗 Starting wallet connection...");
+    console.log("🔗 Starting wallet connection (EXTERNAL BROWSER MODE)...");
     
-    // Force reset Phantom provider
-    const provider = await getPhantomProvider(true);
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|OperaMini/i.test(navigator.userAgent);
-    
-    if (isMobile || isTelegramEnvironment()) {
-        console.log("📱 Mobile/Telegram environment - using deeplink");
+    try {
+        // نمایش loading در button
+        const walletButton = document.getElementById('wallet-button');
+        const walletIcon = document.getElementById('wallet-icon');
         
-        try {
-            // **کلیدی: اضافه کردن cluster برای Solana**
-            const params = new URLSearchParams({
-                cluster: "devnet",  // یا "mainnet-beta" برای mainnet
-                app_url: window.location.origin,
-                redirect_link: `${window.location.origin}/airdrop?phantom_action=connect&user_id=${USER_ID}`,
-                dapp_encryption_public_key: generateEncryptionKey() // برای امنیت
-            });
-            
-            const connectUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
-            
-            console.log("🦄 Phantom connect URL with cluster:", connectUrl);
-            redirectToPhantomApp(connectUrl);
-            
-        } catch (error) {
-            console.error("Error creating deeplink:", error);
-            showToast("Error creating connection link", "error");
+        if (walletButton && walletIcon) {
+            walletButton.classList.add('loading');
+            walletIcon.className = 'fas fa-spinner right-icon';
         }
         
-    } else {
-        // برای دسکتاپ
-        if (provider) {
-            await connectWalletDirect();
+        // هدایت به صفحه اتصال خارجی (مثل commission)
+        const connectUrl = `/wallet/connect?telegram_id=${USER_ID}`;
+        
+        if (isTelegramEnvironment()) {
+            console.log("📱 Telegram environment - opening external wallet connection page");
+            window.Telegram.WebApp.openLink(connectUrl, { try_instant_view: false });
         } else {
-            showPhantomModal();
+            console.log("🌐 Browser environment - opening wallet connection in new tab");
+            window.open(connectUrl, '_blank');
         }
-    }
-}
-
-// **اصلاح کامل: اتصال wallet برای desktop**
-async function connectWalletDirect() {
-    try {
-        console.log("🔗 Starting DESKTOP wallet connection...");
         
-        // اطمینان از Solana network
-        if (phantomProvider && phantomProvider.isConnected) {
-            console.log("🔌 Force disconnecting previous connection...");
-            try {
-                await phantomProvider.disconnect();
-            } catch (e) {
-                console.log("Disconnect error (expected):", e);
+        showToast("Opening wallet connection page...", "info");
+        
+        // بازگرداندن UI به حالت عادی بعد از 3 ثانیه
+        setTimeout(() => {
+            if (walletButton && walletIcon) {
+                walletButton.classList.remove('loading');
+                walletIcon.className = 'fas fa-chevron-right right-icon';
             }
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // تنظیم شبکه Solana
-        console.log("🦄 Requesting Solana connection...");
-        
-        const connectOptions = {
-            onlyIfTrusted: false,
-            // اختیاری: تعیین شبکه برای desktop
-            cluster: 'devnet' // یا 'mainnet-beta'
-        };
-        
-        const response = await phantomProvider.connect(connectOptions);
-        
-        if (!response || !response.publicKey) {
-            throw new Error('No public key received from Phantom');
-        }
-        
-        const walletAddress = response.publicKey.toString();
-        console.log("🎯 Connected to Solana address:", walletAddress);
-        
-        // تأیید آدرس Solana
-        if (walletAddress.length < 32 || walletAddress.length > 44 || walletAddress.startsWith('0x')) {
-            throw new Error(`Invalid Solana address: ${walletAddress}. This looks like an Ethereum address.`);
-        }
-        
-        // تأیید از کاربر
-        const confirmMessage = `Connected to Solana wallet:\n\n${walletAddress}\n\nIs this your correct Phantom Solana address?`;
-        
-        if (!confirm(confirmMessage)) {
-            await phantomProvider.disconnect();
-            throw new Error("User rejected the wallet address");
-        }
-        
-        // ذخیره آدرس
-        connectedWallet = walletAddress;
-        
-        // ارسال به سرور
-        await saveWalletToServer(walletAddress);
-        
-        // بروزرسانی UI
-        tasksCompleted.wallet = true;
-        updateWalletUI();
-        updateTasksUI();
-        
-        showToast(`Wallet connected: ${walletAddress.slice(0,6)}...${walletAddress.slice(-6)}`, "success");
+        }, 3000);
         
     } catch (error) {
-        console.error("❌ Desktop wallet connection failed:", error);
+        console.error("❌ Wallet connection error:", error);
+        showToast("Failed to open wallet connection page", "error");
         
-        // Reset
-        connectedWallet = null;
-        tasksCompleted.wallet = false;
-        updateWalletUI();
-        
-        showToast(`Connection failed: ${error.message}`, "error");
-        
-        if (error.message.includes('Ethereum')) {
-            alert(`Network Error!\n\n${error.message}\n\nPlease make sure you're connected to Solana network in Phantom, not Ethereum.`);
+        // بازگرداندن UI
+        const walletButton = document.getElementById('wallet-button');
+        const walletIcon = document.getElementById('wallet-icon');
+        if (walletButton && walletIcon) {
+            walletButton.classList.remove('loading');
+            walletIcon.className = 'fas fa-chevron-right right-icon';
         }
     }
 }
 
-// تابع ذخیره wallet در سرور
-async function saveWalletToServer(walletAddress) {
-    try {
-        console.log("📤 Saving wallet to server:", walletAddress);
-        
-        const response = await fetch('/airdrop/connect_wallet', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                telegram_id: USER_ID,
-                wallet_address: walletAddress
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Failed to save wallet");
-        }
-        
-        const result = await response.json();
-        console.log("✅ Server save successful:", result);
-        return result;
-        
-    } catch (error) {
-        console.error("❌ Server save failed:", error);
-        showToast("Failed to save wallet address", "error");
-        throw error;
-    }
-}
-
-// تابع جدید برای تغییر account در Phantom
-async function switchPhantomAccount() {
-    try {
-        console.log("🔄 Requesting account switch...");
-        
-        if (!phantomProvider) {
-            throw new Error("Phantom not available");
-        }
-        
-        // disconnect و reconnect برای نمایش popup انتخاب account
-        await phantomProvider.disconnect();
-        
-        // کمی صبر کنیم
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // اتصال مجدد که باید popup account selector را نشان دهد
-        const response = await phantomProvider.connect({ onlyIfTrusted: false });
-        
-        if (response && response.publicKey) {
-            const newAddress = response.publicKey.toString();
-            console.log("🎯 New account selected:", newAddress);
-            
-            // تأیید آدرس Solana
-            if (newAddress.length < 32 || newAddress.length > 44 || newAddress.startsWith('0x')) {
-                throw new Error(`Invalid Solana address: ${newAddress}`);
-            }
-            
-            connectedWallet = newAddress;
-            
-            // ارسال به سرور
-            await saveWalletToServer(newAddress);
-            
-            updateWalletUI();
-            showToast(`Switched to: ${newAddress.slice(0,4)}...${newAddress.slice(-4)}`, "success");
-        }
-        
-    } catch (error) {
-        console.error("❌ Account switch failed:", error);
-        showToast("Failed to switch account", "error");
-    }
-}
-
-// **اصلاح شده: پرداخت کمیسیون با روش استاندارد**
+// **اصلاح شده: پرداخت کمیسیون (بدون تغییر)**
 async function payCommission() {
     if (!connectedWallet) {
         showToast("Please connect wallet first", "error");
@@ -452,43 +244,28 @@ async function payCommission() {
     }
 }
 
-// **باقی توابع**
-function toggleWalletDropdown() {
-    const dropdown = document.querySelector('.wallet-dropdown-content');
-    if (dropdown) {
-        dropdown.classList.toggle('show');
-    }
-}
-
+// **ساده‌سازی شده: updateWalletUI (بدون dropdown)**
 function updateWalletUI() {
     const button = document.querySelector('#connect-wallet .task-button');
     const leftText = button.querySelector('.left-text');
     const rightIcon = button.querySelector('.right-icon');
     const statusIndicator = button.querySelector('.wallet-status-indicator');
     
-    if (tasksCompleted.wallet) {
+    if (tasksCompleted.wallet && connectedWallet) {
         leftText.textContent = 'Wallet Connected';
-        rightIcon.className = 'fas fa-chevron-down right-icon';
+        rightIcon.className = 'fas fa-check right-icon';
         button.classList.add('wallet-connected');
+        button.classList.add('completed');
         statusIndicator.classList.add('connected');
-        
-        // نمایش آدرس در dropdown
-        const addressElement = document.getElementById('wallet-address-dropdown');
-        if (addressElement && connectedWallet) {
-            addressElement.innerHTML = `
-                ${connectedWallet}<br>
-                <button onclick="switchPhantomAccount()" style="margin-top:10px; padding:5px 10px; background:#AB9FF2; color:white; border:none; border-radius:5px; cursor:pointer;">
-                    Switch Account
-                </button>
-            `;
-        }
-        
-        // نمایش dropdown content
         document.querySelector('#connect-wallet .task-box').classList.add('completed');
+        
+        // نمایش آدرس در متن (بدون dropdown)
+        leftText.innerHTML = `Wallet Connected<br><small style="font-size:10px; opacity:0.7;">${connectedWallet.slice(0,6)}...${connectedWallet.slice(-6)}</small>`;
     } else {
         leftText.textContent = 'Connect Wallet';
         rightIcon.className = 'fas fa-chevron-right right-icon';
         button.classList.remove('wallet-connected');
+        button.classList.remove('completed');
         statusIndicator.classList.remove('connected');
         document.querySelector('#connect-wallet .task-box').classList.remove('completed');
     }
@@ -570,94 +347,64 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-function showPhantomModal() {
-    const modal = document.getElementById('phantom-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
-}
+// **حذف شده: showPhantomModal, hidePhantomModal, toggleWalletDropdown**
+// چون دیگر نیاز نداریم
 
-function hidePhantomModal() {
-    const modal = document.getElementById('phantom-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// **بهبود handling callback response**
-function handlePhantomResponse() {
+// **ساده‌سازی شده: handling wallet connection success از URL**
+function handleWalletConnectionSuccess() {
     const urlParams = new URLSearchParams(window.location.search);
-    const phantomAction = urlParams.get('phantom_action');
+    const walletConnected = urlParams.get('wallet_connected');
+    const walletAddress = urlParams.get('wallet_address');
     
-    if (phantomAction === 'connect') {
-        console.log("📱 Processing Phantom callback...");
+    if (walletConnected === 'true' && walletAddress) {
+        console.log("✅ Wallet connection successful from external page:", walletAddress);
         
-        // چک کردن error code
-        const errorCode = urlParams.get('errorCode');
-        const errorMessage = urlParams.get('errorMessage');
-        
-        if (errorCode) {
-            console.error("Phantom connection error:", errorCode, errorMessage);
-            showToast(`Connection failed: ${errorMessage || errorCode}`, "error");
-            return;
-        }
-        
-        // دریافت public key از callback
-        let publicKey = urlParams.get('phantom_encryption_public_key') || 
-                       urlParams.get('public_key') || 
-                       urlParams.get('phantom_publicKey');
-        
-        console.log("🔑 Received publicKey from callback:", publicKey);
-        
-        if (publicKey) {
-            try {
-                // تأیید که آدرس Solana است (base58 format)
-                if (publicKey.length >= 32 && publicKey.length <= 44 && !publicKey.startsWith('0x')) {
-                    console.log('✅ Valid Solana address detected:', publicKey);
-                    
-                    // ذخیره آدرس
-                    connectedWallet = publicKey;
-                    tasksCompleted.wallet = true;
-                    
-                    // ارسال به سرور
-                    saveWalletToServer(publicKey);
-                    
-                    // بروزرسانی UI
-                    updateWalletUI();
-                    updateTasksUI();
-                    showToast('Wallet connected successfully!', 'success');
-                    
-                    // نمایش تأیید
-                    setTimeout(() => {
-                        alert(`Connected to Solana wallet:\n${publicKey}\n\nPlease verify this matches your Phantom wallet.`);
-                    }, 1000);
-                    
-                } else {
-                    throw new Error(`Invalid Solana address format: ${publicKey}`);
-                }
-                
-            } catch (error) {
-                console.error("Invalid public key:", error);
-                showToast("Invalid wallet address received", "error");
-            }
+        // تأیید آدرس Solana
+        if (walletAddress.length >= 32 && walletAddress.length <= 44 && !walletAddress.startsWith('0x')) {
+            connectedWallet = walletAddress;
+            tasksCompleted.wallet = true;
+            
+            updateWalletUI();
+            updateTasksUI();
+            showToast('Wallet connected successfully!', 'success');
             
             // پاک کردن URL
             const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
             window.history.replaceState({}, document.title, cleanUrl);
-            
         } else {
-            console.error("No public key received from Phantom");
-            showToast("No wallet address received. Please try again.", "error");
+            console.error("Invalid wallet address format:", walletAddress);
+            showToast("Invalid wallet address received", "error");
         }
+    }
+}
+
+// **ساده‌سازی شده: handling commission payment success از URL**
+function handleCommissionPaymentSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('payment_success');
+    
+    if (paymentSuccess === 'true') {
+        console.log("✅ Commission payment successful");
+        
+        tasksCompleted.pay = true;
+        updateTasksUI();
+        showToast('Commission paid successfully!', 'success');
+        
+        // پاک کردن URL
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
     }
 }
 
 // Initialize everything when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Airdrop page initialized');
+    console.log('🚀 Airdrop page initialized (EXTERNAL BROWSER MODE)');
     
-    // Handle Phantom response if present
-    handlePhantomResponse();
+    // Handle wallet connection success
+    handleWalletConnectionSuccess();
+    
+    // Handle commission payment success
+    handleCommissionPaymentSuccess();
     
     // Update initial UI state
     updateTasksUI();
@@ -666,14 +413,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start countdown
     updateCountdown();
     setInterval(updateCountdown, 1000);
-    
-    // Initialize Phantom detection
-    getPhantomProvider();
 });
 
 // Export functions for global use
 window.connectWallet = connectWallet;
 window.payCommission = payCommission;
 window.handleWalletConnection = handleWalletConnection;
-window.hidePhantomModal = hidePhantomModal;
-window.switchPhantomAccount = switchPhantomAccount;
