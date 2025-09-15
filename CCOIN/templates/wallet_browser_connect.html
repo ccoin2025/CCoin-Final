@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>CCoin Wallet Connection</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://unpkg.com/bs58@5.0.0/index.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Urbanist', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .wallet-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 800;
+        }
+
+        .description {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .wallet-info {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .connect-button {
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .connect-button:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
+
+        .connect-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            font-size: 18px;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error, .success, .info {
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.5);
+            color: #ffcccb;
+        }
+
+        .success {
+            background: rgba(0, 255, 0, 0.2);
+            border: 1px solid rgba(0, 255, 0, 0.5);
+            color: #90ee90;
+        }
+
+        .info {
+            background: rgba(0, 123, 255, 0.2);
+            border: 1px solid rgba(0, 123, 255, 0.5);
+            color: #87ceeb;
+        }
+
+        .back-button {
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
+
+        .debug-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 12px;
+            font-family: monospace;
+            text-align: left;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .phantom-icon {
+            width: 60px;
+            height: 60px;
+            margin: 20px auto;
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wallet-container">
+        <div class="logo">🦄</div>
+        <h1>Connect Phantom Wallet</h1>
+        <div class="description">
+            Connect your Phantom wallet to CCoin to participate in the airdrop
+        </div>
+
+        <div class="phantom-icon">
+            🦄
+        </div>
+
+        <div id="status" class="loading">
+            <div class="spinner"></div>
+            Preparing wallet connection...
+        </div>
+
+        <div id="debugInfo" class="debug-info" style="display: none;"></div>
+
+        <button class="back-button" onclick="goBackToApp()" style="display: none;" id="backButton">
+            Return to App
+        </button>
+    </div>
+
+    <script>
+        // گرفتن telegram_id از URL
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return {
+                telegram_id: urlParams.get('telegram_id') || ''
+            };
+        }
+
+        // Debug function
+        function addDebug(message) {
+            console.log(message);
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.style.display = 'block';
+            debugDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            statusDiv.innerHTML = `<div class="${className}"><strong>${message}</strong></div>`;
+            
+            if (type === 'error' || type === 'success') {
+                document.getElementById('backButton').style.display = 'block';
+            }
+        }
+
+        // اصلی: شروع فرآیند اتصال
+        async function initWalletConnection() {
+            try {
+                const params = getUrlParams();
+                
+                if (!params.telegram_id) {
+                    throw new Error("Telegram ID missing from URL");
+                }
+
+                addDebug("🚀 Starting wallet connection...");
+                addDebug(`Telegram ID: ${params.telegram_id}`);
+
+                await handleMobileWalletConnection(params.telegram_id);
+
+            } catch (error) {
+                console.error("❌ Wallet connection initialization failed:", error);
+                addDebug(`❌ Error: ${error.message}`);
+                updateStatus(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // اتصال کیف پول موبایل
+        async function handleMobileWalletConnection(telegramId) {
+            try {
+                addDebug("📱 Preparing mobile wallet connection...");
+
+                // تولید کلید encryption
+                const dappKeyPair = nacl.box.keyPair();
+                const dappEncryptionPublicKey = bs58.encode(dappKeyPair.publicKey);
+                
+                addDebug(`🔑 Generated encryption key: ${dappEncryptionPublicKey.slice(0, 10)}...`);
+
+                // ساخت callback URL
+                const callbackUrl = encodeURIComponent(
+                    `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`
+                );
+
+                // ساخت Phantom deeplink
+                const appUrl = encodeURIComponent(window.location.origin);
+                const cluster = 'mainnet-beta'; // یا 'devnet' برای تست
+
+                const phantomDeeplink = `https://phantom.app/ul/v1/connect?` +
+                    `app_url=${appUrl}&` +
+                    `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
+                    `redirect_link=${callbackUrl}&` +
+                    `cluster=${cluster}`;
+
+                addDebug(`🦄 Phantom deeplink created`);
+
+                // نمایش دکمه اتصال
+                updateStatus(
+                    `🦄 Click to connect your Phantom Wallet<br>` +
+                    `<button onclick="openPhantom()" class="connect-button" style="margin-top:15px;">` +
+                    `🦄 Connect Phantom Wallet</button>`, 
+                    'info'
+                );
+
+                // تابع باز کردن Phantom
+                window.openPhantom = function() {
+                    addDebug("🔗 Opening Phantom wallet...");
+                    updateStatus("🦄 Opening Phantom App...<br>Please approve the connection in Phantom and return here.", 'info');
+
+                    try {
+                        // تلاش برای باز کردن Phantom
+                        window.location.href = phantomDeeplink;
+
+                        // fallback برای iOS
+                        setTimeout(() => {
+                            // اگر برنامه باز نشد، به App Store هدایت کن
+                            const fallbackUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
+                            addDebug(`🔄 Fallback to App Store: ${fallbackUrl}`);
+                        }, 3000);
+
+                    } catch (error) {
+                        addDebug(`❌ Failed to open Phantom: ${error.message}`);
+                        updateStatus("❌ Failed to open Phantom. Please install Phantom app.", 'error');
+                    }
+                };
+
+            } catch (error) {
+                addDebug(`❌ Mobile wallet connection error: ${error.message}`);
+                updateStatus(`Wallet connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        function goBackToApp() {
+            const telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openTelegramLink(telegramUrl);
+            } else {
+                window.location.href = telegramUrl;
+            }
+        }
+
+        // شروع فرآیند در بارگذاری صفحه
+        document.addEventListener('DOMContentLoaded', function() {
+            addDebug("🚀 Wallet connection page loaded");
+            initWalletConnection();
+        });
+    </script>
+</body>
+</html>
