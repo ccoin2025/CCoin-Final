@@ -474,7 +474,7 @@
         <div class="actions-section" id="actionsSection">
             <div class="reward-box">
                 <div class="reward-amount">
-                    <span class="tokens-amount" id="totalTokens">{{ user.tokens }}</span>
+                    <span class="tokens-amount" id="totalTokens">0</span>
                     <span class="tokens-label">CCoin Tokens</span>
                 </div>
                 <button class="claim-button" id="claimButton" onclick="claimAirdrop()" disabled>
@@ -520,15 +520,15 @@
     <!-- Global variables for JavaScript -->
     <script>
         window.APP_CONFIG = {
-            USER_ID: "{{ user.telegram_id }}",
+            USER_ID: "{{ request.session.telegram_id }}",
             SOLANA_RPC_URL: "{{ config.SOLANA_RPC }}",
             COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT | default(0.01) }},
             ADMIN_WALLET: "{{ config.ADMIN_WALLET }}",
-            INITIAL_TASKS_COMPLETED: {{ user.tasks_completed | default(false) | tojson }},
-            INITIAL_INVITED_FRIENDS: {{ user.friends_invited | default(false) | tojson }},
-            INITIAL_WALLET_CONNECTED: {{ (user.wallet_address is not none) | tojson }},
-            INITIAL_COMMISSION_PAID: {{ user.commission_paid | default(false) | tojson }},
-            INITIAL_WALLET_ADDRESS: "{{ user.wallet_address or '' }}"
+            INITIAL_TASKS_COMPLETED: {{ tasks_completed | default(false) | tojson }},
+            INITIAL_INVITED_FRIENDS: {{ invited | default(false) | tojson }},
+            INITIAL_WALLET_CONNECTED: {{ wallet_connected | default(false) | tojson }},
+            INITIAL_COMMISSION_PAID: {{ commission_paid | default(false) | tojson }},
+            INITIAL_WALLET_ADDRESS: "{{ user_wallet_address or '' }}"
         };
     </script>
 
