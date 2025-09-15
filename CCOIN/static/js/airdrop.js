@@ -136,6 +136,14 @@ async function getPhantomProvider(forceReset = false) {
     return phantomProvider;
 }
 
+// تابع برای تولید encryption key
+function generateEncryptionKey() {
+    // تولید یک کلید ساده برای encryption (اختیاری)
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode.apply(null, array)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+}
+
 // **اصلاح شده: تشخیص محیط Telegram**
 function isTelegramEnvironment() {
     return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
@@ -206,14 +214,17 @@ async function connectWallet() {
         console.log("📱 Mobile/Telegram environment - using deeplink");
         
         try {
+            // **کلیدی: اضافه کردن cluster برای Solana**
             const params = new URLSearchParams({
-                cluster: "devnet",
+                cluster: "devnet",  // یا "mainnet-beta" برای mainnet
                 app_url: window.location.origin,
-                redirect_link: `${window.location.origin}/airdrop?phantom_action=connect`
+                redirect_link: `${window.location.origin}/airdrop?phantom_action=connect&user_id=${USER_ID}`,
+                dapp_encryption_public_key: generateEncryptionKey() // برای امنیت
             });
             
             const connectUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
             
+            console.log("🦄 Phantom connect URL with cluster:", connectUrl);
             redirectToPhantomApp(connectUrl);
             
         } catch (error) {
@@ -231,14 +242,14 @@ async function connectWallet() {
     }
 }
 
-// **اصلاح کامل: اتصال wallet با تأکید بر account اصلی**
+// **اصلاح کامل: اتصال wallet برای desktop**
 async function connectWalletDirect() {
     try {
-        console.log("🔗 Starting REAL wallet connection...");
+        console.log("🔗 Starting DESKTOP wallet connection...");
         
-        // مرحله 1: کاملاً پاک کردن تمام اتصالات
+        // اطمینان از Solana network
         if (phantomProvider && phantomProvider.isConnected) {
-            console.log("🔌 Force disconnecting all connections...");
+            console.log("🔌 Force disconnecting previous connection...");
             try {
                 await phantomProvider.disconnect();
             } catch (e) {
@@ -246,23 +257,15 @@ async function connectWalletDirect() {
             }
         }
         
-        // مرحله 2: کمی صبر کنیم تا Phantom reset شود
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // مرحله 3: بررسی دوباره Phantom provider
-        phantomProvider = await detectPhantomWallet();
-        if (!phantomProvider) {
-            throw new Error("Phantom wallet not found after reset");
-        }
+        // تنظیم شبکه Solana
+        console.log("🦄 Requesting Solana connection...");
         
-        console.log("🦄 Phantom provider reset complete");
-        
-        // مرحله 4: درخواست اتصال با تنظیمات خاص
-        console.log("🔑 Requesting connection to PRIMARY account...");
-        
-        // استفاده از روش استاندارد Phantom
         const connectOptions = {
-            onlyIfTrusted: false  // اجبار به نمایش popup
+            onlyIfTrusted: false,
+            // اختیاری: تعیین شبکه برای desktop
+            cluster: 'devnet' // یا 'mainnet-beta'
         };
         
         const response = await phantomProvider.connect(connectOptions);
@@ -271,97 +274,80 @@ async function connectWalletDirect() {
             throw new Error('No public key received from Phantom');
         }
         
-        // مرحله 5: دریافت آدرس اصلی
-        const primaryAddress = response.publicKey.toString();
-        console.log("🎯 Primary address from connection:", primaryAddress);
+        const walletAddress = response.publicKey.toString();
+        console.log("🎯 Connected to Solana address:", walletAddress);
         
-        // مرحله 6: Double-check با provider
-        if (phantomProvider.publicKey) {
-            const providerAddress = phantomProvider.publicKey.toString();
-            console.log("🏦 Provider address after connection:", providerAddress);
-            
-            if (primaryAddress !== providerAddress) {
-                console.warn("⚠️ Address mismatch detected!");
-                console.warn("Connection response:", primaryAddress);
-                console.warn("Provider current:", providerAddress);
-                
-                // نمایش popup برای انتخاب
-                const message = `Address mismatch detected!\n\nFrom connection: ${primaryAddress}\nFrom provider: ${providerAddress}\n\nWhich one is your MAIN Phantom address?\n\nClick OK for the first one, Cancel for the second one.`;
-                
-                const useFirst = confirm(message);
-                const finalAddress = useFirst ? primaryAddress : providerAddress;
-                
-                console.log("👤 User selected address:", finalAddress);
-                connectedWallet = finalAddress;
-            } else {
-                console.log("✅ Addresses match - using:", primaryAddress);
-                connectedWallet = primaryAddress;
-            }
-        } else {
-            console.log("✅ Using connection response address:", primaryAddress);
-            connectedWallet = primaryAddress;
+        // تأیید آدرس Solana
+        if (walletAddress.length < 32 || walletAddress.length > 44 || walletAddress.startsWith('0x')) {
+            throw new Error(`Invalid Solana address: ${walletAddress}. This looks like an Ethereum address.`);
         }
         
-        // مرحله 7: نمایش اطلاعات کامل برای debugging
-        console.log("📊 FINAL CONNECTION INFO:");
-        console.log("- Selected Address:", connectedWallet);
-        console.log("- Response publicKey:", response.publicKey.toString());
-        console.log("- Provider publicKey:", phantomProvider.publicKey?.toString());
-        console.log("- Provider isConnected:", phantomProvider.isConnected);
-        
-        // مرحله 8: تأیید از کاربر
-        const confirmMessage = `Please confirm this is your MAIN Phantom wallet address:\n\n${connectedWallet}\n\nThis address should match the one you see in your Phantom wallet.`;
+        // تأیید از کاربر
+        const confirmMessage = `Connected to Solana wallet:\n\n${walletAddress}\n\nIs this your correct Phantom Solana address?`;
         
         if (!confirm(confirmMessage)) {
+            await phantomProvider.disconnect();
             throw new Error("User rejected the wallet address");
         }
         
-        // مرحله 9: ارسال به سرور
-        console.log("📤 Saving confirmed address to server...");
-        const saveResponse = await fetch('/airdrop/connect_wallet', {
+        // ذخیره آدرس
+        connectedWallet = walletAddress;
+        
+        // ارسال به سرور
+        await saveWalletToServer(walletAddress);
+        
+        // بروزرسانی UI
+        tasksCompleted.wallet = true;
+        updateWalletUI();
+        updateTasksUI();
+        
+        showToast(`Wallet connected: ${walletAddress.slice(0,6)}...${walletAddress.slice(-6)}`, "success");
+        
+    } catch (error) {
+        console.error("❌ Desktop wallet connection failed:", error);
+        
+        // Reset
+        connectedWallet = null;
+        tasksCompleted.wallet = false;
+        updateWalletUI();
+        
+        showToast(`Connection failed: ${error.message}`, "error");
+        
+        if (error.message.includes('Ethereum')) {
+            alert(`Network Error!\n\n${error.message}\n\nPlease make sure you're connected to Solana network in Phantom, not Ethereum.`);
+        }
+    }
+}
+
+// تابع ذخیره wallet در سرور
+async function saveWalletToServer(walletAddress) {
+    try {
+        console.log("📤 Saving wallet to server:", walletAddress);
+        
+        const response = await fetch('/airdrop/connect_wallet', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 telegram_id: USER_ID,
-                wallet_address: connectedWallet
+                wallet_address: walletAddress
             })
         });
         
-        if (!saveResponse.ok) {
-            const errorData = await saveResponse.json();
-            throw new Error(errorData.detail || "Failed to save wallet connection");
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Failed to save wallet");
         }
         
-        const result = await saveResponse.json();
-        console.log("✅ Server confirmed:", result);
-        
-        // مرحله 10: بروزرسانی UI
-        tasksCompleted.wallet = true;
-        updateWalletUI();
-        updateTasksUI();
-        
-        showToast(`Wallet connected: ${connectedWallet.slice(0,6)}...${connectedWallet.slice(-6)}`, "success");
-        
-        // نمایش آدرس نهایی
-        setTimeout(() => {
-            alert(`SUCCESS!\n\nConnected wallet: ${connectedWallet}\n\nThis address is now saved to your account.`);
-        }, 1000);
+        const result = await response.json();
+        console.log("✅ Server save successful:", result);
+        return result;
         
     } catch (error) {
-        console.error("❌ Wallet connection completely failed:", error);
-        
-        // Reset everything
-        connectedWallet = null;
-        tasksCompleted.wallet = false;
-        updateWalletUI();
-        
-        // نمایش خطای دقیق
-        const errorMessage = error.message || "Unknown connection error";
-        showToast(`Connection failed: ${errorMessage}`, "error");
-        
-        alert(`Connection Failed!\n\n${errorMessage}\n\nPlease try again or make sure:\n1. Phantom is installed\n2. You have accounts in Phantom\n3. You approve the connection`);
+        console.error("❌ Server save failed:", error);
+        showToast("Failed to save wallet address", "error");
+        throw error;
     }
 }
 
@@ -387,19 +373,15 @@ async function switchPhantomAccount() {
             const newAddress = response.publicKey.toString();
             console.log("🎯 New account selected:", newAddress);
             
+            // تأیید آدرس Solana
+            if (newAddress.length < 32 || newAddress.length > 44 || newAddress.startsWith('0x')) {
+                throw new Error(`Invalid Solana address: ${newAddress}`);
+            }
+            
             connectedWallet = newAddress;
             
             // ارسال به سرور
-            await fetch('/airdrop/connect_wallet', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    telegram_id: USER_ID,
-                    wallet_address: newAddress
-                })
-            });
+            await saveWalletToServer(newAddress);
             
             updateWalletUI();
             showToast(`Switched to: ${newAddress.slice(0,4)}...${newAddress.slice(-4)}`, "success");
@@ -602,25 +584,70 @@ function hidePhantomModal() {
     }
 }
 
-// Handle URL parameters for Phantom responses
+// **بهبود handling callback response**
 function handlePhantomResponse() {
     const urlParams = new URLSearchParams(window.location.search);
     const phantomAction = urlParams.get('phantom_action');
     
     if (phantomAction === 'connect') {
-        const publicKey = urlParams.get('phantom_publicKey');
+        console.log("📱 Processing Phantom callback...");
+        
+        // چک کردن error code
+        const errorCode = urlParams.get('errorCode');
+        const errorMessage = urlParams.get('errorMessage');
+        
+        if (errorCode) {
+            console.error("Phantom connection error:", errorCode, errorMessage);
+            showToast(`Connection failed: ${errorMessage || errorCode}`, "error");
+            return;
+        }
+        
+        // دریافت public key از callback
+        let publicKey = urlParams.get('phantom_encryption_public_key') || 
+                       urlParams.get('public_key') || 
+                       urlParams.get('phantom_publicKey');
+        
+        console.log("🔑 Received publicKey from callback:", publicKey);
         
         if (publicKey) {
-            console.log('✅ Phantom connection successful:', publicKey);
-            connectedWallet = publicKey;
-            tasksCompleted.wallet = true;
-            updateWalletUI();
-            updateTasksUI();
-            showToast('Wallet connected successfully!', 'success');
+            try {
+                // تأیید که آدرس Solana است (base58 format)
+                if (publicKey.length >= 32 && publicKey.length <= 44 && !publicKey.startsWith('0x')) {
+                    console.log('✅ Valid Solana address detected:', publicKey);
+                    
+                    // ذخیره آدرس
+                    connectedWallet = publicKey;
+                    tasksCompleted.wallet = true;
+                    
+                    // ارسال به سرور
+                    saveWalletToServer(publicKey);
+                    
+                    // بروزرسانی UI
+                    updateWalletUI();
+                    updateTasksUI();
+                    showToast('Wallet connected successfully!', 'success');
+                    
+                    // نمایش تأیید
+                    setTimeout(() => {
+                        alert(`Connected to Solana wallet:\n${publicKey}\n\nPlease verify this matches your Phantom wallet.`);
+                    }, 1000);
+                    
+                } else {
+                    throw new Error(`Invalid Solana address format: ${publicKey}`);
+                }
+                
+            } catch (error) {
+                console.error("Invalid public key:", error);
+                showToast("Invalid wallet address received", "error");
+            }
             
-            // Clean URL
+            // پاک کردن URL
             const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
             window.history.replaceState({}, document.title, cleanUrl);
+            
+        } else {
+            console.error("No public key received from Phantom");
+            showToast("No wallet address received. Please try again.", "error");
         }
     }
 }
