@@ -84,25 +84,34 @@ function updateCountdown() {
     }
 }
 
-// Enhanced Phantom detection
-async function detectPhantomWallet() {
-    console.log("🔍 Starting Phantom detection...");
+// Enhanced Phantom detection با reset کامل
+async function detectPhantomWallet(forceReset = false) {
+    console.log("🔍 Starting Phantom detection...", forceReset ? "(FORCED RESET)" : "");
     
+    if (forceReset) {
+        phantomProvider = null;
+        phantomDetected = false;
+    }
+    
+    // بررسی window.phantom (روش جدید)
     if (window.phantom?.solana?.isPhantom) {
         console.log("✅ Phantom detected via window.phantom.solana");
         phantomDetected = true;
         return window.phantom.solana;
     }
     
+    // بررسی window.solana (روش قدیمی)
     if (window.solana?.isPhantom) {
         console.log("✅ Phantom detected via window.solana (legacy)");
         phantomDetected = true;
         return window.solana;
     }
     
+    // انتظار برای load شدن
     console.log("⏳ Waiting for Phantom extension to load...");
     for (let i = 0; i < 50; i++) {
         await new Promise(resolve => setTimeout(resolve, 100));
+        
         if (window.phantom?.solana?.isPhantom) {
             console.log("✅ Phantom detected after waiting");
             phantomDetected = true;
@@ -115,16 +124,15 @@ async function detectPhantomWallet() {
         }
     }
     
-    console.log("❌ Phantom wallet not found");
+    console.log("❌ Phantom wallet not found after waiting");
     phantomDetected = false;
     return null;
 }
 
-async function getPhantomProvider() {
-    if (phantomProvider && phantomDetected) {
-        return phantomProvider;
+async function getPhantomProvider(forceReset = false) {
+    if (forceReset || !phantomProvider || !phantomDetected) {
+        phantomProvider = await detectPhantomWallet(forceReset);
     }
-    phantomProvider = await detectPhantomWallet();
     return phantomProvider;
 }
 
@@ -190,7 +198,8 @@ async function handleWalletConnection() {
 async function connectWallet() {
     console.log("🔗 Starting wallet connection...");
     
-    const provider = await getPhantomProvider();
+    // Force reset Phantom provider
+    const provider = await getPhantomProvider(true);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|OperaMini/i.test(navigator.userAgent);
     
     if (isMobile || isTelegramEnvironment()) {
@@ -205,7 +214,6 @@ async function connectWallet() {
             
             const connectUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
             
-            // **تغییر اصلی: هدایت مستقیم بدون مودال**
             redirectToPhantomApp(connectUrl);
             
         } catch (error) {
@@ -223,75 +231,93 @@ async function connectWallet() {
     }
 }
 
-// **اصلاح اصلی: اتصال مستقیم wallet با debug کامل**
+// **اصلاح کامل: اتصال wallet با تأکید بر account اصلی**
 async function connectWalletDirect() {
     try {
-        console.log("🔗 Starting direct wallet connection...");
-        console.log("🔍 Current Phantom provider:", phantomProvider);
+        console.log("🔗 Starting REAL wallet connection...");
         
-        // پاک کردن اتصالات قبلی
+        // مرحله 1: کاملاً پاک کردن تمام اتصالات
         if (phantomProvider && phantomProvider.isConnected) {
-            console.log("🔌 Disconnecting previous connection...");
-            await phantomProvider.disconnect();
+            console.log("🔌 Force disconnecting all connections...");
+            try {
+                await phantomProvider.disconnect();
+            } catch (e) {
+                console.log("Disconnect error (expected):", e);
+            }
         }
         
-        // بررسی وضعیت قبل از اتصال
-        console.log("📊 Phantom status before connection:");
-        console.log("- isConnected:", phantomProvider.isConnected);
-        console.log("- publicKey:", phantomProvider.publicKey?.toString() || 'null');
+        // مرحله 2: کمی صبر کنیم تا Phantom reset شود
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // درخواست اتصال جدید
-        console.log("🦄 Requesting fresh connection from Phantom...");
-        const response = await phantomProvider.connect({ 
-            onlyIfTrusted: false,
-            force: true  // اجبار به نمایش popup
-        });
+        // مرحله 3: بررسی دوباره Phantom provider
+        phantomProvider = await detectPhantomWallet();
+        if (!phantomProvider) {
+            throw new Error("Phantom wallet not found after reset");
+        }
         
-        console.log("📋 Full Phantom response:", response);
-        console.log("🔑 Response publicKey:", response?.publicKey?.toString() || 'undefined');
+        console.log("🦄 Phantom provider reset complete");
+        
+        // مرحله 4: درخواست اتصال با تنظیمات خاص
+        console.log("🔑 Requesting connection to PRIMARY account...");
+        
+        // استفاده از روش استاندارد Phantom
+        const connectOptions = {
+            onlyIfTrusted: false  // اجبار به نمایش popup
+        };
+        
+        const response = await phantomProvider.connect(connectOptions);
         
         if (!response || !response.publicKey) {
-            throw new Error('Failed to get public key from Phantom response');
+            throw new Error('No public key received from Phantom');
         }
         
-        // بررسی تمام accounts ممکن
+        // مرحله 5: دریافت آدرس اصلی
+        const primaryAddress = response.publicKey.toString();
+        console.log("🎯 Primary address from connection:", primaryAddress);
+        
+        // مرحله 6: Double-check با provider
         if (phantomProvider.publicKey) {
-            console.log("🏦 Phantom provider publicKey:", phantomProvider.publicKey.toString());
+            const providerAddress = phantomProvider.publicKey.toString();
+            console.log("🏦 Provider address after connection:", providerAddress);
+            
+            if (primaryAddress !== providerAddress) {
+                console.warn("⚠️ Address mismatch detected!");
+                console.warn("Connection response:", primaryAddress);
+                console.warn("Provider current:", providerAddress);
+                
+                // نمایش popup برای انتخاب
+                const message = `Address mismatch detected!\n\nFrom connection: ${primaryAddress}\nFrom provider: ${providerAddress}\n\nWhich one is your MAIN Phantom address?\n\nClick OK for the first one, Cancel for the second one.`;
+                
+                const useFirst = confirm(message);
+                const finalAddress = useFirst ? primaryAddress : providerAddress;
+                
+                console.log("👤 User selected address:", finalAddress);
+                connectedWallet = finalAddress;
+            } else {
+                console.log("✅ Addresses match - using:", primaryAddress);
+                connectedWallet = primaryAddress;
+            }
+        } else {
+            console.log("✅ Using connection response address:", primaryAddress);
+            connectedWallet = primaryAddress;
         }
         
-        // دریافت آدرس از response
-        const responseWalletAddress = response.publicKey.toString();
-        console.log("✅ Address from response:", responseWalletAddress);
+        // مرحله 7: نمایش اطلاعات کامل برای debugging
+        console.log("📊 FINAL CONNECTION INFO:");
+        console.log("- Selected Address:", connectedWallet);
+        console.log("- Response publicKey:", response.publicKey.toString());
+        console.log("- Provider publicKey:", phantomProvider.publicKey?.toString());
+        console.log("- Provider isConnected:", phantomProvider.isConnected);
         
-        // دریافت آدرس از provider
-        const providerWalletAddress = phantomProvider.publicKey?.toString();
-        console.log("✅ Address from provider:", providerWalletAddress);
+        // مرحله 8: تأیید از کاربر
+        const confirmMessage = `Please confirm this is your MAIN Phantom wallet address:\n\n${connectedWallet}\n\nThis address should match the one you see in your Phantom wallet.`;
         
-        // انتخاب آدرس صحیح
-        let realWalletAddress = responseWalletAddress;
-        
-        // اگر دو آدرس متفاوت هستند، از کاربر بپرسید
-        if (providerWalletAddress && responseWalletAddress !== providerWalletAddress) {
-            console.warn("⚠️ Address mismatch detected!");
-            console.warn("Response address:", responseWalletAddress);
-            console.warn("Provider address:", providerWalletAddress);
-            
-            // نمایش هر دو آدرس به کاربر
-            const userChoice = confirm(`Two different addresses detected:\n\n1. ${responseWalletAddress}\n2. ${providerWalletAddress}\n\nClick OK for address 1, Cancel for address 2`);
-            
-            realWalletAddress = userChoice ? responseWalletAddress : providerWalletAddress;
+        if (!confirm(confirmMessage)) {
+            throw new Error("User rejected the wallet address");
         }
         
-        console.log("🎯 Final selected address:", realWalletAddress);
-        
-        // بروزرسانی متغیر global
-        connectedWallet = realWalletAddress;
-        
-        // نمایش آدرس در console برای verification
-        console.log("🔍 Please verify this is your correct Phantom address:", realWalletAddress);
-        
-        // ارسال به سرور
-        console.log("📤 Sending wallet address to server...");
+        // مرحله 9: ارسال به سرور
+        console.log("📤 Saving confirmed address to server...");
         const saveResponse = await fetch('/airdrop/connect_wallet', {
             method: 'POST',
             headers: {
@@ -299,7 +325,7 @@ async function connectWalletDirect() {
             },
             body: JSON.stringify({
                 telegram_id: USER_ID,
-                wallet_address: realWalletAddress
+                wallet_address: connectedWallet
             })
         });
         
@@ -309,42 +335,33 @@ async function connectWalletDirect() {
         }
         
         const result = await saveResponse.json();
-        console.log("✅ Server response:", result);
+        console.log("✅ Server confirmed:", result);
         
-        // بروزرسانی وضعیت
+        // مرحله 10: بروزرسانی UI
         tasksCompleted.wallet = true;
-        
-        // بروزرسانی UI
         updateWalletUI();
         updateTasksUI();
         
-        showToast(`Wallet connected: ${realWalletAddress.slice(0,4)}...${realWalletAddress.slice(-4)}`, "success");
+        showToast(`Wallet connected: ${connectedWallet.slice(0,6)}...${connectedWallet.slice(-6)}`, "success");
         
-        // نمایش آدرس کامل برای verification
+        // نمایش آدرس نهایی
         setTimeout(() => {
-            alert(`Connected wallet address:\n${realWalletAddress}\n\nPlease verify this matches your Phantom wallet address.`);
+            alert(`SUCCESS!\n\nConnected wallet: ${connectedWallet}\n\nThis address is now saved to your account.`);
         }, 1000);
         
     } catch (error) {
-        console.error("❌ Wallet connection failed:", error);
+        console.error("❌ Wallet connection completely failed:", error);
         
-        // نمایش جزئیات خطا
-        console.error("Error details:", {
-            message: error.message,
-            stack: error.stack,
-            phantomProvider: phantomProvider,
-            isPhantomConnected: phantomProvider?.isConnected,
-            phantomPublicKey: phantomProvider?.publicKey?.toString()
-        });
-        
-        // reset کردن متغیرها
+        // Reset everything
         connectedWallet = null;
         tasksCompleted.wallet = false;
-        
-        // بروزرسانی UI
         updateWalletUI();
         
-        showToast(`Wallet connection failed: ${error.message}`, "error");
+        // نمایش خطای دقیق
+        const errorMessage = error.message || "Unknown connection error";
+        showToast(`Connection failed: ${errorMessage}`, "error");
+        
+        alert(`Connection Failed!\n\n${errorMessage}\n\nPlease try again or make sure:\n1. Phantom is installed\n2. You have accounts in Phantom\n3. You approve the connection`);
     }
 }
 
