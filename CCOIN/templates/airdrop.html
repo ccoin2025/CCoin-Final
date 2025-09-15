@@ -10,8 +10,36 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <!-- اضافه کردن bs58 library -->
-    <script src="https://unpkg.com/bs58@5.0.0/index.min.js"></script>
+    <script>
+        // Check if bs58 is loaded, if not create a fallback
+        if (typeof bs58 === 'undefined') {
+            window.bs58 = {
+                encode: function (data) {
+                    // Simple fallback using base64
+                    return btoa(String.fromCharCode.apply(null, data));
+                },
+                decode: function (str) {
+                    // Simple fallback 
+                    return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+                }
+            };
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
+    <script>
+        // Ensure bs58 is available globally
+        window.ensureBS58 = function () {
+            if (typeof bs58 !== 'undefined') {
+                window.bs58 = bs58;
+                return true;
+            }
+            if (typeof window.bs58 !== 'undefined') {
+                return true;
+            }
+            console.warn('BS58 library not available, using fallback');
+            return false;
+        };
+    </script>
 
     <style>
         /* استایل منوی کشویی کیف پول */
