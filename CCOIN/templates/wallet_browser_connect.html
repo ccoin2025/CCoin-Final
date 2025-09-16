@@ -75,7 +75,7 @@
             var debug = document.getElementById('debug');
             debug.style.display = 'block';
             debug.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
-            debug.scrollTop = debug.scrollHeight;
+            debug.scrollTop = debug.scrollTop = debug.scrollHeight;
         }
         
         function updateStatus(msg) {
@@ -83,7 +83,7 @@
         }
         
         function init() {
-            log('🚀 Starting simple connection...');
+            log('🚀 Starting connection with fixed callback...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
@@ -97,55 +97,90 @@
             
             log('✅ Telegram ID: ' + telegramId);
             
-            // Create callback and app URLs
+            // Create callback with simple redirect
             var origin = window.location.origin;
-            var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
+            
+            // Try different callback approaches
+            var callbackUrl = origin + '/wallet/callback?telegram_id=' + telegramId + '&success=true';
             
             log('🏠 Origin: ' + origin);
-            log('📞 Callback: ' + callback);
+            log('📞 Callback URL: ' + callbackUrl);
             
-            // Create simple phantom URL WITHOUT encryption key
-            var baseUrl = 'https://phantom.app/ul/v1/connect?';
-            var parameters = [
-                'app_url=' + encodeURIComponent(origin),
-                'redirect_link=' + encodeURIComponent(callback),
-                'cluster=mainnet-beta'
-            ];
-            
-            phantomUrl = baseUrl + parameters.join('&');
-            
-            log('🔗 Simple Phantom URL created (no encryption)');
-            log('🔍 URL: ' + phantomUrl);
-            
-            // Show button
-            updateStatus('✅ Ready to connect (Simple Mode)');
-            document.getElementById('buttons').style.display = 'block';
+            // Create phantom URL with proper encoding
+            try {
+                var phantomParams = new URLSearchParams();
+                phantomParams.set('app_url', origin);
+                phantomParams.set('redirect_link', callbackUrl);
+                phantomParams.set('cluster', 'mainnet-beta');
+                
+                phantomUrl = 'https://phantom.app/ul/v1/connect?' + phantomParams.toString();
+                
+                log('🔗 Phantom URL created');
+                log('🔍 Full URL: ' + phantomUrl);
+                
+                // Show button
+                updateStatus('✅ Ready to connect (Fixed Callback)');
+                document.getElementById('buttons').style.display = 'block';
+                
+            } catch(e) {
+                log('❌ URL creation failed: ' + e.message);
+                updateStatus('❌ Failed to create connection URL');
+                document.getElementById('backBtn').style.display = 'block';
+            }
         }
         
         function openPhantom() {
-            log('🦄 Opening Phantom (Simple Mode)...');
+            log('🦄 Opening Phantom with fixed callback...');
             updateStatus('🦄 Opening Phantom App...');
             
             try {
-                log('🔗 Opening URL: ' + phantomUrl);
+                log('🔗 Full URL: ' + phantomUrl);
                 
-                var popup = window.open(phantomUrl, '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
+                // Try different popup parameters
+                var popup = window.open(
+                    phantomUrl, 
+                    'phantom_connect',
+                    'width=400,height=600,scrollbars=yes,resizable=yes,location=yes'
+                );
+                
                 if (popup) {
-                    log('✅ Phantom opened successfully');
-                    updateStatus('✅ Phantom opened - Please connect your wallet');
+                    log('✅ Phantom popup opened');
+                    updateStatus('✅ Phantom opened - Complete the connection');
                     
-                    // Monitor popup
+                    // Enhanced popup monitoring
+                    var checkInterval = 1000;
+                    var maxChecks = 300; // 5 minutes max
+                    var checkCount = 0;
+                    
                     var checkClosed = setInterval(function() {
-                        if (popup.closed) {
-                            clearInterval(checkClosed);
-                            log('🔄 Popup closed');
-                            updateStatus('🔄 Connection completed. Returning to app...');
-                            setTimeout(goBack, 2000);
+                        checkCount++;
+                        
+                        try {
+                            if (popup.closed) {
+                                clearInterval(checkClosed);
+                                log('🔄 Popup closed after ' + checkCount + ' checks');
+                                updateStatus('🔄 Connection window closed. Check result...');
+                                
+                                // Give time for callback to process
+                                setTimeout(function() {
+                                    log('🔄 Checking connection result...');
+                                    goBack();
+                                }, 3000);
+                            }
+                            
+                            if (checkCount >= maxChecks) {
+                                clearInterval(checkClosed);
+                                log('⏰ Popup timeout after 5 minutes');
+                                updateStatus('⏰ Connection timeout. Please try again.');
+                                popup.close();
+                            }
+                        } catch(e) {
+                            log('⚠️ Popup check error: ' + e.message);
                         }
-                    }, 1000);
+                    }, checkInterval);
                     
                 } else {
-                    log('❌ Popup was blocked');
+                    log('❌ Popup was blocked or failed to open');
                     updateStatus('❌ Popup blocked - Please enable popups and try again');
                     document.getElementById('backBtn').style.display = 'block';
                 }
@@ -158,22 +193,36 @@
         
         function goBack() {
             log('🔙 Going back to app');
-            window.location.href = 'https://t.me/CTG_COIN_BOT/app';
+            try {
+                window.location.href = 'https://t.me/CTG_COIN_BOT/app';
+            } catch(e) {
+                log('❌ Failed to go back: ' + e.message);
+                updateStatus('❌ Please manually return to the Telegram app');
+            }
         }
         
         // Start when page loads
         window.onload = function() {
-            log('📄 Page loaded, starting in 500ms...');
+            log('📄 Page loaded');
             setTimeout(init, 500);
         };
         
-        // Catch all errors
-        window.onerror = function(msg, url, line) {
-            log('❌ ERROR: ' + msg + ' (line: ' + line + ')');
-            updateStatus('❌ Page error: ' + msg);
+        // Enhanced error handling
+        window.onerror = function(msg, url, line, col, error) {
+            var errorMsg = 'ERROR: ' + msg + ' (line: ' + line + ')';
+            if (error && error.stack) {
+                errorMsg += '\nStack: ' + error.stack;
+            }
+            log('❌ ' + errorMsg);
+            updateStatus('❌ Page error occurred');
             document.getElementById('backBtn').style.display = 'block';
             return true;
         };
+        
+        window.addEventListener('unhandledrejection', function(event) {
+            log('❌ Unhandled promise rejection: ' + event.reason);
+            event.preventDefault();
+        });
     </script>
 </body>
 </html>
