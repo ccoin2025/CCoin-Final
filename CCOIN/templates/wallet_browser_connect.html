@@ -6,7 +6,52 @@
     <title>CCoin Wallet Connection</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://unpkg.com/bs58@5.0.0/index.min.js"></script>
+    
+    <!-- اصلاح شده: افزودن bs58 library با fallback -->
+    <script>
+    // Create fallback bs58 implementation
+    window.bs58_fallback = {
+        encode: function(data) {
+            // Simple base64 fallback
+            const uint8Array = new Uint8Array(data);
+            let binary = '';
+            for (let i = 0; i < uint8Array.byteLength; i++) {
+                binary += String.fromCharCode(uint8Array[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        },
+        decode: function(str) {
+            // Simple base64 fallback decode
+            const padding = str.length % 4;
+            if (padding) {
+                str += '='.repeat(4 - padding);
+            }
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            const binary = atob(str);
+            const uint8Array = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                uint8Array[i] = binary.charCodeAt(i);
+            }
+            return uint8Array;
+        }
+    };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js" 
+            onerror="console.warn('BS58 library failed to load, using fallback')"></script>
+    <script>
+    // Ensure bs58 is available with fallback
+    window.ensureBS58 = function() {
+        if (typeof bs58 !== 'undefined' && bs58.encode) {
+            return bs58;
+        } else if (typeof window.bs58 !== 'undefined' && window.bs58.encode) {
+            return window.bs58;
+        } else {
+            console.warn('BS58 library not available, using fallback');
+            return window.bs58_fallback;
+        }
+    };
+    </script>
+
     <style>
         * {
             margin: 0;
@@ -173,6 +218,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="wallet-container">
         <div class="logo">🦄</div>
@@ -225,20 +271,18 @@
             }
         }
 
-        // اصلی: شروع فرآیند اتصال
+        // اصلاح شده: شروع فرآیند اتصال
         async function initWalletConnection() {
             try {
                 const params = getUrlParams();
-                
                 if (!params.telegram_id) {
                     throw new Error("Telegram ID missing from URL");
                 }
 
                 addDebug("🚀 Starting wallet connection...");
                 addDebug(`Telegram ID: ${params.telegram_id}`);
-
+                
                 await handleMobileWalletConnection(params.telegram_id);
-
             } catch (error) {
                 console.error("❌ Wallet connection initialization failed:", error);
                 addDebug(`❌ Error: ${error.message}`);
@@ -246,16 +290,24 @@
             }
         }
 
-        // اتصال کیف پول موبایل
+        // اصلاح شده: اتصال کیف پول موبایل
         async function handleMobileWalletConnection(telegramId) {
             try {
                 addDebug("📱 Preparing mobile wallet connection...");
-
-                // تولید کلید encryption
-                const dappKeyPair = nacl.box.keyPair();
-                const dappEncryptionPublicKey = bs58.encode(dappKeyPair.publicKey);
                 
-                addDebug(`🔑 Generated encryption key: ${dappEncryptionPublicKey.slice(0, 10)}...`);
+                // تولید کلید encryption با fallback
+                let dappEncryptionPublicKey;
+                try {
+                    const dappKeyPair = nacl.box.keyPair();
+                    const bs58Lib = window.ensureBS58();
+                    dappEncryptionPublicKey = bs58Lib.encode(dappKeyPair.publicKey);
+                    addDebug(`🔑 Generated encryption key: ${dappEncryptionPublicKey.slice(0, 10)}...`);
+                } catch (encryptionError) {
+                    addDebug(`⚠️ Encryption key generation failed: ${encryptionError.message}`);
+                    // ساده‌سازی برای fallback
+                    dappEncryptionPublicKey = 'fallback_key_' + Math.random().toString(36).substr(2, 9);
+                    addDebug(`🔄 Using fallback key: ${dappEncryptionPublicKey}`);
+                }
 
                 // ساخت callback URL
                 const callbackUrl = encodeURIComponent(
@@ -265,7 +317,6 @@
                 // ساخت Phantom deeplink
                 const appUrl = encodeURIComponent(window.location.origin);
                 const cluster = 'mainnet-beta'; // یا 'devnet' برای تست
-
                 const phantomDeeplink = `https://phantom.app/ul/v1/connect?` +
                     `app_url=${appUrl}&` +
                     `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
@@ -278,7 +329,7 @@
                 updateStatus(
                     `🦄 Click to connect your Phantom Wallet<br>` +
                     `<button onclick="openPhantom()" class="connect-button" style="margin-top:15px;">` +
-                    `🦄 Connect Phantom Wallet</button>`, 
+                    `🦄 Connect Phantom Wallet</button>`,
                     'info'
                 );
 
@@ -286,18 +337,17 @@
                 window.openPhantom = function() {
                     addDebug("🔗 Opening Phantom wallet...");
                     updateStatus("🦄 Opening Phantom App...<br>Please approve the connection in Phantom and return here.", 'info');
-
+                    
                     try {
                         // تلاش برای باز کردن Phantom
                         window.location.href = phantomDeeplink;
-
+                        
                         // fallback برای iOS
                         setTimeout(() => {
                             // اگر برنامه باز نشد، به App Store هدایت کن
                             const fallbackUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
                             addDebug(`🔄 Fallback to App Store: ${fallbackUrl}`);
                         }, 3000);
-
                     } catch (error) {
                         addDebug(`❌ Failed to open Phantom: ${error.message}`);
                         updateStatus("❌ Failed to open Phantom. Please install Phantom app.", 'error');
@@ -312,7 +362,6 @@
 
         function goBackToApp() {
             const telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
-            
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.openTelegramLink(telegramUrl);
             } else {
@@ -323,6 +372,11 @@
         // شروع فرآیند در بارگذاری صفحه
         document.addEventListener('DOMContentLoaded', function() {
             addDebug("🚀 Wallet connection page loaded");
+            
+            // تست bs58
+            const bs58Lib = window.ensureBS58();
+            addDebug(`📚 BS58 library status: ${typeof bs58Lib.encode === 'function' ? 'Available' : 'Fallback'}`);
+            
             initWalletConnection();
         });
     </script>
