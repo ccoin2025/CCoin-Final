@@ -2,398 +2,181 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>CCoin Wallet Connection</title>
-    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    
-    <!-- اصلاح شده: BS58 ساده -->
-    <script>
-    window.bs58_simple = {
-        encode: function(data) {
-            try {
-                const uint8Array = new Uint8Array(data);
-                let binary = '';
-                for (let i = 0; i < uint8Array.byteLength; i++) {
-                    binary += String.fromCharCode(uint8Array[i]);
-                }
-                return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-            } catch(e) {
-                return 'fallback_' + Math.random().toString(36).substr(2, 16);
-            }
-        }
-    };
-    </script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connect Wallet</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Urbanist', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-        }
-
-        .wallet-container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
             text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 50px 20px;
+            min-height: 100vh;
+        }
+        .container {
             max-width: 400px;
-            width: 90%;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 20px;
         }
-
-        .logo {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        h1 {
-            font-size: 28px;
-            margin-bottom: 10px;
-            font-weight: 800;
-        }
-
-        .description {
-            font-size: 16px;
-            opacity: 0.9;
-            margin-bottom: 30px;
-            line-height: 1.5;
-        }
-
-        .connect-button {
+        .btn {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
             color: white;
             border: none;
             padding: 15px 30px;
             border-radius: 25px;
             font-size: 18px;
-            font-weight: 600;
             cursor: pointer;
-            margin: 20px 0;
-            transition: all 0.3s ease;
             width: 100%;
+            margin: 10px 0;
         }
-
-        .connect-button:hover {
+        .btn:hover {
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
         }
-
-        .loading {
-            font-size: 18px;
-            margin: 20px 0;
-        }
-
-        .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .error, .success, .info {
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-
-        .error {
-            background: rgba(255, 0, 0, 0.2);
-            border: 1px solid rgba(255, 0, 0, 0.5);
-            color: #ffcccb;
-        }
-
-        .success {
-            background: rgba(0, 255, 0, 0.2);
-            border: 1px solid rgba(0, 255, 0, 0.5);
-            color: #90ee90;
-        }
-
-        .info {
-            background: rgba(0, 123, 255, 0.2);
-            border: 1px solid rgba(0, 123, 255, 0.5);
-            color: #87ceeb;
-        }
-
-        .back-button {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: all 0.3s ease;
-        }
-
-        .debug-info {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
+        .debug {
+            background: rgba(0,0,0,0.3);
             padding: 10px;
-            margin: 15px 0;
+            border-radius: 10px;
+            margin: 20px 0;
             font-size: 12px;
-            font-family: monospace;
             text-align: left;
-            max-height: 150px;
+            max-height: 200px;
             overflow-y: auto;
-        }
-
-        .phantom-icon {
-            width: 60px;
-            height: 60px;
-            margin: 20px auto;
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
         }
     </style>
 </head>
-
 <body>
-    <div class="wallet-container">
-        <div class="logo">🦄</div>
-        <h1>Connect Phantom Wallet</h1>
-        <div class="description">
-            Connect your Phantom wallet to CCoin to participate in the airdrop
+    <div class="container">
+        <h1>🦄 Connect Phantom Wallet</h1>
+        <p>Connect your wallet to participate in CCoin airdrop</p>
+        
+        <div id="status">
+            <p>Preparing connection...</p>
         </div>
-
-        <div class="phantom-icon">🦄</div>
-
-        <div id="status" class="loading">
-            <div class="spinner"></div>
-            Preparing wallet connection...
+        
+        <div id="buttons" style="display: none;">
+            <button class="btn" onclick="openApp()">📱 Open Phantom App</button>
+            <button class="btn" onclick="openWeb()">🌐 Open Phantom Web</button>
+            <button class="btn" onclick="openStore()">🏪 Download Phantom</button>
         </div>
-
-        <div id="debugInfo" class="debug-info" style="display: none;"></div>
-
-        <button class="back-button" onclick="goBackToApp()" style="display: none;" id="backButton">
-            Return to App
+        
+        <button class="btn" onclick="goBack()" style="display: none;" id="backBtn">
+            ← Back to App
         </button>
+        
+        <div id="debug" class="debug" style="display: none;"></div>
     </div>
 
     <script>
-        // متغیرهای global
-        let telegramId = '';
-        let phantomAppUrl = '';
-        let phantomWebUrl = '';
-
-        // تابع debug ساده
-        function addDebug(message) {
-            try {
-                console.log(message);
-                const debugDiv = document.getElementById('debugInfo');
-                if (debugDiv) {
-                    debugDiv.style.display = 'block';
-                    debugDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
-                    debugDiv.scrollTop = debugDiv.scrollHeight;
-                }
-            } catch(e) {
-                console.error('Debug error:', e);
-            }
+        var telegramId = '';
+        var appUrl = '';
+        var webUrl = '';
+        
+        function log(msg) {
+            console.log(msg);
+            var debug = document.getElementById('debug');
+            debug.style.display = 'block';
+            debug.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
+            debug.scrollTop = debug.scrollHeight;
         }
-
-        function updateStatus(message, type) {
-            try {
-                const statusDiv = document.getElementById('status');
-                const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
-                statusDiv.innerHTML = '<div class="' + className + '"><strong>' + message + '</strong></div>';
-                
-                if (type === 'error' || type === 'success') {
-                    document.getElementById('backButton').style.display = 'block';
-                }
-            } catch(e) {
-                console.error('Status update error:', e);
-            }
+        
+        function updateStatus(msg) {
+            document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
-
-        // تابع اصلی
-        function initConnection() {
-            try {
-                addDebug("🚀 Starting connection...");
-                
-                // گرفتن telegram_id
-                const urlParams = new URLSearchParams(window.location.search);
-                telegramId = urlParams.get('telegram_id') || '';
-                
-                if (!telegramId) {
-                    throw new Error("Telegram ID missing");
-                }
-                
-                addDebug("✅ Telegram ID: " + telegramId);
-                
-                // تولید کلید
-                let encryptionKey = '';
-                try {
-                    if (typeof nacl !== 'undefined') {
-                        const keyPair = nacl.box.keyPair();
-                        encryptionKey = window.bs58_simple.encode(keyPair.publicKey);
-                    } else {
-                        encryptionKey = 'simple_key_' + Math.random().toString(36).substr(2, 16);
-                    }
-                    addDebug("🔑 Key generated: " + encryptionKey.substring(0, 10) + "...");
-                } catch(keyError) {
-                    addDebug("⚠️ Key error: " + keyError.message);
-                    encryptionKey = 'fallback_key_' + Math.random().toString(36).substr(2, 16);
-                }
-                
-                // ساخت URLs
-                const callbackUrl = encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
-                const appUrl = encodeURIComponent(window.location.origin);
-                
-                phantomAppUrl = 'phantom://v1/connect?' +
-                    'app_url=' + appUrl + '&' +
-                    'dapp_encryption_public_key=' + encryptionKey + '&' +
-                    'redirect_link=' + callbackUrl + '&' +
-                    'cluster=mainnet-beta';
-                
-                phantomWebUrl = 'https://phantom.app/ul/v1/connect?' +
-                    'app_url=' + appUrl + '&' +
-                    'dapp_encryption_public_key=' + encryptionKey + '&' +
-                    'redirect_link=' + callbackUrl + '&' +
-                    'cluster=mainnet-beta';
-                
-                addDebug("🔗 URLs created");
-                
-                // نمایش دکمه
-                showConnectButton();
-                
-            } catch(error) {
-                addDebug("❌ Init error: " + error.message);
-                updateStatus("Connection setup failed: " + error.message, 'error');
+        
+        function init() {
+            log('🚀 Starting...');
+            
+            // Get telegram ID
+            var params = new URLSearchParams(window.location.search);
+            telegramId = params.get('telegram_id') || '';
+            
+            if (!telegramId) {
+                updateStatus('❌ Error: No telegram ID');
+                document.getElementById('backBtn').style.display = 'block';
+                return;
             }
-        }
-
-        function showConnectButton() {
-            try {
-                updateStatus(
-                    '🦄 Ready to connect<br>' +
-                    '<button onclick="connectPhantom()" class="connect-button" style="margin-top:15px;">' +
-                    '🦄 Connect Phantom Wallet</button>',
-                    'info'
-                );
-            } catch(e) {
-                addDebug("❌ Button error: " + e.message);
-            }
-        }
-
-        // تابع اتصال phantom
-        function connectPhantom() {
-            try {
-                addDebug("🔗 Starting Phantom connection...");
-                updateStatus("🦄 Opening Phantom...", 'info');
-                
-                // تشخیص موبایل ساده
-                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                const isAndroid = /Android/.test(navigator.userAgent);
-                
-                addDebug("📱 Device: Mobile=" + isMobile + ", iOS=" + isIOS + ", Android=" + isAndroid);
-                
-                if (isMobile) {
-                    // موبایل: تلاش برای باز کردن اپ
-                    addDebug("📱 Trying mobile app...");
+            
+            log('✅ Telegram ID: ' + telegramId);
+            
+            // Create simple key
+            var simpleKey = 'ccoin_key_' + Math.random().toString(36).substr(2, 16);
+            log('🔑 Generated key: ' + simpleKey.substr(0, 15) + '...');
+            
+            // Create URLs
+            var callback = encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
+            var app = encodeURIComponent(window.location.origin);
+            
+            appUrl = 'phantom://v1/connect?app_url=' + app + 
+                    '&dapp_encryption_public_key=' + simpleKey + 
+                    '&redirect_link=' + callback + 
+                    '&cluster=mainnet-beta';
                     
-                    // تلاش اول
-                    setTimeout(function() {
-                        try {
-                            window.location.href = phantomAppUrl;
-                        } catch(e) {
-                            addDebug("❌ App failed: " + e.message);
-                        }
-                    }, 100);
-                    
-                    // fallback بعد از 3 ثانیه
-                    setTimeout(function() {
-                        addDebug("🔄 Fallback to web...");
-                        try {
-                            window.open(phantomWebUrl, '_blank');
-                        } catch(e) {
-                            addDebug("❌ Web failed: " + e.message);
-                        }
-                        
-                        // نهایی fallback
-                        setTimeout(function() {
-                            let storeUrl = 'https://phantom.app/download';
-                            if (isIOS) {
-                                storeUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
-                            } else if (isAndroid) {
-                                storeUrl = 'https://play.google.com/store/apps/details?id=app.phantom';
-                            }
-                            
-                            updateStatus(
-                                '🦄 Install Phantom App<br>' +
-                                '<a href="' + storeUrl + '" target="_blank" class="connect-button" style="display:inline-block; text-decoration:none; margin-top:15px;">' +
-                                '📱 Install App</a>',
-                                'info'
-                            );
-                        }, 2000);
-                    }, 3000);
-                    
-                } else {
-                    // دسکتاپ: مستقیم web
-                    addDebug("🖥️ Desktop: opening web...");
-                    window.open(phantomWebUrl, '_blank');
-                }
-                
-            } catch(error) {
-                addDebug("❌ Connect error: " + error.message);
-                updateStatus("Connection failed: " + error.message, 'error');
+            webUrl = 'https://phantom.app/ul/v1/connect?app_url=' + app + 
+                    '&dapp_encryption_public_key=' + simpleKey + 
+                    '&redirect_link=' + callback + 
+                    '&cluster=mainnet-beta';
+            
+            log('🔗 URLs created');
+            
+            // Show buttons
+            updateStatus('✅ Ready to connect');
+            document.getElementById('buttons').style.display = 'block';
+        }
+        
+        function openApp() {
+            log('📱 Opening app...');
+            updateStatus('📱 Opening Phantom App...');
+            try {
+                window.location.href = appUrl;
+            } catch(e) {
+                log('❌ App failed: ' + e.message);
+                updateStatus('❌ App failed, try web version');
             }
         }
-
-        function goBackToApp() {
+        
+        function openWeb() {
+            log('🌐 Opening web...');
+            updateStatus('🌐 Opening Phantom Web...');
             try {
-                const telegramUrl = 'https://t.me/CTG_COIN_BOT/app';
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.openTelegramLink(telegramUrl);
-                } else {
-                    window.location.href = telegramUrl;
-                }
+                window.open(webUrl, '_blank');
             } catch(e) {
-                window.location.href = 'https://t.me/CTG_COIN_BOT/app';
+                log('❌ Web failed: ' + e.message);
+                updateStatus('❌ Web failed');
             }
         }
-
-        // شروع
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                addDebug("🚀 Page loaded");
-                setTimeout(initConnection, 100);
-            } catch(e) {
-                console.error('Load error:', e);
-                updateStatus('Page loading failed', 'error');
+        
+        function openStore() {
+            log('🏪 Opening store...');
+            var storeUrl = 'https://phantom.app/download';
+            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            var isAndroid = /Android/.test(navigator.userAgent);
+            
+            if (isIOS) {
+                storeUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
+            } else if (isAndroid) {
+                storeUrl = 'https://play.google.com/store/apps/details?id=app.phantom';
             }
-        });
-
-        // مدیریت خطاهای global
-        window.onerror = function(msg, url, lineNo, columnNo, error) {
-            addDebug("❌ JS Error: " + msg);
-            return false;
+            
+            window.open(storeUrl, '_blank');
+        }
+        
+        function goBack() {
+            window.location.href = 'https://t.me/CTG_COIN_BOT/app';
+        }
+        
+        // Start when page loads
+        window.onload = function() {
+            setTimeout(init, 500);
+        };
+        
+        // Catch all errors
+        window.onerror = function(msg, url, line) {
+            log('❌ ERROR: ' + msg + ' (line: ' + line + ')');
+            updateStatus('❌ Page error occurred');
+            document.getElementById('backBtn').style.display = 'block';
+            return true;
         };
     </script>
 </body>
