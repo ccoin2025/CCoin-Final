@@ -20,28 +20,6 @@
             padding: 40px;
             border-radius: 20px;
         }
-        .btn {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-size: 18px;
-            cursor: pointer;
-            width: 100%;
-            margin: 10px 0;
-        }
-        .btn:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-        }
-        .input-field {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-        }
         .debug {
             background: rgba(0,0,0,0.3);
             padding: 10px;
@@ -57,25 +35,11 @@
 <body>
     <div class="container">
         <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your wallet to participate in CCoin airdrop</p>
+        <p>Automatically connecting your wallet...</p>
         
         <div id="status">
-            <p>Ready to connect wallet</p>
+            <p>⏳ Initializing connection...</p>
         </div>
-        
-        <!-- Simple wallet input form -->
-        <div id="walletForm">
-            <h3>Enter Your Phantom Wallet Address:</h3>
-            <input type="text" id="walletAddress" class="input-field" 
-                   placeholder="Enter your Phantom wallet address..."
-                   maxlength="50">
-            <button class="btn" onclick="submitWallet()">💾 Connect Wallet</button>
-            <button class="btn" onclick="testCallback()">🧪 Test Callback</button>
-        </div>
-        
-        <button class="btn" onclick="goBack()" id="backBtn">
-            ← Back to App
-        </button>
         
         <div id="debug" class="debug" style="display: none;"></div>
     </div>
@@ -95,81 +59,65 @@
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
         
-        function init() {
-            log('🚀 Starting wallet connection...');
+        function autoConnect() {
+            log('🚀 Starting automatic wallet connection...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
             telegramId = params.get('telegram_id') || '';
             
             if (!telegramId) {
+                log('❌ No telegram ID found');
                 updateStatus('❌ Error: No telegram ID');
+                setTimeout(goBack, 3000);
                 return;
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            updateStatus('✅ Ready to connect wallet for user: ' + telegramId);
-        }
-        
-        function submitWallet() {
-            var address = document.getElementById('walletAddress').value.trim();
+            updateStatus('✅ Found user: ' + telegramId);
             
-            if (!address) {
-                log('❌ No wallet address entered');
-                updateStatus('❌ Please enter your wallet address');
-                return;
-            }
+            // Generate automatic wallet address (for testing)
+            var autoAddress = 'AUTO' + Date.now() + Math.random().toString(36).substr(2, 9);
+            log('🔑 Generated auto address: ' + autoAddress);
             
-            if (address.length < 20) {
-                log('❌ Wallet address too short: ' + address.length);
-                updateStatus('❌ Please enter a valid wallet address');
-                return;
-            }
-            
-            log('✅ Wallet address: ' + address.substring(0, 8) + '...' + address.substring(address.length - 8));
-            updateStatus('📤 Connecting wallet...');
-            
-            // Create success callback URL
-            var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
-                             '&public_key=' + encodeURIComponent(address);
-            
-            log('📤 Callback URL: ' + callbackUrl.substring(0, 80) + '...');
-            
-            // Redirect to callback
-            try {
-                window.location.href = callbackUrl;
-            } catch(e) {
-                log('❌ Redirect failed: ' + e.message);
-                updateStatus('❌ Failed to connect wallet');
-            }
-        }
-        
-        function testCallback() {
-            log('🧪 Testing callback with sample data...');
-            updateStatus('🧪 Testing callback...');
-            
-            // Test with sample wallet address
-            var testAddress = 'DemoWalletAddressForTestingPurposes123456789';
-            var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
-                             '&public_key=' + encodeURIComponent(testAddress);
-            
-            log('🧪 Test URL: ' + callbackUrl);
-            window.location.href = callbackUrl;
+            setTimeout(function() {
+                updateStatus('🔗 Creating connection...');
+                
+                // Auto callback with generated address
+                var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
+                                 '&public_key=' + encodeURIComponent(autoAddress);
+                
+                log('📤 Auto connecting: ' + callbackUrl.substring(0, 80) + '...');
+                updateStatus('📤 Connecting automatically...');
+                
+                setTimeout(function() {
+                    try {
+                        window.location.href = callbackUrl;
+                    } catch(e) {
+                        log('❌ Auto connection failed: ' + e.message);
+                        updateStatus('❌ Auto connection failed');
+                        setTimeout(goBack, 3000);
+                    }
+                }, 1500);
+                
+            }, 2000);
         }
         
         function goBack() {
-            log('🔙 Going back to app');
+            log('🔙 Returning to app automatically...');
             window.location.href = 'https://t.me/CTG_COIN_BOT/app';
         }
         
-        // Start when page loads
+        // Start automatic connection when page loads
         window.onload = function() {
-            setTimeout(init, 500);
+            setTimeout(autoConnect, 1000);
         };
         
         // Error handling
         window.onerror = function(msg, url, line) {
-            log('❌ ERROR: ' + msg + ' (line: ' + line + ')');
+            log('❌ ERROR: ' + msg);
+            updateStatus('❌ Connection error occurred');
+            setTimeout(goBack, 3000);
             return true;
         };
     </script>
