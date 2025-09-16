@@ -52,7 +52,7 @@
         <p>Connect your wallet to participate in CCoin airdrop</p>
         
         <div id="status">
-            <p>Preparing automatic connection...</p>
+            <p>Preparing connection...</p>
         </div>
         
         <div id="buttons" style="display: none;">
@@ -69,6 +69,7 @@
     <script>
         var telegramId = '';
         var phantomUrl = '';
+        var isPhantomOpened = false;
         
         function log(msg) {
             console.log(msg);
@@ -83,7 +84,7 @@
         }
         
         function init() {
-            log('🚀 Starting automatic connection...');
+            log('🚀 Starting connection...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
@@ -104,7 +105,7 @@
             log('🏠 Origin: ' + origin);
             log('📞 Callback: ' + callback);
             
-            // Create phantom URL (simple mode without encryption)
+            // Create phantom URL
             try {
                 var phantomParams = new URLSearchParams();
                 phantomParams.set('app_url', origin);
@@ -114,18 +115,10 @@
                 phantomUrl = 'https://phantom.app/ul/v1/connect?' + phantomParams.toString();
                 
                 log('🔗 Phantom URL created');
-                log('🔍 URL: ' + phantomUrl);
                 
-                // Show button
-                updateStatus('✅ Ready for automatic connection');
+                // Show button without auto-open
+                updateStatus('✅ Ready to connect');
                 document.getElementById('buttons').style.display = 'block';
-                
-                // Auto-open after 2 seconds
-                setTimeout(function() {
-                    log('⏰ Auto-opening Phantom in 2 seconds...');
-                    updateStatus('⏰ Auto-opening Phantom...');
-                    openPhantom();
-                }, 2000);
                 
             } catch(e) {
                 log('❌ URL creation failed: ' + e.message);
@@ -135,25 +128,32 @@
         }
         
         function openPhantom() {
-            log('🦄 Opening Phantom automatically...');
+            if (isPhantomOpened) {
+                log('⚠️ Phantom already opened, preventing duplicate');
+                return;
+            }
+            
+            log('🦄 Opening Phantom...');
             updateStatus('🦄 Opening Phantom App...');
+            isPhantomOpened = true;
             
             try {
-                log('🔗 Full URL: ' + phantomUrl);
+                log('🔗 URL: ' + phantomUrl.substring(0, 80) + '...');
                 
-                var popup = window.open(
-                    phantomUrl, 
-                    'phantom_connect',
-                    'width=400,height=600,scrollbars=yes,resizable=yes,location=yes'
-                );
+                // Try different methods to open phantom
+                var opened = false;
                 
-                if (popup) {
-                    log('✅ Phantom popup opened');
-                    updateStatus('✅ Phantom opened - Complete the connection');
+                // Method 1: Try direct window.open
+                var popup = window.open(phantomUrl, '_blank', 'width=450,height=700,scrollbars=yes,resizable=yes');
+                
+                if (popup && !popup.closed) {
+                    opened = true;
+                    log('✅ Phantom popup opened successfully');
+                    updateStatus('✅ Phantom opened - Complete the connection there');
                     
-                    // Monitor popup
-                    var checkInterval = 1000;
-                    var maxChecks = 300; // 5 minutes max
+                    // Monitor popup but don't auto-close
+                    var checkInterval = 2000; // Check every 2 seconds
+                    var maxChecks = 150; // 5 minutes max (150 * 2s)
                     var checkCount = 0;
                     
                     var checkClosed = setInterval(function() {
@@ -162,22 +162,23 @@
                         try {
                             if (popup.closed) {
                                 clearInterval(checkClosed);
-                                log('🔄 Popup closed after ' + checkCount + ' checks');
-                                updateStatus('🔄 Connection window closed. Returning to app...');
+                                log('🔄 Popup closed by user after ' + (checkCount * 2) + ' seconds');
+                                updateStatus('🔄 Connection window closed. Check if wallet connected...');
                                 
-                                // Return to app after 3 seconds
+                                // Give user choice to return or try again
                                 setTimeout(function() {
-                                    log('🔄 Returning to app...');
-                                    goBack();
+                                    updateStatus('✅ If wallet connected successfully, you can return to app');
+                                    document.getElementById('backBtn').style.display = 'block';
+                                    isPhantomOpened = false; // Allow retry
                                 }, 3000);
                             }
                             
                             if (checkCount >= maxChecks) {
                                 clearInterval(checkClosed);
-                                log('⏰ Popup timeout after 5 minutes');
-                                updateStatus('⏰ Connection timeout. Returning to app...');
-                                popup.close();
-                                setTimeout(goBack, 2000);
+                                log('⏰ Popup monitoring timeout after 5 minutes');
+                                updateStatus('⏰ Monitoring timeout - Check if connection succeeded');
+                                document.getElementById('backBtn').style.display = 'block';
+                                isPhantomOpened = false;
                             }
                         } catch(e) {
                             log('⚠️ Popup check error: ' + e.message);
@@ -185,14 +186,31 @@
                     }, checkInterval);
                     
                 } else {
-                    log('❌ Popup was blocked');
-                    updateStatus('❌ Popup blocked - Please enable popups');
-                    document.getElementById('backBtn').style.display = 'block';
+                    opened = false;
                 }
+                
+                // Method 2: If popup failed, try location redirect
+                if (!opened) {
+                    log('⚠️ Popup failed, trying direct redirect...');
+                    updateStatus('⚠️ Popup blocked, trying direct redirect...');
+                    
+                    setTimeout(function() {
+                        try {
+                            window.location.href = phantomUrl;
+                        } catch(e) {
+                            log('❌ Direct redirect also failed: ' + e.message);
+                            updateStatus('❌ Failed to open Phantom. Please install Phantom wallet.');
+                            document.getElementById('backBtn').style.display = 'block';
+                            isPhantomOpened = false;
+                        }
+                    }, 1000);
+                }
+                
             } catch(e) {
                 log('❌ Failed to open Phantom: ' + e.message);
                 updateStatus('❌ Failed to open Phantom: ' + e.message);
                 document.getElementById('backBtn').style.display = 'block';
+                isPhantomOpened = false;
             }
         }
         
@@ -209,7 +227,7 @@
         // Start when page loads
         window.onload = function() {
             log('📄 Page loaded');
-            setTimeout(init, 1000);
+            setTimeout(init, 500);
         };
         
         // Error handling
@@ -219,6 +237,13 @@
             document.getElementById('backBtn').style.display = 'block';
             return true;
         };
+        
+        // Prevent multiple submissions
+        window.addEventListener('beforeunload', function() {
+            if (isPhantomOpened) {
+                log('🔄 Page unloading, phantom was opened');
+            }
+        });
     </script>
 </body>
 </html>
