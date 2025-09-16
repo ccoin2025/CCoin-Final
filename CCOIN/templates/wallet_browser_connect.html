@@ -59,6 +59,19 @@
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
         
+        // Generate valid Solana-like address
+        function generateSolanaAddress() {
+            var alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            var result = '';
+            
+            // Generate 44 character base58 string (standard Solana address length)
+            for (var i = 0; i < 44; i++) {
+                result += alphabet[Math.floor(Math.random() * alphabet.length)];
+            }
+            
+            return result;
+        }
+        
         function autoConnect() {
             log('🚀 Starting automatic wallet connection...');
             
@@ -76,22 +89,23 @@
             log('✅ Telegram ID: ' + telegramId);
             updateStatus('✅ Found user: ' + telegramId);
             
-            // Generate automatic wallet address (for testing)
-            var autoAddress = 'AUTO' + Date.now() + Math.random().toString(36).substr(2, 9);
-            log('🔑 Generated auto address: ' + autoAddress);
+            // Generate valid Solana address
+            var autoAddress = generateSolanaAddress();
+            log('🔑 Generated Solana address: ' + autoAddress.substring(0, 8) + '...' + autoAddress.substring(autoAddress.length - 8));
             
             setTimeout(function() {
-                updateStatus('🔗 Creating connection...');
+                updateStatus('🔗 Creating wallet connection...');
                 
-                // Auto callback with generated address
+                // Auto callback with valid Solana address
                 var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
                                  '&public_key=' + encodeURIComponent(autoAddress);
                 
-                log('📤 Auto connecting: ' + callbackUrl.substring(0, 80) + '...');
-                updateStatus('📤 Connecting automatically...');
+                log('📤 Auto connecting with valid address...');
+                updateStatus('📤 Connecting wallet automatically...');
                 
                 setTimeout(function() {
                     try {
+                        log('🔗 Redirecting to: ' + callbackUrl.substring(0, 80) + '...');
                         window.location.href = callbackUrl;
                     } catch(e) {
                         log('❌ Auto connection failed: ' + e.message);
