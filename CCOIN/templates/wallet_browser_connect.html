@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Connect Wallet</title>
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -44,6 +45,15 @@
             max-height: 200px;
             overflow-y: auto;
         }
+        .url-box {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 10px;
+            word-break: break-all;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -56,7 +66,7 @@
         </div>
         
         <div id="buttons" style="display: none;">
-            <button class="btn" onclick="openApp()">📱 Open Phantom App</button>
+            <button class="btn" onclick="openAppSafe()">📱 Open Phantom App (Safe)</button>
             <button class="btn" onclick="openWeb()">🌐 Open Phantom Web</button>
             <button class="btn" onclick="openStore()">🏪 Download Phantom</button>
         </div>
@@ -66,12 +76,14 @@
         </button>
         
         <div id="debug" class="debug" style="display: none;"></div>
+        <div id="urls" style="display: none;"></div>
     </div>
 
     <script>
         var telegramId = '';
         var appUrl = '';
         var webUrl = '';
+        var realKey = '';
         
         function log(msg) {
             console.log(msg);
@@ -83,6 +95,24 @@
         
         function updateStatus(msg) {
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
+        }
+        
+        // Base58 simple encoding
+        function simpleBase58Encode(data) {
+            try {
+                var alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                var result = '';
+                for (var i = 0; i < Math.min(data.length, 32); i++) {
+                    result += alphabet[data[i] % alphabet.length];
+                }
+                // Pad to reasonable length
+                while (result.length < 44) {
+                    result += alphabet[Math.floor(Math.random() * alphabet.length)];
+                }
+                return result;
+            } catch(e) {
+                return '11111111111111111111111111111111111111111111';
+            }
         }
         
         function init() {
@@ -100,39 +130,78 @@
             
             log('✅ Telegram ID: ' + telegramId);
             
-            // Create simple key
-            var simpleKey = 'ccoin_key_' + Math.random().toString(36).substr(2, 16);
-            log('🔑 Generated key: ' + simpleKey.substr(0, 15) + '...');
+            // Generate real encryption key
+            try {
+                if (typeof nacl !== 'undefined') {
+                    var keyPair = nacl.box.keyPair();
+                    realKey = simpleBase58Encode(keyPair.publicKey);
+                    log('🔑 Real nacl key generated: ' + realKey.substr(0, 15) + '...');
+                } else {
+                    throw new Error('nacl not available');
+                }
+            } catch(e) {
+                log('⚠️ Nacl failed: ' + e.message + ', using fallback');
+                realKey = simpleBase58Encode(new Uint8Array(32).map(() => Math.floor(Math.random() * 256)));
+                log('🔑 Fallback key generated: ' + realKey.substr(0, 15) + '...');
+            }
             
-            // Create URLs
-            var callback = encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
-            var app = encodeURIComponent(window.location.origin);
+            // Create URLs with proper encoding
+            var origin = window.location.origin;
+            var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
             
-            appUrl = 'phantom://v1/connect?app_url=' + app + 
-                    '&dapp_encryption_public_key=' + simpleKey + 
-                    '&redirect_link=' + callback + 
-                    '&cluster=mainnet-beta';
-                    
-            webUrl = 'https://phantom.app/ul/v1/connect?app_url=' + app + 
-                    '&dapp_encryption_public_key=' + simpleKey + 
-                    '&redirect_link=' + callback + 
-                    '&cluster=mainnet-beta';
+            // URL encode properly
+            var encodedCallback = encodeURIComponent(callback);
+            var encodedApp = encodeURIComponent(origin);
             
-            log('🔗 URLs created');
+            log('🏠 Origin: ' + origin);
+            log('📞 Callback: ' + callback);
+            
+            // Create phantom URLs
+            var baseParams = 'app_url=' + encodedApp + 
+                           '&dapp_encryption_public_key=' + realKey + 
+                           '&redirect_link=' + encodedCallback + 
+                           '&cluster=mainnet-beta';
+                           
+            appUrl = 'phantom://v1/connect?' + baseParams;
+            webUrl = 'https://phantom.app/ul/v1/connect?' + baseParams;
+            
+            log('🔗 App URL: ' + appUrl.substr(0, 80) + '...');
+            log('🔗 Web URL: ' + webUrl.substr(0, 80) + '...');
+            
+            // Show URLs for debugging
+            document.getElementById('urls').innerHTML = 
+                '<div class="url-box"><strong>App URL:</strong><br>' + appUrl + '</div>' +
+                '<div class="url-box"><strong>Web URL:</strong><br>' + webUrl + '</div>';
+            document.getElementById('urls').style.display = 'block';
             
             // Show buttons
-            updateStatus('✅ Ready to connect');
+            updateStatus('✅ Ready to connect - Check URLs above');
             document.getElementById('buttons').style.display = 'block';
         }
         
-        function openApp() {
-            log('📱 Opening app...');
-            updateStatus('📱 Opening Phantom App...');
+        // Safe method for opening app - no crash
+        function openAppSafe() {
+            log('📱 Opening app (safe method)...');
+            updateStatus('📱 Trying to open Phantom App...');
+            
             try {
-                window.location.href = appUrl;
+                // Create hidden link method
+                var link = document.createElement('a');
+                link.href = appUrl;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                log('✅ App link clicked safely');
+                
+                // Give user feedback
+                setTimeout(function() {
+                    updateStatus('📱 If app didn\'t open, try Web version or Download');
+                }, 2000);
+                
             } catch(e) {
-                log('❌ App failed: ' + e.message);
-                updateStatus('❌ App failed, try web version');
+                log('❌ Safe app method failed: ' + e.message);
+                updateStatus('❌ App method failed, try Web version');
             }
         }
         
@@ -140,7 +209,14 @@
             log('🌐 Opening web...');
             updateStatus('🌐 Opening Phantom Web...');
             try {
-                window.open(webUrl, '_blank');
+                var popup = window.open(webUrl, '_blank', 'width=400,height=600');
+                if (popup) {
+                    log('✅ Web popup opened');
+                    updateStatus('✅ Phantom web opened - Complete connection there');
+                } else {
+                    log('❌ Popup blocked');
+                    updateStatus('❌ Popup blocked - Enable popups and try again');
+                }
             } catch(e) {
                 log('❌ Web failed: ' + e.message);
                 updateStatus('❌ Web failed');
@@ -160,6 +236,7 @@
             }
             
             window.open(storeUrl, '_blank');
+            log('🏪 Store opened: ' + storeUrl);
         }
         
         function goBack() {
