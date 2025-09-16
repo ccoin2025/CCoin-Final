@@ -82,38 +82,8 @@
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
         
-        // Generate a valid Solana public key format without dependencies
-        function generateSolanaPublicKey() {
-            // Base58 alphabet
-            var alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-            
-            // Generate a 32-byte array
-            var bytes = new Uint8Array(32);
-            for (var i = 0; i < 32; i++) {
-                bytes[i] = Math.floor(Math.random() * 256);
-            }
-            
-            // Convert to base58-like string (simplified)
-            var result = '';
-            for (var i = 0; i < bytes.length; i++) {
-                var byte = bytes[i];
-                // Map byte to alphabet index
-                var index1 = byte % alphabet.length;
-                var index2 = Math.floor(byte / alphabet.length) % alphabet.length;
-                result += alphabet[index1];
-                if (i % 2 === 0) result += alphabet[index2];
-            }
-            
-            // Ensure proper length (typical Solana address is 44 chars)
-            while (result.length < 44) {
-                result += alphabet[Math.floor(Math.random() * alphabet.length)];
-            }
-            
-            return result.substring(0, 44);
-        }
-        
         function init() {
-            log('🚀 Starting connection...');
+            log('🚀 Starting simple connection...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
@@ -127,18 +97,6 @@
             
             log('✅ Telegram ID: ' + telegramId);
             
-            // Generate encryption key without external libraries
-            var encryptionKey = '';
-            try {
-                encryptionKey = generateSolanaPublicKey();
-                log('🔑 Generated standalone key: ' + encryptionKey.substr(0, 15) + '... (length: ' + encryptionKey.length + ')');
-            } catch(e) {
-                log('❌ Key generation failed: ' + e.message);
-                updateStatus('❌ Failed to generate encryption key');
-                document.getElementById('backBtn').style.display = 'block';
-                return;
-            }
-            
             // Create callback and app URLs
             var origin = window.location.origin;
             var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
@@ -146,44 +104,42 @@
             log('🏠 Origin: ' + origin);
             log('📞 Callback: ' + callback);
             
-            // Create phantom URL with manual parameter building
+            // Create simple phantom URL WITHOUT encryption key
             var baseUrl = 'https://phantom.app/ul/v1/connect?';
             var parameters = [
                 'app_url=' + encodeURIComponent(origin),
-                'dapp_encryption_public_key=' + encodeURIComponent(encryptionKey),
                 'redirect_link=' + encodeURIComponent(callback),
                 'cluster=mainnet-beta'
             ];
             
             phantomUrl = baseUrl + parameters.join('&');
             
-            log('🔗 Phantom URL created');
-            log('🔍 URL length: ' + phantomUrl.length);
-            log('🔍 Key in URL: ' + encryptionKey);
+            log('🔗 Simple Phantom URL created (no encryption)');
+            log('🔍 URL: ' + phantomUrl);
             
             // Show button
-            updateStatus('✅ Ready to connect');
+            updateStatus('✅ Ready to connect (Simple Mode)');
             document.getElementById('buttons').style.display = 'block';
         }
         
         function openPhantom() {
-            log('🦄 Opening Phantom...');
+            log('🦄 Opening Phantom (Simple Mode)...');
             updateStatus('🦄 Opening Phantom App...');
             
             try {
-                log('🔗 Opening URL: ' + phantomUrl.substring(0, 100) + '...');
+                log('🔗 Opening URL: ' + phantomUrl);
                 
-                var popup = window.open(phantomUrl, '_blank', 'width=400,height=600');
+                var popup = window.open(phantomUrl, '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
                 if (popup) {
                     log('✅ Phantom opened successfully');
-                    updateStatus('✅ Phantom opened - Complete the connection');
+                    updateStatus('✅ Phantom opened - Please connect your wallet');
                     
                     // Monitor popup
                     var checkClosed = setInterval(function() {
                         if (popup.closed) {
                             clearInterval(checkClosed);
                             log('🔄 Popup closed');
-                            updateStatus('🔄 Connection window closed. Returning to app...');
+                            updateStatus('🔄 Connection completed. Returning to app...');
                             setTimeout(goBack, 2000);
                         }
                     }, 1000);
@@ -218,11 +174,6 @@
             document.getElementById('backBtn').style.display = 'block';
             return true;
         };
-        
-        // Additional safety
-        window.addEventListener('unhandledrejection', function(event) {
-            log('❌ Unhandled promise rejection: ' + event.reason);
-        });
     </script>
 </body>
 </html>
