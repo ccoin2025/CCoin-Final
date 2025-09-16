@@ -34,6 +34,14 @@
         .btn:hover {
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
         }
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+        }
         .debug {
             background: rgba(0,0,0,0.3);
             padding: 10px;
@@ -52,14 +60,20 @@
         <p>Connect your wallet to participate in CCoin airdrop</p>
         
         <div id="status">
-            <p>Preparing connection...</p>
+            <p>Ready to connect wallet</p>
         </div>
         
-        <div id="buttons" style="display: none;">
-            <button class="btn" onclick="openPhantom()">🦄 Open Phantom App</button>
+        <!-- Simple wallet input form -->
+        <div id="walletForm">
+            <h3>Enter Your Phantom Wallet Address:</h3>
+            <input type="text" id="walletAddress" class="input-field" 
+                   placeholder="Enter your Phantom wallet address..."
+                   maxlength="50">
+            <button class="btn" onclick="submitWallet()">💾 Connect Wallet</button>
+            <button class="btn" onclick="testCallback()">🧪 Test Callback</button>
         </div>
         
-        <button class="btn" onclick="goBack()" style="display: none;" id="backBtn">
+        <button class="btn" onclick="goBack()" id="backBtn">
             ← Back to App
         </button>
         
@@ -68,8 +82,6 @@
 
     <script>
         var telegramId = '';
-        var phantomUrl = '';
-        var isPhantomOpened = false;
         
         function log(msg) {
             console.log(msg);
@@ -84,7 +96,7 @@
         }
         
         function init() {
-            log('🚀 Starting connection...');
+            log('🚀 Starting wallet connection...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
@@ -92,158 +104,74 @@
             
             if (!telegramId) {
                 updateStatus('❌ Error: No telegram ID');
-                document.getElementById('backBtn').style.display = 'block';
                 return;
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            
-            // Create callback and app URLs
-            var origin = window.location.origin;
-            var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
-            
-            log('🏠 Origin: ' + origin);
-            log('📞 Callback: ' + callback);
-            
-            // Create phantom URL
-            try {
-                var phantomParams = new URLSearchParams();
-                phantomParams.set('app_url', origin);
-                phantomParams.set('redirect_link', callback);
-                phantomParams.set('cluster', 'mainnet-beta');
-                
-                phantomUrl = 'https://phantom.app/ul/v1/connect?' + phantomParams.toString();
-                
-                log('🔗 Phantom URL created');
-                
-                // Show button without auto-open
-                updateStatus('✅ Ready to connect');
-                document.getElementById('buttons').style.display = 'block';
-                
-            } catch(e) {
-                log('❌ URL creation failed: ' + e.message);
-                updateStatus('❌ Failed to create connection URL');
-                document.getElementById('backBtn').style.display = 'block';
-            }
+            updateStatus('✅ Ready to connect wallet for user: ' + telegramId);
         }
         
-        function openPhantom() {
-            if (isPhantomOpened) {
-                log('⚠️ Phantom already opened, preventing duplicate');
+        function submitWallet() {
+            var address = document.getElementById('walletAddress').value.trim();
+            
+            if (!address) {
+                log('❌ No wallet address entered');
+                updateStatus('❌ Please enter your wallet address');
                 return;
             }
             
-            log('🦄 Opening Phantom...');
-            updateStatus('🦄 Opening Phantom App...');
-            isPhantomOpened = true;
-            
-            try {
-                log('🔗 URL: ' + phantomUrl.substring(0, 80) + '...');
-                
-                // Try different methods to open phantom
-                var opened = false;
-                
-                // Method 1: Try direct window.open
-                var popup = window.open(phantomUrl, '_blank', 'width=450,height=700,scrollbars=yes,resizable=yes');
-                
-                if (popup && !popup.closed) {
-                    opened = true;
-                    log('✅ Phantom popup opened successfully');
-                    updateStatus('✅ Phantom opened - Complete the connection there');
-                    
-                    // Monitor popup but don't auto-close
-                    var checkInterval = 2000; // Check every 2 seconds
-                    var maxChecks = 150; // 5 minutes max (150 * 2s)
-                    var checkCount = 0;
-                    
-                    var checkClosed = setInterval(function() {
-                        checkCount++;
-                        
-                        try {
-                            if (popup.closed) {
-                                clearInterval(checkClosed);
-                                log('🔄 Popup closed by user after ' + (checkCount * 2) + ' seconds');
-                                updateStatus('🔄 Connection window closed. Check if wallet connected...');
-                                
-                                // Give user choice to return or try again
-                                setTimeout(function() {
-                                    updateStatus('✅ If wallet connected successfully, you can return to app');
-                                    document.getElementById('backBtn').style.display = 'block';
-                                    isPhantomOpened = false; // Allow retry
-                                }, 3000);
-                            }
-                            
-                            if (checkCount >= maxChecks) {
-                                clearInterval(checkClosed);
-                                log('⏰ Popup monitoring timeout after 5 minutes');
-                                updateStatus('⏰ Monitoring timeout - Check if connection succeeded');
-                                document.getElementById('backBtn').style.display = 'block';
-                                isPhantomOpened = false;
-                            }
-                        } catch(e) {
-                            log('⚠️ Popup check error: ' + e.message);
-                        }
-                    }, checkInterval);
-                    
-                } else {
-                    opened = false;
-                }
-                
-                // Method 2: If popup failed, try location redirect
-                if (!opened) {
-                    log('⚠️ Popup failed, trying direct redirect...');
-                    updateStatus('⚠️ Popup blocked, trying direct redirect...');
-                    
-                    setTimeout(function() {
-                        try {
-                            window.location.href = phantomUrl;
-                        } catch(e) {
-                            log('❌ Direct redirect also failed: ' + e.message);
-                            updateStatus('❌ Failed to open Phantom. Please install Phantom wallet.');
-                            document.getElementById('backBtn').style.display = 'block';
-                            isPhantomOpened = false;
-                        }
-                    }, 1000);
-                }
-                
-            } catch(e) {
-                log('❌ Failed to open Phantom: ' + e.message);
-                updateStatus('❌ Failed to open Phantom: ' + e.message);
-                document.getElementById('backBtn').style.display = 'block';
-                isPhantomOpened = false;
+            if (address.length < 20) {
+                log('❌ Wallet address too short: ' + address.length);
+                updateStatus('❌ Please enter a valid wallet address');
+                return;
             }
+            
+            log('✅ Wallet address: ' + address.substring(0, 8) + '...' + address.substring(address.length - 8));
+            updateStatus('📤 Connecting wallet...');
+            
+            // Create success callback URL
+            var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
+                             '&public_key=' + encodeURIComponent(address);
+            
+            log('📤 Callback URL: ' + callbackUrl.substring(0, 80) + '...');
+            
+            // Redirect to callback
+            try {
+                window.location.href = callbackUrl;
+            } catch(e) {
+                log('❌ Redirect failed: ' + e.message);
+                updateStatus('❌ Failed to connect wallet');
+            }
+        }
+        
+        function testCallback() {
+            log('🧪 Testing callback with sample data...');
+            updateStatus('🧪 Testing callback...');
+            
+            // Test with sample wallet address
+            var testAddress = 'DemoWalletAddressForTestingPurposes123456789';
+            var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
+                             '&public_key=' + encodeURIComponent(testAddress);
+            
+            log('🧪 Test URL: ' + callbackUrl);
+            window.location.href = callbackUrl;
         }
         
         function goBack() {
             log('🔙 Going back to app');
-            try {
-                window.location.href = 'https://t.me/CTG_COIN_BOT/app';
-            } catch(e) {
-                log('❌ Failed to go back: ' + e.message);
-                updateStatus('❌ Please manually return to the Telegram app');
-            }
+            window.location.href = 'https://t.me/CTG_COIN_BOT/app';
         }
         
         // Start when page loads
         window.onload = function() {
-            log('📄 Page loaded');
             setTimeout(init, 500);
         };
         
         // Error handling
         window.onerror = function(msg, url, line) {
             log('❌ ERROR: ' + msg + ' (line: ' + line + ')');
-            updateStatus('❌ Page error occurred');
-            document.getElementById('backBtn').style.display = 'block';
             return true;
         };
-        
-        // Prevent multiple submissions
-        window.addEventListener('beforeunload', function() {
-            if (isPhantomOpened) {
-                log('🔄 Page unloading, phantom was opened');
-            }
-        });
     </script>
 </body>
 </html>
