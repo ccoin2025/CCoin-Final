@@ -7,6 +7,8 @@ from CCOIN.models.user import User
 from datetime import datetime
 import re
 import os
+import json
+import base64
 
 router = APIRouter()
 templates = Jinja2Templates(directory="CCOIN/templates")
@@ -25,20 +27,43 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
     """پردازش callback از Phantom Wallet"""
     telegram_id = request.query_params.get("telegram_id")
     
-    # پارامترهای موفقیت
-    public_key = request.query_params.get("public_key")
-    phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
-    nonce = request.query_params.get("nonce")
-    data = request.query_params.get("data")
+    # Debug: نمایش تمام پارامترها
+    print(f"[WALLET CALLBACK] All params: {dict(request.query_params)}")
+    
+    # پارامترهای موفقیت - همه احتمالات
+    public_key = (
+        request.query_params.get("public_key") or
+        request.query_params.get("publicKey") or
+        request.query_params.get("phantom_encryption_public_key") or
+        request.query_params.get("dapp_encryption_public_key")
+    )
+    
+    # پردازش پارامتر data اگر موجود باشد
+    data_param = request.query_params.get("data")
+    if data_param and not public_key:
+        try:
+            # تلاش برای decode کردن data
+            decoded_data = json.loads(data_param)
+            public_key = decoded_data.get("public_key") or decoded_data.get("publicKey")
+            print(f"[WALLET CALLBACK] Extracted from data: {public_key}")
+        except:
+            try:
+                # تلاش برای base64 decode
+                decoded_bytes = base64.b64decode(data_param)
+                decoded_data = json.loads(decoded_bytes)
+                public_key = decoded_data.get("public_key") or decoded_data.get("publicKey")
+                print(f"[WALLET CALLBACK] Extracted from base64 data: {public_key}")
+            except:
+                print(f"[WALLET CALLBACK] Could not decode data parameter")
     
     # پارامترهای خطا
-    error_code = request.query_params.get("errorCode")
-    error_message = request.query_params.get("errorMessage")
-    
+    error_code = request.query_params.get("errorCode") or request.query_params.get("error_code")
+    error_message = request.query_params.get("errorMessage") or request.query_params.get("error_message")
+
     print(f"[WALLET CALLBACK] telegram_id: {telegram_id}")
     print(f"[WALLET CALLBACK] public_key: {public_key}")
     print(f"[WALLET CALLBACK] error_code: {error_code}")
-    
+
     if error_code:
         return templates.TemplateResponse("wallet_callback.html", {
             "request": request,
@@ -46,40 +71,56 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
             "error": f"Phantom Error {error_code}: {error_message}",
             "telegram_id": telegram_id
         })
-    
+
     # موفقیت - ذخیره آدرس wallet
-    if telegram_id and (public_key or phantom_encryption_public_key):
+    if telegram_id and public_key:
         try:
             user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
             if user:
-                wallet_address = public_key or phantom_encryption_public_key
-                user.wallet_address = wallet_address
-                db.commit()
+                wallet_address = public_key
                 
-                return templates.TemplateResponse("wallet_callback.html", {
-                    "request": request,
-                    "success": True,
-                    "wallet_address": wallet_address,
-                    "telegram_id": telegram_id
-                })
+                # اعتبارسنجی آدرس
+                if is_valid_solana_address(wallet_address):
+                    user.wallet_address = wallet_address
+                    db.commit()
+                    print(f"[WALLET CALLBACK] SUCCESS: Saved wallet {wallet_address[:8]}... for user {telegram_id}")
+                    
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": True,
+                        "wallet_address": wallet_address,
+                        "telegram_id": telegram_id
+                    })
+                else:
+                    print(f"[WALLET CALLBACK] ERROR: Invalid Solana address format: {wallet_address}")
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": False,
+                        "error": f"Invalid wallet address format",
+                        "telegram_id": telegram_id
+                    })
+            else:
+                print(f"[WALLET CALLBACK] ERROR: User not found for telegram_id: {telegram_id}")
+                
         except Exception as e:
-            print(f"Database error: {e}")
+            print(f"[WALLET CALLBACK] Database error: {e}")
             return templates.TemplateResponse("wallet_callback.html", {
                 "request": request,
                 "success": False,
                 "error": f"Failed to save wallet: {str(e)}",
                 "telegram_id": telegram_id
             })
-    
+
     # پارامترهای ناقص
+    print(f"[WALLET CALLBACK] ERROR: Incomplete data - telegram_id: {telegram_id}, public_key: {public_key}")
     return templates.TemplateResponse("wallet_callback.html", {
         "request": request,
         "success": False,
-        "error": "Incomplete connection data received",
+        "error": f"Incomplete connection data. Please try again.",
         "telegram_id": telegram_id
     })
 
-# باقی endpoint های موجود...
+# باقی کدها بدون تغییر...
 @router.get("/api/wallet/status")
 async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
     """بررسی وضعیت اتصال wallet"""
@@ -120,7 +161,7 @@ async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
 
         # بررسی تکمیل تسک‌ها
         tasks_completed = any(task.completed for task in user.tasks) if user.tasks else False
-
+        
         # بررسی دعوت دوستان
         friends_invited = len(user.referrals) > 0 if user.referrals else False
 
@@ -129,6 +170,7 @@ async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
             "friends_invited": friends_invited,
             "success": True
         })
+
     except Exception as e:
         print(f"Error checking tasks status: {e}")
         return JSONResponse({
@@ -157,6 +199,7 @@ async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
                 "transaction_hash": None,
                 "success": True
             })
+
     except Exception as e:
         print(f"Error checking commission status: {e}")
         return JSONResponse({
@@ -171,6 +214,7 @@ def is_valid_solana_address(address: str) -> bool:
     """اعتبارسنجی آدرس Solana"""
     if not address or not isinstance(address, str):
         return False
+    
     # آدرس Solana باید 32-44 کاراکتر باشد و فقط حروف و اعداد base58
     pattern = r'^[1-9A-HJ-NP-Za-km-z]{32,44}$'
     return bool(re.match(pattern, address))
