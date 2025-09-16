@@ -290,7 +290,7 @@
             }
         }
 
-        // اصلاح شده: اتصال کیف پول موبایل
+        // اصلاح شده: اتصال کیف پول موبایل با deeplink صحیح
         async function handleMobileWalletConnection(telegramId) {
             try {
                 addDebug("📱 Preparing mobile wallet connection...");
@@ -314,16 +314,27 @@
                     `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`
                 );
 
-                // ساخت Phantom deeplink
+                // اصلاح شده: ساخت Phantom deeplink صحیح
                 const appUrl = encodeURIComponent(window.location.origin);
-                const cluster = 'mainnet-beta'; // یا 'devnet' برای تست
-                const phantomDeeplink = `https://phantom.app/ul/v1/connect?` +
+                const cluster = 'mainnet-beta';
+                
+                // deeplink اصلی phantom برای موبایل
+                const phantomDeeplink = `phantom://v1/connect?` +
                     `app_url=${appUrl}&` +
                     `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
                     `redirect_link=${callbackUrl}&` +
                     `cluster=${cluster}`;
 
-                addDebug(`🦄 Phantom deeplink created`);
+                // alternative deeplink برای مرورگر موبایل
+                const phantomWebDeeplink = `https://phantom.app/ul/v1/connect?` +
+                    `app_url=${appUrl}&` +
+                    `dapp_encryption_public_key=${dappEncryptionPublicKey}&` +
+                    `redirect_link=${callbackUrl}&` +
+                    `cluster=${cluster}`;
+
+                addDebug(`🦄 Phantom deeplinks created`);
+                addDebug(`App deeplink: ${phantomDeeplink.slice(0, 50)}...`);
+                addDebug(`Web deeplink: ${phantomWebDeeplink.slice(0, 50)}...`);
 
                 // نمایش دکمه اتصال
                 updateStatus(
@@ -333,24 +344,84 @@
                     'info'
                 );
 
-                // تابع باز کردن Phantom
+                // اصلاح شده: تابع باز کردن Phantom با تشخیص موبایل
                 window.openPhantom = function() {
                     addDebug("🔗 Opening Phantom wallet...");
                     updateStatus("🦄 Opening Phantom App...<br>Please approve the connection in Phantom and return here.", 'info');
                     
                     try {
-                        // تلاش برای باز کردن Phantom
-                        window.location.href = phantomDeeplink;
+                        // تشخیص نوع دستگاه
+                        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        const isAndroid = /Android/.test(navigator.userAgent);
                         
-                        // fallback برای iOS
-                        setTimeout(() => {
-                            // اگر برنامه باز نشد، به App Store هدایت کن
-                            const fallbackUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
-                            addDebug(`🔄 Fallback to App Store: ${fallbackUrl}`);
-                        }, 3000);
+                        addDebug(`📱 Device detection - Mobile: ${isMobile}, iOS: ${isIOS}, Android: ${isAndroid}`);
+                        
+                        if (isMobile) {
+                            // برای موبایل: تلاش برای باز کردن اپ با timeout
+                            addDebug("📱 Mobile detected, trying app deeplink...");
+                            
+                            // ایجاد invisible iframe برای تست deeplink
+                            const iframe = document.createElement('iframe');
+                            iframe.style.display = 'none';
+                            iframe.src = phantomDeeplink;
+                            document.body.appendChild(iframe);
+                            
+                            // حذف iframe بعد از کمی
+                            setTimeout(() => {
+                                document.body.removeChild(iframe);
+                            }, 100);
+                            
+                            // اگر بعد از 2 ثانیه هنوز در صفحه هستیم، یعنی اپ باز نشده
+                            setTimeout(() => {
+                                // تلاش دوم با window.location
+                                addDebug("🔄 First attempt failed, trying window.location...");
+                                try {
+                                    window.location.href = phantomDeeplink;
+                                } catch (e) {
+                                    addDebug(`❌ App deeplink failed: ${e.message}`);
+                                }
+                                
+                                // fallback به web deeplink بعد از 3 ثانیه
+                                setTimeout(() => {
+                                    addDebug("🔄 App failed, trying web deeplink...");
+                                    window.open(phantomWebDeeplink, '_blank');
+                                    
+                                    // نهایی fallback به app store
+                                    setTimeout(() => {
+                                        let storeUrl;
+                                        if (isIOS) {
+                                            storeUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
+                                        } else if (isAndroid) {
+                                            storeUrl = 'https://play.google.com/store/apps/details?id=app.phantom';
+                                        } else {
+                                            storeUrl = 'https://phantom.app/download';
+                                        }
+                                        addDebug(`🏪 Final fallback to store: ${storeUrl}`);
+                                        updateStatus(
+                                            `🦄 Phantom app not found.<br>` +
+                                            `<a href="${storeUrl}" target="_blank" class="connect-button" style="display:inline-block; text-decoration:none; margin-top:15px;">` +
+                                            `📱 Install Phantom App</a>`,
+                                            'info'
+                                        );
+                                    }, 2000);
+                                }, 3000);
+                            }, 2000);
+                            
+                        } else {
+                            // برای دسکتاپ: مستقیم web deeplink
+                            addDebug("🖥️ Desktop detected, using web deeplink...");
+                            window.open(phantomWebDeeplink, '_blank');
+                        }
+                        
                     } catch (error) {
                         addDebug(`❌ Failed to open Phantom: ${error.message}`);
-                        updateStatus("❌ Failed to open Phantom. Please install Phantom app.", 'error');
+                        updateStatus(
+                            "❌ Failed to open Phantom.<br>" +
+                            `<a href="https://phantom.app/download" target="_blank" class="connect-button" style="display:inline-block; text-decoration:none; margin-top:15px;">` +
+                            `📱 Install Phantom App</a>`,
+                            'error'
+                        );
                     }
                 };
 
