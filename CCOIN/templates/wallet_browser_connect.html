@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Connect Wallet</title>
     <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -45,15 +46,6 @@
             max-height: 200px;
             overflow-y: auto;
         }
-        .url-box {
-            background: rgba(0,0,0,0.2);
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-size: 10px;
-            word-break: break-all;
-            text-align: left;
-        }
     </style>
 </head>
 <body>
@@ -66,9 +58,7 @@
         </div>
         
         <div id="buttons" style="display: none;">
-            <button class="btn" onclick="openAppSafe()">📱 Open Phantom App (Safe)</button>
-            <button class="btn" onclick="openWeb()">🌐 Open Phantom Web</button>
-            <button class="btn" onclick="openStore()">🏪 Download Phantom</button>
+            <button class="btn" onclick="openPhantom()">🦄 Open Phantom App</button>
         </div>
         
         <button class="btn" onclick="goBack()" style="display: none;" id="backBtn">
@@ -76,14 +66,11 @@
         </button>
         
         <div id="debug" class="debug" style="display: none;"></div>
-        <div id="urls" style="display: none;"></div>
     </div>
 
     <script>
         var telegramId = '';
-        var appUrl = '';
-        var webUrl = '';
-        var realKey = '';
+        var phantomUrl = '';
         
         function log(msg) {
             console.log(msg);
@@ -97,26 +84,8 @@
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
         
-        // Base58 simple encoding
-        function simpleBase58Encode(data) {
-            try {
-                var alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-                var result = '';
-                for (var i = 0; i < Math.min(data.length, 32); i++) {
-                    result += alphabet[data[i] % alphabet.length];
-                }
-                // Pad to reasonable length
-                while (result.length < 44) {
-                    result += alphabet[Math.floor(Math.random() * alphabet.length)];
-                }
-                return result;
-            } catch(e) {
-                return '11111111111111111111111111111111111111111111';
-            }
-        }
-        
         function init() {
-            log('🚀 Starting...');
+            log('🚀 Starting connection...');
             
             // Get telegram ID
             var params = new URLSearchParams(window.location.search);
@@ -130,113 +99,77 @@
             
             log('✅ Telegram ID: ' + telegramId);
             
-            // Generate real encryption key
+            // Generate proper encryption key
+            var encryptionKey = '';
             try {
-                if (typeof nacl !== 'undefined') {
+                if (typeof nacl !== 'undefined' && typeof bs58 !== 'undefined') {
+                    // Generate proper 32-byte keypair
                     var keyPair = nacl.box.keyPair();
-                    realKey = simpleBase58Encode(keyPair.publicKey);
-                    log('🔑 Real nacl key generated: ' + realKey.substr(0, 15) + '...');
+                    encryptionKey = bs58.encode(keyPair.publicKey);
+                    log('🔑 Generated proper bs58 key: ' + encryptionKey.substr(0, 15) + '... (length: ' + encryptionKey.length + ')');
+                    log('🔍 Key bytes length: ' + keyPair.publicKey.length);
                 } else {
-                    throw new Error('nacl not available');
+                    throw new Error('Required libraries not available');
                 }
             } catch(e) {
-                log('⚠️ Nacl failed: ' + e.message + ', using fallback');
-                realKey = simpleBase58Encode(new Uint8Array(32).map(() => Math.floor(Math.random() * 256)));
-                log('🔑 Fallback key generated: ' + realKey.substr(0, 15) + '...');
+                log('❌ Key generation failed: ' + e.message);
+                updateStatus('❌ Failed to generate encryption key');
+                document.getElementById('backBtn').style.display = 'block';
+                return;
             }
             
-            // Create URLs with proper encoding
+            // Create callback and app URLs
             var origin = window.location.origin;
             var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
-            
-            // URL encode properly
-            var encodedCallback = encodeURIComponent(callback);
-            var encodedApp = encodeURIComponent(origin);
             
             log('🏠 Origin: ' + origin);
             log('📞 Callback: ' + callback);
             
-            // Create phantom URLs
-            var baseParams = 'app_url=' + encodedApp + 
-                           '&dapp_encryption_public_key=' + realKey + 
-                           '&redirect_link=' + encodedCallback + 
-                           '&cluster=mainnet-beta';
-                           
-            appUrl = 'phantom://v1/connect?' + baseParams;
-            webUrl = 'https://phantom.app/ul/v1/connect?' + baseParams;
+            // Create proper phantom URL
+            var params = new URLSearchParams({
+                'app_url': origin,
+                'dapp_encryption_public_key': encryptionKey,
+                'redirect_link': callback,
+                'cluster': 'mainnet-beta'
+            });
             
-            log('🔗 App URL: ' + appUrl.substr(0, 80) + '...');
-            log('🔗 Web URL: ' + webUrl.substr(0, 80) + '...');
+            phantomUrl = 'https://phantom.app/ul/v1/connect?' + params.toString();
             
-            // Show URLs for debugging
-            document.getElementById('urls').innerHTML = 
-                '<div class="url-box"><strong>App URL:</strong><br>' + appUrl + '</div>' +
-                '<div class="url-box"><strong>Web URL:</strong><br>' + webUrl + '</div>';
-            document.getElementById('urls').style.display = 'block';
+            log('🔗 Phantom URL: ' + phantomUrl.substr(0, 80) + '...');
+            log('🔍 Full URL length: ' + phantomUrl.length);
             
-            // Show buttons
-            updateStatus('✅ Ready to connect - Check URLs above');
+            // Show button
+            updateStatus('✅ Ready to connect');
             document.getElementById('buttons').style.display = 'block';
         }
         
-        // Safe method for opening app - no crash
-        function openAppSafe() {
-            log('📱 Opening app (safe method)...');
-            updateStatus('📱 Trying to open Phantom App...');
+        function openPhantom() {
+            log('🦄 Opening Phantom...');
+            updateStatus('🦄 Opening Phantom App...');
             
             try {
-                // Create hidden link method
-                var link = document.createElement('a');
-                link.href = appUrl;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                log('✅ App link clicked safely');
-                
-                // Give user feedback
-                setTimeout(function() {
-                    updateStatus('📱 If app didn\'t open, try Web version or Download');
-                }, 2000);
-                
-            } catch(e) {
-                log('❌ Safe app method failed: ' + e.message);
-                updateStatus('❌ App method failed, try Web version');
-            }
-        }
-        
-        function openWeb() {
-            log('🌐 Opening web...');
-            updateStatus('🌐 Opening Phantom Web...');
-            try {
-                var popup = window.open(webUrl, '_blank', 'width=400,height=600');
+                var popup = window.open(phantomUrl, '_blank', 'width=400,height=600');
                 if (popup) {
-                    log('✅ Web popup opened');
-                    updateStatus('✅ Phantom web opened - Complete connection there');
+                    log('✅ Phantom opened successfully');
+                    updateStatus('✅ Phantom opened - Complete the connection');
+                    
+                    // Check if popup is closed
+                    var checkClosed = setInterval(function() {
+                        if (popup.closed) {
+                            clearInterval(checkClosed);
+                            log('🔄 Popup closed, user may have completed connection');
+                            updateStatus('🔄 Connection window closed. Check if wallet is connected.');
+                        }
+                    }, 1000);
+                    
                 } else {
-                    log('❌ Popup blocked');
-                    updateStatus('❌ Popup blocked - Enable popups and try again');
+                    log('❌ Popup was blocked');
+                    updateStatus('❌ Popup blocked - Please enable popups and try again');
                 }
             } catch(e) {
-                log('❌ Web failed: ' + e.message);
-                updateStatus('❌ Web failed');
+                log('❌ Failed to open Phantom: ' + e.message);
+                updateStatus('❌ Failed to open Phantom: ' + e.message);
             }
-        }
-        
-        function openStore() {
-            log('🏪 Opening store...');
-            var storeUrl = 'https://phantom.app/download';
-            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            var isAndroid = /Android/.test(navigator.userAgent);
-            
-            if (isIOS) {
-                storeUrl = 'https://apps.apple.com/app/phantom-solana-wallet/id1598432977';
-            } else if (isAndroid) {
-                storeUrl = 'https://play.google.com/store/apps/details?id=app.phantom';
-            }
-            
-            window.open(storeUrl, '_blank');
-            log('🏪 Store opened: ' + storeUrl);
         }
         
         function goBack() {
@@ -251,7 +184,7 @@
         // Catch all errors
         window.onerror = function(msg, url, line) {
             log('❌ ERROR: ' + msg + ' (line: ' + line + ')');
-            updateStatus('❌ Page error occurred');
+            updateStatus('❌ Page error: ' + msg);
             document.getElementById('backBtn').style.display = 'block';
             return true;
         };
