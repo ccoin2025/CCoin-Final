@@ -120,7 +120,43 @@ async def wallet_callback(request: Request, db: Session = Depends(get_db)):
         "telegram_id": telegram_id
     })
 
-# باقی کدها بدون تغییر...
+@router.post("/wallet/disconnect")
+async def wallet_disconnect(request: Request, db: Session = Depends(get_db)):
+    """حذف اتصال wallet"""
+    telegram_id = request.query_params.get("telegram_id")
+    
+    if not telegram_id:
+        return JSONResponse({
+            "success": False,
+            "error": "No telegram_id provided"
+        })
+    
+    try:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if user:
+            old_address = user.wallet_address
+            user.wallet_address = None  # حذف آدرس
+            db.commit()
+            
+            print(f"[WALLET DISCONNECT] Removed wallet {old_address} for user {telegram_id}")
+            
+            return JSONResponse({
+                "success": True,
+                "message": "Wallet disconnected successfully"
+            })
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            })
+            
+    except Exception as e:
+        print(f"[WALLET DISCONNECT] Error: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
 @router.get("/api/wallet/status")
 async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
     """بررسی وضعیت اتصال wallet"""
