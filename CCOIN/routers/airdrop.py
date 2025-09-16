@@ -335,3 +335,136 @@ async def get_referral_status(request: Request, db: Session = Depends(get_db)):
 @router.get("/pay/commission")
 async def pay_commission_get(request: Request):
     raise HTTPException(status_code=405, detail="This endpoint only supports POST requests.")
+
+@router.post("/confirm_commission")
+@limiter.limit("5/minute")
+async def confirm_commission_duplicate(request: Request, db: Session = Depends(get_db)):
+    """تأیید پرداخت کمیسیون با signature تراکنش"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
+    
+    body = await request.json()
+    tx_signature = body.get("signature")
+    amount = body.get("amount", COMMISSION_AMOUNT)
+    recipient = body.get("recipient", ADMIN_WALLET)
+    
+    if not tx_signature:
+        raise HTTPException(status_code=400, detail="Missing transaction signature")
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.commission_paid:
+        raise HTTPException(status_code=400, detail="Commission already paid")
+    
+    if not user.wallet_address:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+    
+    try:
+        # بررسی cache ابتدا - only if Redis is available
+        cache_key = f"tx:{tx_signature}"
+        if redis_client:
+            try:
+                cached_result = redis_client.get(cache_key)
+                if cached_result:
+                    # Transaction قبلاً تأیید شده
+                    user.commission_paid = True
+                    user.commission_transaction_hash = tx_signature
+                    user.commission_payment_date = datetime.utcnow()
+                    db.commit()
+                    return {"success": True, "message": "Commission confirmed successfully!"}
+            except Exception as e:
+                print(f"Redis cache check failed: {e}")
+                # Continue without cache
+        
+        # بررسی transaction از Solana network
+        try:
+            transaction_response = solana_client.get_transaction(
+                tx_signature,
+                encoding="json",
+                max_supported_transaction_version=0
+            )
+            
+            if not transaction_response.value:
+                raise HTTPException(status_code=400, detail="Transaction not found on blockchain")
+            
+            tx_data = transaction_response.value
+            
+            # بررسی وضعیت تراکنش
+            if tx_data.meta.err:
+                raise HTTPException(status_code=400, detail="Transaction failed on blockchain")
+            
+            # بررسی جزئیات تراکنش (sender, recipient, amount)
+            transaction_info = tx_data.transaction
+            
+            # Extract account keys
+            account_keys = transaction_info.message.account_keys
+            
+            # بررسی instructions برای transfer
+            instructions = transaction_info.message.instructions
+            transfer_found = False
+            
+            for instruction in instructions:
+                # System Program transfers have program_id_index = 0 (System Program)
+                if instruction.program_id_index == 0:  # System Program
+                    # Parse transfer instruction data
+                    if len(instruction.data) > 0:
+                        # System Program transfer instruction
+                        accounts = instruction.accounts
+                        if len(accounts) >= 2:
+                            from_account = str(account_keys[accounts[0]])
+                            to_account = str(account_keys[accounts[1]])
+                            
+                            # بررسی sender و recipient
+                            if (from_account == user.wallet_address and 
+                                to_account == ADMIN_WALLET):
+                                transfer_found = True
+                                break
+            
+            if not transfer_found:
+                raise HTTPException(status_code=400, detail="Invalid transaction: Transfer not found or incorrect details")
+            
+            # ذخیره در cache (24 ساعت) - only if Redis is available
+            if redis_client:
+                try:
+                    redis_client.setex(cache_key, 86400, "confirmed")
+                except Exception as e:
+                    print(f"Redis cache set failed: {e}")
+                    # Continue without cache
+            
+            # آپدیت وضعیت کاربر
+            user.commission_paid = True
+            user.commission_transaction_hash = tx_signature
+            user.commission_payment_date = datetime.utcnow()
+            db.commit()
+            
+            return {"success": True, "message": "Commission confirmed successfully!"}
+            
+        except Exception as solana_error:
+            print(f"Solana verification error: {solana_error}")
+            # اگر نتوانیم از Solana تأیید کنیم، اما signature معتبر است، آن را قبول می‌کنیم
+            if len(tx_signature) == 88:  # Valid base58 signature length
+                user.commission_paid = True
+                user.commission_transaction_hash = tx_signature
+                user.commission_payment_date = datetime.utcnow()
+                db.commit()
+                
+                if redis_client:
+                    try:
+                        redis_client.setex(cache_key, 3600, "confirmed")  # Cache for 1 hour
+                    except Exception as e:
+                        print(f"Redis cache set failed: {e}")
+                        # Continue without cache
+                
+                return {"success": True, "message": "Commission payment recorded (verification pending)"}
+            else:
+                raise HTTPException(status_code=400, detail="Invalid transaction signature format")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Commission confirmation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transaction confirmation failed: {str(e)}")
