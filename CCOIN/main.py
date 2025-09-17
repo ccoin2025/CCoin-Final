@@ -6,16 +6,14 @@ from fastapi.templating import Jinja2Templates
 from telegram import Update, Bot
 from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from starlette.requests import Request
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
 from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
-from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET
+from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET, REDIS_URL
 from apscheduler.schedulers.background import BackgroundScheduler
 from solana.rpc.async_api import AsyncClient
 from solana.transaction import Transaction
@@ -33,10 +31,32 @@ import hashlib
 from dotenv import load_dotenv
 from CCOIN.routers import wallet
 
-
 load_dotenv()
 
 ENV = os.getenv("ENV", "production")
+
+# Redis و Rate Limiting Setup (اختیاری)
+RATE_LIMITING_ENABLED = False
+limiter = None
+
+try:
+    if REDIS_URL:
+        from slowapi import Limiter, _rate_limit_exceeded_handler
+        from slowapi.util import get_remote_address
+        from slowapi.errors import RateLimitExceeded
+        
+        limiter = Limiter(
+            key_func=get_remote_address,
+            storage_uri=REDIS_URL
+        )
+        RATE_LIMITING_ENABLED = True
+        print("✅ Redis connected - Rate limiting enabled")
+    else:
+        print("⚠️ No REDIS_URL provided - Rate limiting disabled")
+except ImportError:
+    print("⚠️ slowapi not available - Rate limiting disabled")
+except Exception as e:
+    print(f"⚠️ Redis connection failed - Rate limiting disabled: {e}")
 
 TELEGRAM_IP_RANGES = [
     ipaddress.IPv4Network("149.154.160.0/20"),
@@ -59,8 +79,16 @@ logger = structlog.get_logger()
 
 app = FastAPI(debug=ENV == "development")
 
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
+# فقط اگر Rate Limiting فعال باشد
+if RATE_LIMITING_ENABLED and limiter:
+    app.state.limiter = limiter
+    
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded. Please try again later."}
+        )
 
 Base.metadata.create_all(bind=engine)
 
@@ -78,19 +106,19 @@ app.add_middleware(
 async def root(request: Request, db: Session = Depends(get_db)):
     # telegram_id را از query parameter یا session بگیرید
     telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
-    
+
     if not telegram_id:
         logger.info("No telegram_id in session for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
-    
+
     # telegram_id را در session تنظیم کنید
     request.session["telegram_id"] = telegram_id
-    
+
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info("User not found for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {"request": request})
-    
+
     # هدایت براساس وضعیت first_login
     if user.first_login:
         logger.info(f"User {telegram_id} first login, redirecting to load")
@@ -105,15 +133,15 @@ async def verify_telegram_init_data(request: Request):
     if not init_data:
         logger.info("Missing Telegram init data")
         raise HTTPException(status_code=401, detail="Missing Telegram Web App init data")
-    
+
     data_check_string = "\n".join(sorted([f"{k}={v[0]}" for k, v in parse_qs(init_data).items() if k != "hash"]))
     secret_key = hmac.new("WebAppData".encode(), BOT_TOKEN.encode(), hashlib.sha256).digest()
     data_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    
+
     if not secrets.compare_digest(data_hash, parse_qs(init_data).get("hash", [""])[0]):
         logger.info("Invalid Telegram init data")
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
-    
+
     return init_data
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
@@ -121,12 +149,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if not telegram_id:
         logger.info("No telegram_id in session for get_current_user, redirecting to bot")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
-    
+
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return user
 
 @app.api_route("/telegram_webhook/{webhook_token}", methods=["GET", "POST"])
@@ -134,33 +162,33 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
     if webhook_token != os.getenv("WEBHOOK_TOKEN"):
         logger.info("Invalid webhook token")
         raise HTTPException(status_code=403, detail="Invalid webhook token")
-    
+
     # اگر GET request است، فقط تایید کنید
     if request.method == "GET":
         logger.info("GET request to webhook - verification")
         return {"ok": True, "message": "Webhook endpoint is active"}
-    
+
     # ادامه کد برای POST request
     update_data = await request.json()
     logger.info(f"Received webhook data: {update_data}")
-    
+
     try:
         bot = Bot(token=BOT_TOKEN)
         await bot.initialize()
         update = Update.de_json(update_data, bot=bot)
-        
+
         if not update:
             logger.info("Invalid Telegram update")
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
-        
+
         # پردازش update با telegram app
         await telegram_app.process_update(update)
-        
+
         await bot.shutdown()
-        
+
         logger.info("Update processed successfully")
         return {"ok": True}
-        
+
     except Exception as e:
         logger.error(f"Error processing Telegram update: {e}")
         return {"ok": False, "error": str(e)}
@@ -183,19 +211,19 @@ async def submit_wallet(request: Request, wallet_address: str, db: Session = Dep
 async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
     await verify_telegram_init_data(request)
     user = await get_current_user(request, db)
-    
+
     if not user.wallet_address:
         raise HTTPException(status_code=400, detail="No wallet connected")
-    
+
     admin_private_key = os.getenv("ADMIN_PRIVATE_KEY")
     if not admin_private_key:
         raise HTTPException(status_code=500, detail="Admin keypair not configured")
-    
+
     async with AsyncClient(SOLANA_RPC) as client:
         admin_keypair = Keypair.from_base58_string(admin_private_key)
-        
+
         amount = int(user.tokens * 1_000_000_000)
-        
+
         transaction = Transaction().add(
             transfer(TransferParams(
                 from_pubkey=Pubkey.from_string(ADMIN_WALLET),
@@ -203,12 +231,12 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
                 lamports=amount
             ))
         )
-        
+
         await client.send_transaction(transaction, admin_keypair)
-        
+
         user.tokens = 0
         db.commit()
-        
+
         return JSONResponse({"message": "Tokens airdropped successfully"})
 
 # Route جدید برای تست webhook
@@ -220,7 +248,7 @@ async def webhook_info():
         await bot.initialize()
         webhook_info = await bot.get_webhook_info()
         await bot.shutdown()
-        
+
         return {
             "webhook_url": webhook_info.url,
             "has_custom_certificate": webhook_info.has_custom_certificate,
@@ -240,7 +268,7 @@ async def fix_referral_codes(db: Session = Depends(get_db)):
     users_without_code = db.query(User).filter(
         (User.referral_code == None) | (User.referral_code == "")
     ).all()
-    
+
     fixed_count = 0
     for user in users_without_code:
         # تولید کد رفرال جدید
@@ -252,20 +280,24 @@ async def fix_referral_codes(db: Session = Depends(get_db)):
                 user.referral_code = new_code
                 fixed_count += 1
                 break
-    
+
     db.commit()
-    
+
     return {
         "message": f"Fixed {fixed_count} users without referral codes",
         "fixed_users": fixed_count
     }
 
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Rate limit exceeded. Please try again later."}
-    )
+# Status endpoint برای بررسی سلامت برنامه
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "rate_limiting": RATE_LIMITING_ENABLED,
+        "redis_available": REDIS_URL is not None,
+        "environment": ENV
+    }
 
 app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
@@ -285,23 +317,23 @@ scheduler.start()
 
 @app.on_event("startup")
 async def startup():
-    logger.info("App started")
-    
+    logger.info(f"App started - Rate limiting: {RATE_LIMITING_ENABLED}")
+
     webhook_token = os.getenv('WEBHOOK_TOKEN')
     if not webhook_token:
         logger.error("WEBHOOK_TOKEN not set!")
         return
-    
+
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()
-    
+
     webhook_url = f"https://ccoin-final.onrender.com/telegram_webhook/{webhook_token}"
-    
+
     try:
         # تنظیم webhook
         await bot.set_webhook(url=webhook_url)
         logger.info(f"Telegram webhook set to: {webhook_url}")
-        
+
         # تنظیم Menu Button برای Web App
         try:
             from telegram import MenuButtonWebApp, WebAppInfo
@@ -315,19 +347,19 @@ async def startup():
             logger.info("MenuButtonWebApp not available in this version")
         except Exception as e:
             logger.error(f"Error setting menu button: {e}")
-        
+
         webhook_info = await bot.get_webhook_info()
         logger.info(f"Webhook info: {webhook_info}")
-        
+
     except Exception as e:
         logger.error(f"Error setting webhook: {e}")
-    
+
     try:
         await telegram_app.initialize()
         logger.info("Telegram app initialized")
     except Exception as e:
         logger.error(f"Error initializing telegram app: {e}")
-    
+
     await bot.shutdown()
 
 @app.on_event("shutdown")
@@ -338,5 +370,3 @@ def shutdown():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
