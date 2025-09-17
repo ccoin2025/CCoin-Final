@@ -55,24 +55,13 @@
             max-height: 300px;
             overflow-y: auto;
             font-family: monospace;
+            display: none;
         }
         .status {
             margin: 20px 0;
             padding: 15px;
             border-radius: 10px;
             background: rgba(255, 255, 255, 0.1);
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #ffffff30;
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
         .instructions {
             background: rgba(255, 255, 255, 0.05);
@@ -81,6 +70,15 @@
             margin: 20px 0;
             font-size: 14px;
             line-height: 1.5;
+        }
+        .method-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            margin: 10px 0;
+            padding: 15px 20px;
+            font-size: 16px;
+        }
+        .method-btn:hover {
+            background: linear-gradient(135deg, #218838, #1ea085);
         }
     </style>
 </head>
@@ -93,23 +91,31 @@
             <p>📱 Ready to connect to Phantom app</p>
         </div>
         
-        <button class="btn" id="connectBtn" onclick="connectToPhantom()">
-            🦄 Connect Phantom App
+        <button class="btn method-btn" onclick="connectMethod1()">
+            🔗 Method 1: Direct Link
+        </button>
+        
+        <button class="btn method-btn" onclick="connectMethod2()">
+            🌐 Method 2: Universal Link
+        </button>
+        
+        <button class="btn method-btn" onclick="connectMethod3()">
+            📱 Method 3: Manual Connect
         </button>
         
         <div class="instructions">
             <strong>Instructions:</strong><br>
-            1. Make sure you have Phantom app installed<br>
-            2. Click the button above<br>
-            3. Approve connection in Phantom app<br>
-            4. You'll be redirected back automatically
+            1. Try Method 1 first (works if Phantom app is installed)<br>
+            2. If it doesn't work, try Method 2<br>
+            3. Method 3 provides manual instructions
         </div>
         
-        <div id="debug" class="debug" style="display: none;"></div>
+        <div id="debug" class="debug"></div>
     </div>
 
     <script>
         var telegramId = '';
+        var isConnecting = false;
         
         function log(msg) {
             console.log(msg);
@@ -119,100 +125,74 @@
             debug.scrollTop = debug.scrollHeight;
         }
         
-        function updateStatus(msg, loading = false) {
+        function updateStatus(msg) {
             var status = document.getElementById('status');
-            var content = loading ? '<div class="loading"></div> ' + msg : msg;
-            status.innerHTML = '<p>' + content + '</p>';
+            status.innerHTML = '<p>' + msg + '</p>';
         }
         
-        function connectToPhantom() {
-            var connectBtn = document.getElementById('connectBtn');
-            connectBtn.disabled = true;
-            connectBtn.textContent = '🔄 Opening Phantom...';
+        function connectMethod1() {
+            if (isConnecting) return;
+            isConnecting = true;
             
-            log('🚀 Starting Phantom app connection...');
-            updateStatus('📱 Opening Phantom app...', true);
+            log('🚀 Method 1: Direct Deep Link');
+            updateStatus('📱 Opening Phantom app (Method 1)...');
+            
+            var baseUrl = window.location.origin;
+            var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
+            
+            var deepLink = 'phantom://v1/connect?' +
+                'app_url=' + encodeURIComponent(baseUrl) +
+                '&redirect_link=' + encodeURIComponent(callbackUrl);
+            
+            log('Deep Link: ' + deepLink);
             
             try {
-                var baseUrl = window.location.origin;
-                var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
-                
-                log('📍 Base URL: ' + baseUrl);
-                log('📍 Callback URL: ' + callbackUrl);
-                
-                // اول تلاش برای deep link مستقیم به Phantom app
-                var phantomDeepLink = 'phantom://v1/connect?' +
-                    'app_url=' + encodeURIComponent(baseUrl) +
-                    '&redirect_link=' + encodeURIComponent(callbackUrl);
-                
-                log('🔗 Phantom Deep Link: ' + phantomDeepLink);
-                
-                // تلاش برای باز کردن Phantom app
-                window.location.href = phantomDeepLink;
-                
-                // اگر 3 ثانیه بعد هنوز در همین صفحه هستیم، fallback استفاده کن
-                setTimeout(function() {
-                    if (document.getElementById('connectBtn').disabled) {
-                        log('⚠️ Deep link failed, trying universal link...');
-                        tryUniversalLink();
-                    }
-                }, 3000);
-                
+                window.location.href = deepLink;
             } catch (error) {
-                log('❌ Error creating connection URL: ' + error.message);
-                updateStatus('❌ Error: ' + error.message);
-                connectBtn.disabled = false;
-                connectBtn.textContent = '🦄 Try Again';
+                log('Error: ' + error.message);
+                updateStatus('❌ Method 1 failed');
+                isConnecting = false;
             }
         }
         
-        function tryUniversalLink() {
-            log('🔄 Trying Phantom universal link...');
+        function connectMethod2() {
+            if (isConnecting) return;
+            isConnecting = true;
+            
+            log('🌐 Method 2: Universal Link');
+            updateStatus('📱 Opening Phantom via Universal Link...');
+            
             var baseUrl = window.location.origin;
             var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
             
-            // Universal link برای iOS و Android
             var universalLink = 'https://phantom.app/ul/browse/' + 
-                encodeURIComponent(baseUrl + '/wallet/connect?telegram_id=' + telegramId) +
+                encodeURIComponent(baseUrl) +
                 '?ref=' + encodeURIComponent(callbackUrl);
             
-            log('🔗 Universal Link: ' + universalLink);
-            window.location.href = universalLink;
+            log('Universal Link: ' + universalLink);
             
-            // fallback دوم - تلاش با پروتکل solana
-            setTimeout(function() {
-                if (document.getElementById('connectBtn').disabled) {
-                    log('🔄 Trying Solana protocol...');
-                    trySolanaProtocol();
-                }
-            }, 3000);
+            try {
+                window.location.href = universalLink;
+            } catch (error) {
+                log('Error: ' + error.message);
+                updateStatus('❌ Method 2 failed');
+                isConnecting = false;
+            }
         }
         
-        function trySolanaProtocol() {
-            var baseUrl = window.location.origin;
-            var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
+        function connectMethod3() {
+            log('📱 Method 3: Manual Instructions');
+            updateStatus('📋 Manual connection instructions');
             
-            // استفاده از پروتکل solana
-            var solanaLink = 'solana:connect?' +
-                'redirect=' + encodeURIComponent(callbackUrl) +
-                '&app_url=' + encodeURIComponent(baseUrl);
-            
-            log('🔗 Solana Protocol: ' + solanaLink);
-            window.location.href = solanaLink;
-            
-            // نهایی fallback - راهنمایی کاربر
-            setTimeout(function() {
-                updateStatus('💡 Please install Phantom app and try again');
-                document.getElementById('connectBtn').disabled = false;
-                document.getElementById('connectBtn').textContent = '🦄 Try Again';
-                
-                // نمایش لینک دستی برای دانلود Phantom
-                var instructions = document.querySelector('.instructions');
-                instructions.innerHTML = '<strong>Phantom App Not Found:</strong><br>' +
-                    '1. <a href="https://phantom.app/download" target="_blank" style="color: #AB9FF2;">Download Phantom App</a><br>' +
-                    '2. Install and set up your wallet<br>' +
-                    '3. Return here and try connecting again';
-            }, 4000);
+            var instructions = document.querySelector('.instructions');
+            instructions.innerHTML = 
+                '<strong>Manual Connection:</strong><br>' +
+                '1. Open Phantom app manually<br>' +
+                '2. Go to Settings → Connected Apps<br>' +
+                '3. Add new connection<br>' +
+                '4. Enter URL: ' + window.location.origin + '<br>' +
+                '5. Approve connection<br>' +
+                '<br><a href="https://phantom.app/download" target="_blank" style="color: #AB9FF2;">Download Phantom App</a>';
         }
         
         function init() {
@@ -226,31 +206,24 @@
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            log('📱 Ready to connect to Phantom app');
-            updateStatus('📱 Ready to connect to Phantom app');
-            
-            // Auto-connect بعد از 2 ثانیه
-            setTimeout(function() {
-                if (!document.getElementById('connectBtn').disabled) {
-                    log('⚡ Auto-connecting to Phantom...');
-                    connectToPhantom();
-                }
-            }, 2000);
+            updateStatus('📱 Choose connection method');
         }
         
-        // Initialize
-        window.addEventListener('load', init);
-        
-        // Fallback initialization
+        // Safe initialization
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
             init();
         }
         
-        // Debug: نمایش اطلاعات صفحه
-        log('🔍 Page loaded, URL: ' + window.location.href);
-        log('🔍 User agent: ' + navigator.userAgent);
+        // Reset connection flag if user comes back
+        window.addEventListener('focus', function() {
+            setTimeout(function() {
+                isConnecting = false;
+            }, 2000);
+        });
+        
+        log('🔍 Page loaded safely');
     </script>
 </body>
 </html>
