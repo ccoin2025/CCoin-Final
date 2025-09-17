@@ -2,228 +2,339 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connect Phantom Wallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            text-align: center;
-            padding: 50px 20px;
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000; color: #fff; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
         }
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-            border: none;
-            padding: 20px 30px;
-            border-radius: 25px;
-            font-size: 18px;
-            cursor: pointer;
-            width: 100%;
-            margin: 15px 0;
-            text-decoration: none;
-            display: inline-block;
-            box-sizing: border-box;
-            font-weight: 600;
+        
+        .container { text-align: center; max-width: 400px; width: 100%; }
+        .logo { width: 80px; height: 80px; background: #fff; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #000; }
+        h1 { font-size: 24px; margin-bottom: 10px; font-weight: 600; }
+        .subtitle { color: #999; margin-bottom: 30px; font-size: 16px; }
+        
+        .connect-btn {
+            background: #fff; color: #000; border: none; padding: 15px 30px; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 20px;
             transition: all 0.3s ease;
         }
-        .btn:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
+        .connect-btn:hover { background: #f0f0f0; transform: translateY(-2px); }
+        .connect-btn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+        
+        .waiting-state {
+            background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
+            padding: 20px; margin: 20px 0; display: none;
         }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .debug {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 12px;
-            text-align: left;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            display: none;
-        }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .instructions {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .method-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            margin: 10px 0;
-            padding: 15px 20px;
-            font-size: 16px;
-        }
-        .method-btn:hover {
-            background: linear-gradient(135deg, #218838, #1ea085);
-        }
+        .waiting-state.show { display: block; }
+        
+        .status { margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
+        .status.success { background: #1a5f1a; color: #90ee90; border: 1px solid #228b22; }
+        .status.error { background: #5f1a1a; color: #ffb3b3; border: 1px solid #dc3545; }
+        
+        .loading { display: none; margin-top: 20px; }
+        .spinner { width: 20px; height: 20px; border: 2px solid #333; border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .wallet-address { background: #222; padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px; border: 1px solid #444; }
+        .countdown { font-size: 24px; color: #fff; margin: 10px 0; }
+        .instructions { font-size: 14px; color: #999; line-height: 1.4; margin: 15px 0; }
+        .check-btn { background: #17a2b8; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; margin: 10px 5px; }
+        .cancel-btn { background: #dc3545; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; margin: 10px 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your Phantom app to participate in CCoin airdrop</p>
+        <div class="logo">👛</div>
+        <h1>Connect Phantom Wallet</h1>
+        <p class="subtitle">Connect your wallet to continue with airdrop</p>
         
-        <div id="status" class="status">
-            <p>📱 Ready to connect to Phantom app</p>
+        <button id="connectBtn" class="connect-btn" onclick="connectPhantom()">
+            Connect Phantom Wallet
+        </button>
+        
+        <div id="waitingState" class="waiting-state">
+            <h3>⏳ Waiting for Phantom...</h3>
+            <div class="countdown" id="countdown">60</div>
+            <div class="instructions">
+                Please complete the connection in Phantom app and return here.
+                <br><br>
+                <strong>Steps:</strong><br>
+                1. Approve the connection in Phantom<br>
+                2. Return to this page<br>
+                3. Click "Check Connection" below
+            </div>
+            <button class="check-btn" onclick="checkConnection()">🔄 Check Connection</button>
+            <button class="cancel-btn" onclick="cancelConnection()">❌ Cancel</button>
         </div>
         
-        <button class="btn method-btn" onclick="connectMethod1()">
-            🔗 Method 1: Direct Link
-        </button>
-        
-        <button class="btn method-btn" onclick="connectMethod2()">
-            🌐 Method 2: Universal Link
-        </button>
-        
-        <button class="btn method-btn" onclick="connectMethod3()">
-            📱 Method 3: Manual Connect
-        </button>
-        
-        <div class="instructions">
-            <strong>Instructions:</strong><br>
-            1. Try Method 1 first (works if Phantom app is installed)<br>
-            2. If it doesn't work, try Method 2<br>
-            3. Method 3 provides manual instructions
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">Checking connection...</p>
         </div>
         
-        <div id="debug" class="debug"></div>
+        <div id="status" class="status"></div>
     </div>
 
     <script>
-        var telegramId = '';
-        var isConnecting = false;
-        
-        function log(msg) {
-            console.log(msg);
-            var debug = document.getElementById('debug');
-            debug.style.display = 'block';
-            debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
-            debug.scrollTop = debug.scrollHeight;
-        }
-        
-        function updateStatus(msg) {
-            var status = document.getElementById('status');
-            status.innerHTML = '<p>' + msg + '</p>';
-        }
-        
-        function connectMethod1() {
+        const USER_ID = new URLSearchParams(window.location.search).get('telegram_id') || 
+                       (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user ? window.Telegram.WebApp.initDataUnsafe.user.id : null) || 
+                       'guest';
+
+        let isConnecting = false;
+        let connectionCheckInterval = null;
+        let countdownInterval = null;
+        let countdownValue = 60;
+
+        async function connectPhantom() {
             if (isConnecting) return;
-            isConnecting = true;
             
-            log('🚀 Method 1: Direct Deep Link');
-            updateStatus('📱 Opening Phantom app (Method 1)...');
-            
-            var baseUrl = window.location.origin;
-            var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
-            
-            var deepLink = 'phantom://v1/connect?' +
-                'app_url=' + encodeURIComponent(baseUrl) +
-                '&redirect_link=' + encodeURIComponent(callbackUrl);
-            
-            log('Deep Link: ' + deepLink);
+            const connectBtn = document.getElementById('connectBtn');
+            const waitingState = document.getElementById('waitingState');
+            const status = document.getElementById('status');
             
             try {
-                window.location.href = deepLink;
+                isConnecting = true;
+                connectBtn.disabled = true;
+                connectBtn.textContent = 'Preparing Connection...';
+                status.style.display = 'none';
+
+                console.log('Starting Phantom connection for user:', USER_ID);
+
+                // ساخت URL callback
+                const callbackUrl = `${window.location.origin}/wallet/callback?telegram_id=${USER_ID}`;
+                console.log('Callback URL:', callbackUrl);
+
+                // پارامترهای Deep Link - ساده و مطابق استاندارد
+                const params = new URLSearchParams();
+                params.append('app_url', window.location.origin);
+                params.append('redirect_link', callbackUrl);
+
+                const deepLinkUrl = `phantom://v1/connect?${params.toString()}`;
+                console.log('Deep Link URL:', deepLinkUrl);
+
+                connectBtn.textContent = 'Opening Phantom...';
+
+                // تلاش برای باز کردن Phantom با fallback
+                try {
+                    // Method 1: Deep Link
+                    window.location.href = deepLinkUrl;
+                } catch (error) {
+                    console.log('Deep link failed, trying universal link');
+                    // Method 2: Universal Link
+                    const universalLink = `https://phantom.app/ul/browse/${encodeURIComponent(window.location.origin)}?ref=${encodeURIComponent(callbackUrl)}`;
+                    window.location.href = universalLink;
+                }
+
+                // نمایش حالت انتظار
+                setTimeout(() => {
+                    connectBtn.style.display = 'none';
+                    waitingState.classList.add('show');
+                    startCountdown();
+                    startAutoCheck();
+                }, 1000);
+
             } catch (error) {
-                log('Error: ' + error.message);
-                updateStatus('❌ Method 1 failed');
-                isConnecting = false;
+                console.error('Connection error:', error);
+                showStatus('error', `❌ Failed to open Phantom: ${error.message}`);
+                resetConnection();
             }
         }
-        
-        function connectMethod2() {
-            if (isConnecting) return;
-            isConnecting = true;
+
+        function startCountdown() {
+            countdownValue = 60;
+            const countdownElement = document.getElementById('countdown');
             
-            log('🌐 Method 2: Universal Link');
-            updateStatus('📱 Opening Phantom via Universal Link...');
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
             
-            var baseUrl = window.location.origin;
-            var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                if (countdownElement) {
+                    countdownElement.textContent = countdownValue;
+                }
+                
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    showStatus('error', '⏰ Connection timed out. Please try again.');
+                    resetConnection();
+                }
+            }, 1000);
+        }
+
+        function startAutoCheck() {
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
             
-            var universalLink = 'https://phantom.app/ul/browse/' + 
-                encodeURIComponent(baseUrl) +
-                '?ref=' + encodeURIComponent(callbackUrl);
+            connectionCheckInterval = setInterval(async () => {
+                await checkConnectionSilent();
+            }, 3000);
+        }
+
+        async function checkConnection() {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'block';
+            }
             
-            log('Universal Link: ' + universalLink);
+            const result = await checkConnectionSilent();
             
+            if (loading) {
+                loading.style.display = 'none';
+            }
+            
+            if (!result) {
+                showStatus('error', '🔍 Connection not found yet. Please make sure you approved the connection in Phantom.');
+            }
+        }
+
+        async function checkConnectionSilent() {
             try {
-                window.location.href = universalLink;
+                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}&t=${Date.now()}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                    }
+                    if (connectionCheckInterval) {
+                        clearInterval(connectionCheckInterval);
+                    }
+                    
+                    showStatus('success', '✅ Wallet connected successfully!', data.address);
+                    
+                    setTimeout(() => {
+                        if (window.Telegram && window.Telegram.WebApp) {
+                            window.Telegram.WebApp.close();
+                        } else {
+                            window.location.href = `/airdrop?telegram_id=${USER_ID}`;
+                        }
+                    }, 2000);
+                    
+                    return true;
+                }
+                
+                return false;
             } catch (error) {
-                log('Error: ' + error.message);
-                updateStatus('❌ Method 2 failed');
-                isConnecting = false;
+                console.error('Check connection error:', error);
+                return false;
             }
         }
-        
-        function connectMethod3() {
-            log('📱 Method 3: Manual Instructions');
-            updateStatus('📋 Manual connection instructions');
-            
-            var instructions = document.querySelector('.instructions');
-            instructions.innerHTML = 
-                '<strong>Manual Connection:</strong><br>' +
-                '1. Open Phantom app manually<br>' +
-                '2. Go to Settings → Connected Apps<br>' +
-                '3. Add new connection<br>' +
-                '4. Enter URL: ' + window.location.origin + '<br>' +
-                '5. Approve connection<br>' +
-                '<br><a href="https://phantom.app/download" target="_blank" style="color: #AB9FF2;">Download Phantom App</a>';
+
+        function cancelConnection() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+            resetConnection();
         }
-        
-        function init() {
-            var params = new URLSearchParams(window.location.search);
-            telegramId = params.get('telegram_id') || '';
+
+        function resetConnection() {
+            isConnecting = false;
+            const connectBtn = document.getElementById('connectBtn');
+            const waitingState = document.getElementById('waitingState');
             
-            if (!telegramId) {
-                updateStatus('❌ Error: No telegram ID found');
-                log('❌ No telegram_id parameter in URL');
-                return;
+            if (connectBtn) {
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect Phantom Wallet';
+                connectBtn.style.display = 'block';
             }
             
-            log('✅ Telegram ID: ' + telegramId);
-            updateStatus('📱 Choose connection method');
+            if (waitingState) {
+                waitingState.classList.remove('show');
+            }
         }
-        
-        // Safe initialization
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
+
+        function showStatus(type, message, walletAddress = null) {
+            const status = document.getElementById('status');
+            if (status) {
+                status.className = `status ${type}`;
+                status.innerHTML = message;
+                
+                if (walletAddress) {
+                    status.innerHTML += `<div class="wallet-address">${walletAddress}</div>`;
+                }
+                
+                status.style.display = 'block';
+            }
         }
-        
-        // Reset connection flag if user comes back
-        window.addEventListener('focus', function() {
-            setTimeout(function() {
-                isConnecting = false;
-            }, 2000);
+
+        async function checkExistingConnection() {
+            try {
+                const response = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
+                if (!response.ok) {
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.connected && data.address) {
+                    showStatus('success', '✅ Wallet already connected!', data.address);
+                    const connectBtn = document.getElementById('connectBtn');
+                    if (connectBtn) {
+                        connectBtn.textContent = 'Change Wallet';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking wallet status:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, USER_ID:', USER_ID);
+            checkExistingConnection();
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                try {
+                    window.Telegram.WebApp.ready();
+                    window.Telegram.WebApp.expand();
+                    if (window.Telegram.WebApp.BackButton) {
+                        window.Telegram.WebApp.BackButton.show();
+                        window.Telegram.WebApp.BackButton.onClick(() => {
+                            cancelConnection();
+                            window.Telegram.WebApp.close();
+                        });
+                    }
+                } catch (error) {
+                    console.log('Telegram WebApp setup error:', error);
+                }
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('connected') === 'true') {
+                checkConnection();
+            }
         });
-        
-        log('🔍 Page loaded safely');
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isConnecting) {
+                setTimeout(checkConnectionSilent, 1000);
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+            }
+        });
     </script>
 </body>
 </html>
