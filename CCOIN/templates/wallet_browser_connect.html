@@ -205,23 +205,49 @@
                 log('📍 Base URL: ' + baseUrl);
                 log('📍 Callback URL: ' + callbackUrl);
                 
-                // Method از فایل کمکی: Deep Link ساده
-                var phantomDeepLink = 'phantom://v1/connect?' +
-                    'app_url=' + encodeURIComponent(baseUrl) +
-                    '&redirect_link=' + encodeURIComponent(callbackUrl);
+                // استفاده از Universal Link به جای Deep Link برای جلوگیری از ERR_UNKNOWN_URL_SCHEME
+                var phantomUniversalLink = 'https://phantom.app/ul/browse/' + 
+                    encodeURIComponent(baseUrl) +
+                    '?ref=' + encodeURIComponent(callbackUrl);
                 
-                log('🔗 Phantom Deep Link: ' + phantomDeepLink);
+                log('🔗 Phantom Universal Link: ' + phantomUniversalLink);
                 
-                // تلاش برای باز کردن Phantom app
-                window.location.href = phantomDeepLink;
+                // تلاش برای باز کردن Phantom با safe method
+                var iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = phantomUniversalLink;
+                document.body.appendChild(iframe);
                 
-                // نمایش waiting state بعد از 1 ثانیه
+                // بعد از 2 ثانیه iframe را حذف کن
+                setTimeout(function() {
+                    if (iframe && iframe.parentNode) {
+                        iframe.parentNode.removeChild(iframe);
+                    }
+                }, 2000);
+                
+                // اگر iframe کار نکرد، از window.open استفاده کن
+                setTimeout(function() {
+                    try {
+                        var popup = window.open(phantomUniversalLink, '_blank');
+                        setTimeout(function() {
+                            if (popup) {
+                                popup.close();
+                            }
+                        }, 3000);
+                    } catch (popupError) {
+                        log('Popup blocked: ' + popupError.message);
+                        // Fallback: direct navigation
+                        window.location.href = phantomUniversalLink;
+                    }
+                }, 1000);
+                
+                // نمایش waiting state بعد از 2 ثانیه
                 setTimeout(function() {
                     connectBtn.style.display = 'none';
                     waitingState.classList.add('show');
                     startCountdown();
                     startAutoCheck();
-                }, 1000);
+                }, 2000);
                 
             } catch (error) {
                 log('❌ Error creating connection URL: ' + error.message);
