@@ -205,9 +205,8 @@
                 log('📍 Base URL: ' + baseUrl);
                 log('📍 Callback URL: ' + callbackUrl);
                 
-                // ساخت URL صحیح برای Phantom Connect
+                // حذف کلید ثابت و استفاده از روش ساده‌تر
                 var connectUrl = 'https://phantom.app/ul/v1/connect?' +
-                    'dapp_encryption_public_key=44qRbj3hKqUMfDSVUgkA7QnGcQKNQmbTWcTVVqKJ4zbE&' +
                     'cluster=devnet&' +
                     'app_url=' + encodeURIComponent(baseUrl) + '&' +
                     'redirect_link=' + encodeURIComponent(callbackUrl);
