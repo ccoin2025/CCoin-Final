@@ -1,414 +1,377 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Connect Phantom Wallet</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            text-align: center;
-            padding: 50px 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-            border: none;
-            padding: 20px 30px;
-            border-radius: 25px;
-            font-size: 18px;
-            cursor: pointer;
-            width: 100%;
-            margin: 15px 0;
-            text-decoration: none;
-            display: inline-block;
-            box-sizing: border-box;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        .btn:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
-        }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .debug {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 12px;
-            text-align: left;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-        }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #ffffff30;
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .instructions {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .manual-input {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            margin: 20px 0;
-            display: none;
-        }
-        .manual-input.show {
-            display: block;
-        }
-        .manual-input input {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 14px;
-            margin: 10px 0;
-            font-family: monospace;
-            box-sizing: border-box;
-        }
-        .manual-input input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-        .manual-input input:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.2);
-        }
-        .submit-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 15px;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px 5px;
-            transition: all 0.3s ease;
-        }
-        .submit-btn:hover {
-            background: linear-gradient(135deg, #218838, #1ea085);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your Phantom app to participate in CCoin airdrop</p>
-        
-        <div id="status" class="status">
-            <p>📱 Ready to connect to Phantom app</p>
-        </div>
-        
-        <button class="btn" id="connectBtn" onclick="connectToPhantom()">
-            🦄 Connect Phantom App
-        </button>
-        
-        <button class="btn" id="manualBtn" onclick="showManualInput()" style="background: linear-gradient(135deg, #17a2b8, #138496);">
-            ✋ Enter Wallet Address Manually
-        </button>
-        
-        <div id="manualInput" class="manual-input">
-            <h3>📝 Enter Your Phantom Wallet Address</h3>
-            <p>Copy your wallet address from Phantom app and paste it here:</p>
-            <input type="text" id="walletAddress" placeholder="Enter your Solana wallet address (starts with numbers/letters)" />
-            <br>
-            <button class="submit-btn" onclick="submitManualAddress()">✅ Connect Wallet</button>
-            <button class="submit-btn" onclick="hideManualInput()" style="background: linear-gradient(135deg, #6c757d, #5a6268);">❌ Cancel</button>
-        </div>
-        
-        <div class="instructions">
-            <strong>Two ways to connect:</strong><br>
-            1. <strong>Auto Connect:</strong> Click "Connect Phantom App" (opens Phantom app)<br>
-            2. <strong>Manual:</strong> Click "Enter Manually" and paste your wallet address
-        </div>
-        
-        <div id="debug" class="debug" style="display: none;"></div>
-    </div>
+from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, JSONResponse
+from sqlalchemy.orm import Session
+from CCOIN.database import get_db
+from CCOIN.models.user import User
+from datetime import datetime
+import re
+import os
+import json
+import base64
+import urllib.parse
 
-    <script>
-        var telegramId = '';
-        var isConnecting = false;
+router = APIRouter()
+templates = Jinja2Templates(directory="CCOIN/templates")
+
+@router.get("/wallet/connect")
+async def wallet_connect(request: Request):
+    """صفحه اتصال کیف پول در مرورگر خارجی"""
+    telegram_id = request.query_params.get("telegram_id")
+    return templates.TemplateResponse("wallet_browser_connect.html", {
+        "request": request,
+        "telegram_id": telegram_id
+    })
+
+@router.post("/api/wallet/connect")
+async def connect_wallet_api(request: Request, db: Session = Depends(get_db)):
+    """API endpoint برای ذخیره آدرس wallet"""
+    try:
+        data = await request.json()
+        telegram_id = data.get('telegram_id')
+        wallet_address = data.get('wallet_address')
         
-        function log(msg) {
-            console.log(msg);
-            var debug = document.getElementById('debug');
-            if (debug) {
-                debug.style.display = 'block';
-                debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
-                debug.scrollTop = debug.scrollHeight;
-            }
-        }
+        print(f"[WALLET CONNECT API] telegram_id: {telegram_id}, wallet_address: {wallet_address}")
         
-        function updateStatus(msg, loading = false) {
-            var status = document.getElementById('status');
-            if (status) {
-                var content = loading ? '<div class="loading"></div> ' + msg : msg;
-                status.innerHTML = '<p>' + content + '</p>';
-            }
-        }
+        if not telegram_id or not wallet_address:
+            return JSONResponse({
+                "success": False,
+                "error": "Missing required fields"
+            }, status_code=400)
         
-        function connectToPhantom() {
-            if (isConnecting) return;
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if not user:
+            print(f"[WALLET CONNECT API] User not found for telegram_id: {telegram_id}")
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            }, status_code=404)
+        
+        # اعتبارسنجی آدرس
+        if is_valid_solana_address(wallet_address):
+            # بررسی تکراری نبودن آدرس
+            existing_wallet = db.query(User).filter(
+                User.wallet_address == wallet_address,
+                User.telegram_id != str(telegram_id)
+            ).first()
             
-            var connectBtn = document.getElementById('connectBtn');
-            if (!connectBtn) return;
+            if existing_wallet:
+                print(f"[WALLET CONNECT API] Wallet address already used by another user")
+                return JSONResponse({
+                    "success": False,
+                    "error": "This wallet address is already connected to another account"
+                }, status_code=400)
             
-            isConnecting = true;
-            connectBtn.disabled = true;
-            connectBtn.textContent = '🔄 Opening Phantom...';
+            user.wallet_address = wallet_address
+            db.commit()
+            print(f"[WALLET CONNECT API] SUCCESS: Saved wallet {wallet_address[:8]}... for user {telegram_id}")
             
-            log('🚀 Starting Phantom app connection...');
-            updateStatus('📱 Opening Phantom app...', true);
+            return JSONResponse({
+                "success": True,
+                "message": "Wallet connected successfully",
+                "wallet_address": wallet_address
+            })
+        else:
+            print(f"[WALLET CONNECT API] Invalid wallet address: {wallet_address}")
+            return JSONResponse({
+                "success": False,
+                "error": "Invalid wallet address format"
+            }, status_code=400)
             
-            try {
-                // استفاده از deep link مستقیم Phantom
-                var phantomDeepLink = 'phantom://connect?app=' + encodeURIComponent(window.location.origin) + 
-                    '&callback=' + encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
+    except Exception as e:
+        print(f"[WALLET CONNECT API] Error: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@router.get("/wallet/callback")
+async def wallet_callback(request: Request, db: Session = Depends(get_db)):
+    """پردازش callback از Phantom Wallet"""
+    telegram_id = request.query_params.get("telegram_id")
+    
+    # Debug: نمایش تمام پارامترها
+    print(f"[WALLET CALLBACK] All params: {dict(request.query_params)}")
+    
+    # پارامترهای موفقیت - همه احتمالات
+    public_key = (
+        request.query_params.get("public_key") or
+        request.query_params.get("publicKey") or
+        request.query_params.get("phantom_encryption_public_key") or
+        request.query_params.get("dapp_encryption_public_key") or
+        request.query_params.get("pubkey") or
+        request.query_params.get("address")
+    )
+    
+    # پردازش پارامتر data اگر موجود باشد
+    data_param = request.query_params.get("data")
+    if data_param and not public_key:
+        try:
+            # تلاش برای decode کردن data به عنوان JSON
+            decoded_data = json.loads(urllib.parse.unquote(data_param))
+            public_key = (
+                decoded_data.get("public_key") or 
+                decoded_data.get("publicKey") or
+                decoded_data.get("address") or
+                decoded_data.get("pubkey")
+            )
+            print(f"[WALLET CALLBACK] Extracted from data: {public_key}")
+        except:
+            try:
+                # تلاش برای base64 decode
+                decoded_bytes = base64.b64decode(data_param)
+                decoded_data = json.loads(decoded_bytes)
+                public_key = (
+                    decoded_data.get("public_key") or 
+                    decoded_data.get("publicKey") or
+                    decoded_data.get("address") or
+                    decoded_data.get("pubkey")
+                )
+                print(f"[WALLET CALLBACK] Extracted from base64 data: {public_key}")
+            except:
+                try:
+                    # تلاش برای URL decode ساده
+                    decoded_data = urllib.parse.unquote(data_param)
+                    if decoded_data != data_param:
+                        # اگر decode شد، دوباره تلاش کن
+                        decoded_json = json.loads(decoded_data)
+                        public_key = (
+                            decoded_json.get("public_key") or 
+                            decoded_json.get("publicKey") or
+                            decoded_json.get("address") or
+                            decoded_json.get("pubkey")
+                        )
+                        print(f"[WALLET CALLBACK] Extracted from URL decoded data: {public_key}")
+                except:
+                    print(f"[WALLET CALLBACK] Could not decode data parameter: {data_param}")
+    
+    # بررسی پارامترهای Phantom Connect API جدید
+    connect_data = request.query_params.get("phantom_encryption_public_key")
+    if connect_data and not public_key:
+        public_key = connect_data
+        print(f"[WALLET CALLBACK] Using phantom_encryption_public_key: {public_key}")
+    
+    # پارامترهای خطا
+    error_code = (
+        request.query_params.get("errorCode") or 
+        request.query_params.get("error_code") or
+        request.query_params.get("error")
+    )
+    error_message = (
+        request.query_params.get("errorMessage") or 
+        request.query_params.get("error_message") or
+        request.query_params.get("error_description")
+    )
+    
+    print(f"[WALLET CALLBACK] telegram_id: {telegram_id}")
+    print(f"[WALLET CALLBACK] public_key: {public_key}")
+    print(f"[WALLET CALLBACK] error_code: {error_code}")
+    
+    if error_code:
+        return templates.TemplateResponse("wallet_callback.html", {
+            "request": request,
+            "success": False,
+            "error": f"Phantom Error {error_code}: {error_message}",
+            "telegram_id": telegram_id
+        })
+    
+    # موفقیت - ذخیره آدرس wallet
+    if telegram_id and public_key:
+        try:
+            user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+            if user:
+                wallet_address = public_key.strip()
                 
-                log('🔗 Phantom Deep Link: ' + phantomDeepLink);
-                
-                // تلاش برای باز کردن deep link
-                window.location.href = phantomDeepLink;
-                
-                // fallback به صورت manual input بعد از 3 ثانیه
-                setTimeout(function() {
-                    if (isConnecting) {
-                        log('⚠️ Deep link timeout, showing manual input');
-                        updateStatus('📱 Having trouble opening Phantom? Try manual input below');
-                        resetConnection();
-                        showManualInput();
-                    }
-                }, 3000);
-                
-            } catch (error) {
-                log('❌ Deep link error: ' + error.message);
-                updateStatus('❌ Error opening Phantom app. Please try manual input.');
-                resetConnection();
-                showManualInput();
-            }
-        }
-        
-        function showManualInput() {
-            var manualInput = document.getElementById('manualInput');
-            var connectBtn = document.getElementById('connectBtn');
-            var manualBtn = document.getElementById('manualBtn');
-            
-            if (manualInput) {
-                manualInput.classList.add('show');
-            }
-            if (connectBtn) {
-                connectBtn.style.display = 'none';
-            }
-            if (manualBtn) {
-                manualBtn.style.display = 'none';
-            }
-            
-            updateStatus('📝 Enter your Phantom wallet address below');
-            
-            // focus روی input
-            setTimeout(function() {
-                var walletInput = document.getElementById('walletAddress');
-                if (walletInput) {
-                    walletInput.focus();
-                }
-            }, 200);
-        }
-        
-        function hideManualInput() {
-            var manualInput = document.getElementById('manualInput');
-            var connectBtn = document.getElementById('connectBtn');
-            var manualBtn = document.getElementById('manualBtn');
-            
-            if (manualInput) {
-                manualInput.classList.remove('show');
-            }
-            if (connectBtn) {
-                connectBtn.style.display = 'block';
-            }
-            if (manualBtn) {
-                manualBtn.style.display = 'block';
-            }
-            
-            // پاک کردن input
-            var walletInput = document.getElementById('walletAddress');
-            if (walletInput) {
-                walletInput.value = '';
-            }
-            
-            updateStatus('📱 Ready to connect to Phantom app');
-        }
-        
-        async function submitManualAddress() {
-            var walletInput = document.getElementById('walletAddress');
-            if (!walletInput) return;
-            
-            var address = walletInput.value.trim();
-            
-            if (!address) {
-                updateStatus('❌ Please enter a wallet address');
-                return;
-            }
-            
-            // بررسی فرمت ساده
-            if (address.length < 32 || address.length > 44) {
-                updateStatus('❌ Invalid wallet address length. Please check your address.');
-                return;
-            }
-            
-            log('📝 Manual address submitted: ' + address);
-            updateStatus('💾 Saving wallet address...', true);
-            
-            try {
-                await saveWalletAddress(address);
-            } catch (error) {
-                log('❌ Manual submit error: ' + error.message);
-                updateStatus('❌ Error saving address: ' + error.message);
-            }
-        }
-        
-        async function saveWalletAddress(publicKey) {
-            try {
-                log('💾 Saving wallet address to server...');
-                
-                const response = await fetch('/api/wallet/connect', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        wallet_address: publicKey
+                # اعتبارسنجی آدرس
+                if is_valid_solana_address(wallet_address):
+                    # بررسی تکراری نبودن آدرس
+                    existing_wallet = db.query(User).filter(
+                        User.wallet_address == wallet_address,
+                        User.telegram_id != str(telegram_id)
+                    ).first()
+                    
+                    if existing_wallet:
+                        print(f"[WALLET CALLBACK] ERROR: Wallet address already used by another user")
+                        return templates.TemplateResponse("wallet_callback.html", {
+                            "request": request,
+                            "success": False,
+                            "error": "This wallet address is already connected to another account",
+                            "telegram_id": telegram_id
+                        })
+                    
+                    user.wallet_address = wallet_address
+                    db.commit()
+                    print(f"[WALLET CALLBACK] SUCCESS: Saved wallet {wallet_address[:8]}... for user {telegram_id}")
+                    
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": True,
+                        "wallet_address": wallet_address,
+                        "telegram_id": telegram_id
                     })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    log('✅ Wallet saved successfully');
-                    
-                    updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + publicKey + '</div>');
-                    
-                    setTimeout(function() {
-                        window.location.href = '/airdrop?telegram_id=' + telegramId;
-                    }, 2000);
-                } else {
-                    throw new Error(data.error || 'Server error');
-                }
-                
-            } catch (error) {
-                log('❌ Failed to save wallet: ' + error.message);
-                updateStatus('❌ Failed to save wallet: ' + error.message);
-                
-                // نمایش manual input اگر مخفی بود
-                if (!document.getElementById('manualInput').classList.contains('show')) {
-                    showManualInput();
-                }
-            }
-        }
-        
-        function resetConnection() {
-            isConnecting = false;
-            var connectBtn = document.getElementById('connectBtn');
-            if (connectBtn) {
-                connectBtn.disabled = false;
-                connectBtn.textContent = '🦄 Connect Phantom App';
-            }
-        }
-        
-        function checkExistingConnection() {
-            fetch('/api/wallet/status?telegram_id=' + telegramId)
-                .then(function(response) {
-                    if (!response.ok) {
-                        return;
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data && data.connected && data.address) {
-                        updateStatus('✅ Wallet already connected!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
-                        var connectBtn = document.getElementById('connectBtn');
-                        var manualBtn = document.getElementById('manualBtn');
-                        if (connectBtn) {
-                            connectBtn.textContent = '🔄 Change Wallet';
-                        }
-                        if (manualBtn) {
-                            manualBtn.textContent = '✏️ Change Address';
-                        }
-                    }
-                })
-                .catch(function(error) {
-                    log('Error checking wallet status: ' + error.message);
-                });
-        }
-        
-        function init() {
-            var params = new URLSearchParams(window.location.search);
-            telegramId = params.get('telegram_id') || '';
+                else:
+                    print(f"[WALLET CALLBACK] ERROR: Invalid Solana address format: {wallet_address}")
+                    return templates.TemplateResponse("wallet_callback.html", {
+                        "request": request,
+                        "success": False,
+                        "error": f"Invalid wallet address format: {wallet_address[:20]}...",
+                        "telegram_id": telegram_id
+                    })
+            else:
+                print(f"[WALLET CALLBACK] ERROR: User not found for telegram_id: {telegram_id}")
+        except Exception as e:
+            print(f"[WALLET CALLBACK] Database error: {e}")
+            return templates.TemplateResponse("wallet_callback.html", {
+                "request": request,
+                "success": False,
+                "error": f"Failed to save wallet: {str(e)}",
+                "telegram_id": telegram_id
+            })
+    
+    # پارامترهای ناقص
+    print(f"[WALLET CALLBACK] ERROR: Incomplete data - telegram_id: {telegram_id}, public_key: {public_key}")
+    return templates.TemplateResponse("wallet_callback.html", {
+        "request": request,
+        "success": False,
+        "error": f"Incomplete connection data. Please try again.",
+        "telegram_id": telegram_id
+    })
+
+@router.post("/wallet/disconnect")
+async def wallet_disconnect(request: Request, db: Session = Depends(get_db)):
+    """حذف اتصال wallet"""
+    telegram_id = request.query_params.get("telegram_id")
+    
+    if not telegram_id:
+        return JSONResponse({
+            "success": False,
+            "error": "No telegram_id provided"
+        })
+    
+    try:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if user:
+            old_address = user.wallet_address
+            user.wallet_address = None  # حذف آدرس
+            db.commit()
+            print(f"[WALLET DISCONNECT] Removed wallet {old_address} for user {telegram_id}")
             
-            if (!telegramId) {
-                updateStatus('❌ Error: No telegram ID found');
-                log('❌ No telegram_id parameter in URL');
-                return;
-            }
-            
-            log('✅ Telegram ID: ' + telegramId);
-            updateStatus('📱 Ready to connect to Phantom app');
-            
-            checkExistingConnection();
-            
-            // Enter key listener برای manual input
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Enter' && document.getElementById('manualInput').classList.contains('show')) {
-                    submitManualAddress();
-                }
-            });
-        }
+            return JSONResponse({
+                "success": True,
+                "message": "Wallet disconnected successfully"
+            })
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            })
+    
+    except Exception as e:
+        print(f"[WALLET DISCONNECT] Error: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+@router.get("/api/wallet/status")
+async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت اتصال wallet"""
+    try:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if user and user.wallet_address:
+            return JSONResponse({
+                "connected": True,
+                "address": user.wallet_address,
+                "success": True
+            })
+        else:
+            return JSONResponse({
+                "connected": False,
+                "address": None,
+                "success": True
+            })
+    except Exception as e:
+        print(f"Error checking wallet status: {e}")
+        return JSONResponse({
+            "connected": False,
+            "address": None,
+            "success": False,
+            "error": str(e)
+        })
+
+@router.get("/api/tasks/status")
+async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت تسک‌ها و دعوت دوستان"""
+    try:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if not user:
+            return JSONResponse({
+                "tasks_completed": False,
+                "friends_invited": False,
+                "success": True
+            })
         
-        // Safe initialization
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
+        # بررسی تکمیل تسک‌ها
+        tasks_completed = any(task.completed for task in user.tasks) if user.tasks else False
         
-        log('🔍 Page loaded');
-    </script>
-</body>
-</html>
+        # بررسی دعوت دوستان
+        friends_invited = len(user.referrals) > 0 if user.referrals else False
+        
+        return JSONResponse({
+            "tasks_completed": tasks_completed,
+            "friends_invited": friends_invited,
+            "success": True
+        })
+    except Exception as e:
+        print(f"Error checking tasks status: {e}")
+        return JSONResponse({
+            "tasks_completed": False,
+            "friends_invited": False,
+            "success": False,
+            "error": str(e)
+        })
+
+@router.get("/api/commission/status")
+async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
+    """بررسی وضعیت پرداخت کمیسیون"""
+    try:
+        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+        if user and user.commission_paid:
+            return JSONResponse({
+                "paid": True,
+                "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
+                "transaction_hash": user.commission_transaction_hash,
+                "success": True
+            })
+        else:
+            return JSONResponse({
+                "paid": False,
+                "payment_date": None,
+                "transaction_hash": None,
+                "success": True
+            })
+    except Exception as e:
+        print(f"Error checking commission status: {e}")
+        return JSONResponse({
+            "paid": False,
+            "payment_date": None,
+            "transaction_hash": None,
+            "success": False,
+            "error": str(e)
+        })
+
+def is_valid_solana_address(address: str) -> bool:
+    """اعتبارسنجی آدرس Solana"""
+    if not address or not isinstance(address, str):
+        return False
+    
+    # حذف whitespace
+    address = address.strip()
+    
+    # آدرس Solana باید 32-44 کاراکتر باشد و فقط حروف و اعداد base58
+    if len(address) < 32 or len(address) > 44:
+        return False
+    
+    # بررسی کاراکترهای مجاز base58
+    pattern = r'^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+    return bool(re.match(pattern, address))
