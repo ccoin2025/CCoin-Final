@@ -655,7 +655,7 @@
                     if (telegramId) {
                         showToast('Redirecting to browser for wallet connection...', 'info');
                         setTimeout(() => {
-                            window.location.href = `/wallet/browser-connect?telegram_id=${telegramId}`;
+                            window.location.href = `/wallet/connect?telegram_id=${telegramId}`;
                         }, 1000);
                         return;
                     }
@@ -703,7 +703,7 @@
                 if (telegramId && window.Telegram && window.Telegram.WebApp) {
                     showToast('Redirecting to browser for wallet connection...', 'info');
                     setTimeout(() => {
-                        window.location.href = `/wallet/browser-connect?telegram_id=${telegramId}`;
+                        window.location.href = `/wallet/connect?telegram_id=${telegramId}`;
                     }, 1000);
                 } else {
                     showToast('Failed to connect wallet!', 'error');
