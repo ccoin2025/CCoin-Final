@@ -82,6 +82,49 @@
             font-size: 14px;
             line-height: 1.5;
         }
+        .manual-input {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+        .manual-input.show {
+            display: block;
+        }
+        .manual-input input {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            margin: 10px 0;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+        .manual-input input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        .manual-input input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .submit-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 15px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        .submit-btn:hover {
+            background: linear-gradient(135deg, #218838, #1ea085);
+        }
     </style>
 </head>
 <body>
@@ -97,12 +140,23 @@
             🦄 Connect Phantom App
         </button>
         
+        <button class="btn" id="manualBtn" onclick="showManualInput()" style="background: linear-gradient(135deg, #17a2b8, #138496);">
+            ✋ Enter Wallet Address Manually
+        </button>
+        
+        <div id="manualInput" class="manual-input">
+            <h3>📝 Enter Your Phantom Wallet Address</h3>
+            <p>Copy your wallet address from Phantom app and paste it here:</p>
+            <input type="text" id="walletAddress" placeholder="Enter your Solana wallet address (starts with numbers/letters)" />
+            <br>
+            <button class="submit-btn" onclick="submitManualAddress()">✅ Connect Wallet</button>
+            <button class="submit-btn" onclick="hideManualInput()" style="background: linear-gradient(135deg, #6c757d, #5a6268);">❌ Cancel</button>
+        </div>
+        
         <div class="instructions">
-            <strong>Instructions:</strong><br>
-            1. Make sure you have Phantom app installed<br>
-            2. Click the button above<br>
-            3. Approve connection in Phantom app<br>
-            4. You'll be redirected back automatically
+            <strong>Two ways to connect:</strong><br>
+            1. <strong>Auto Connect:</strong> Click "Connect Phantom App" (opens Phantom app)<br>
+            2. <strong>Manual:</strong> Click "Enter Manually" and paste your wallet address
         </div>
         
         <div id="debug" class="debug" style="display: none;"></div>
@@ -138,65 +192,114 @@
             
             isConnecting = true;
             connectBtn.disabled = true;
-            connectBtn.textContent = '🔄 Connecting...';
+            connectBtn.textContent = '🔄 Opening Phantom...';
             
-            log('🚀 Starting Phantom connection...');
-            updateStatus('📱 Connecting to Phantom...', true);
+            log('🚀 Starting Phantom app connection...');
+            updateStatus('📱 Opening Phantom app...', true);
             
-            // بررسی وجود Phantom
-            if (window.solana && window.solana.isPhantom) {
-                log('✅ Phantom detected in browser');
-                connectWithPhantomAPI();
-            } else {
-                log('❌ Phantom not detected, trying mobile connection...');
-                connectMobilePhantom();
-            }
-        }
-        
-        async function connectWithPhantomAPI() {
             try {
-                log('📡 Requesting connection from Phantom...');
+                // استفاده از deep link مستقیم Phantom
+                var phantomDeepLink = 'phantom://connect?app=' + encodeURIComponent(window.location.origin) + 
+                    '&callback=' + encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
                 
-                const response = await window.solana.connect();
-                const publicKey = response.publicKey.toString();
+                log('🔗 Phantom Deep Link: ' + phantomDeepLink);
                 
-                log('✅ Connected! Public Key: ' + publicKey);
+                // تلاش برای باز کردن deep link
+                window.location.href = phantomDeepLink;
                 
-                // ارسال آدرس به سرور
-                await saveWalletAddress(publicKey);
-                
-            } catch (error) {
-                log('❌ Phantom connection failed: ' + error.message);
-                updateStatus('❌ Connection failed: ' + error.message);
-                resetConnection();
-            }
-        }
-        
-        function connectMobilePhantom() {
-            try {
-                // برای موبایل - استفاده از deep link ساده
-                var deepLink = 'https://phantom.app/ul/browse/' + 
-                    encodeURIComponent(window.location.origin) + 
-                    '?connect=wallet&telegram_id=' + telegramId;
-                
-                log('🔗 Mobile deep link: ' + deepLink);
-                
-                // تلاش برای باز کردن Phantom
-                window.location.href = deepLink;
-                
-                // اگر بعد از 3 ثانیه هنوز اینجا هستیم، manual instruction بده
+                // fallback به صورت manual input بعد از 3 ثانیه
                 setTimeout(function() {
-                    updateStatus('📱 Please manually connect your wallet in Phantom app and return here');
-                    resetConnection();
-                    
-                    // شروع چک کردن اتصال
-                    startManualCheck();
+                    if (isConnecting) {
+                        log('⚠️ Deep link timeout, showing manual input');
+                        updateStatus('📱 Having trouble opening Phantom? Try manual input below');
+                        resetConnection();
+                        showManualInput();
+                    }
                 }, 3000);
                 
             } catch (error) {
-                log('❌ Mobile connection failed: ' + error.message);
-                updateStatus('❌ Error: ' + error.message);
+                log('❌ Deep link error: ' + error.message);
+                updateStatus('❌ Error opening Phantom app. Please try manual input.');
                 resetConnection();
+                showManualInput();
+            }
+        }
+        
+        function showManualInput() {
+            var manualInput = document.getElementById('manualInput');
+            var connectBtn = document.getElementById('connectBtn');
+            var manualBtn = document.getElementById('manualBtn');
+            
+            if (manualInput) {
+                manualInput.classList.add('show');
+            }
+            if (connectBtn) {
+                connectBtn.style.display = 'none';
+            }
+            if (manualBtn) {
+                manualBtn.style.display = 'none';
+            }
+            
+            updateStatus('📝 Enter your Phantom wallet address below');
+            
+            // focus روی input
+            setTimeout(function() {
+                var walletInput = document.getElementById('walletAddress');
+                if (walletInput) {
+                    walletInput.focus();
+                }
+            }, 200);
+        }
+        
+        function hideManualInput() {
+            var manualInput = document.getElementById('manualInput');
+            var connectBtn = document.getElementById('connectBtn');
+            var manualBtn = document.getElementById('manualBtn');
+            
+            if (manualInput) {
+                manualInput.classList.remove('show');
+            }
+            if (connectBtn) {
+                connectBtn.style.display = 'block';
+            }
+            if (manualBtn) {
+                manualBtn.style.display = 'block';
+            }
+            
+            // پاک کردن input
+            var walletInput = document.getElementById('walletAddress');
+            if (walletInput) {
+                walletInput.value = '';
+            }
+            
+            updateStatus('📱 Ready to connect to Phantom app');
+        }
+        
+        async function submitManualAddress() {
+            var walletInput = document.getElementById('walletAddress');
+            if (!walletInput) return;
+            
+            var address = walletInput.value.trim();
+            
+            if (!address) {
+                updateStatus('❌ Please enter a wallet address');
+                return;
+            }
+            
+            // بررسی فرمت ساده
+            if (address.length < 32 || address.length > 44) {
+                updateStatus('❌ Invalid wallet address length. Please check your address.');
+                return;
+            }
+            
+            log('📝 Manual address submitted: ' + address);
+            updateStatus('💾 Saving wallet address...', true);
+            
+            try {
+                await saveWalletAddress(address);
+            } catch (error) {
+                log('❌ Manual submit error: ' + error.message);
+                updateStatus('❌ Error saving address: ' + error.message);
             }
         }
         
@@ -215,8 +318,9 @@
                     })
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
                     log('✅ Wallet saved successfully');
                     
                     updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + publicKey + '</div>');
@@ -225,41 +329,18 @@
                         window.location.href = '/airdrop?telegram_id=' + telegramId;
                     }, 2000);
                 } else {
-                    throw new Error('Server error');
+                    throw new Error(data.error || 'Server error');
                 }
                 
             } catch (error) {
                 log('❌ Failed to save wallet: ' + error.message);
                 updateStatus('❌ Failed to save wallet: ' + error.message);
-                resetConnection();
+                
+                // نمایش manual input اگر مخفی بود
+                if (!document.getElementById('manualInput').classList.contains('show')) {
+                    showManualInput();
+                }
             }
-        }
-        
-        function startManualCheck() {
-            var checkInterval = setInterval(function() {
-                fetch('/api/wallet/status?telegram_id=' + telegramId + '&t=' + Date.now())
-                    .then(function(response) {
-                        return response.json();
-                    })
-                    .then(function(data) {
-                        if (data.connected && data.address) {
-                            clearInterval(checkInterval);
-                            updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
-                            
-                            setTimeout(function() {
-                                window.location.href = '/airdrop?telegram_id=' + telegramId;
-                            }, 2000);
-                        }
-                    })
-                    .catch(function(error) {
-                        log('❌ Check error: ' + error.message);
-                    });
-            }, 3000);
-            
-            // توقف چک کردن بعد از 60 ثانیه
-            setTimeout(function() {
-                clearInterval(checkInterval);
-            }, 60000);
         }
         
         function resetConnection() {
@@ -283,8 +364,12 @@
                     if (data && data.connected && data.address) {
                         updateStatus('✅ Wallet already connected!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
                         var connectBtn = document.getElementById('connectBtn');
+                        var manualBtn = document.getElementById('manualBtn');
                         if (connectBtn) {
                             connectBtn.textContent = '🔄 Change Wallet';
+                        }
+                        if (manualBtn) {
+                            manualBtn.textContent = '✏️ Change Address';
                         }
                     }
                 })
@@ -304,17 +389,16 @@
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            log('🔍 Checking for Phantom...');
-            
-            if (window.solana && window.solana.isPhantom) {
-                log('✅ Phantom browser extension detected');
-                updateStatus('📱 Phantom detected - Ready to connect');
-            } else {
-                log('⚠️ Phantom extension not detected - Mobile mode');
-                updateStatus('📱 Ready to connect to Phantom app');
-            }
+            updateStatus('📱 Ready to connect to Phantom app');
             
             checkExistingConnection();
+            
+            // Enter key listener برای manual input
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && document.getElementById('manualInput').classList.contains('show')) {
+                    submitManualAddress();
+                }
+            });
         }
         
         // Safe initialization
