@@ -28,10 +28,13 @@
             border: none;
             padding: 15px 30px;
             border-radius: 25px;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
             width: 100%;
             margin: 10px 0;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
         }
 
         .btn:hover {
@@ -57,7 +60,16 @@
 
         .install-phantom {
             background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-            margin-top: 10px;
+        }
+
+        .deeplink-phantom {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+
+        .option-text {
+            font-size: 14px;
+            margin: 20px 0;
+            color: #ddd;
         }
     </style>
 </head>
@@ -71,8 +83,18 @@
         </div>
         
         <div id="buttons" style="display: none;">
-            <button class="btn" id="connectBtn" onclick="connectPhantom()">🦄 Connect Phantom Wallet</button>
-            <button class="btn install-phantom" id="installBtn" onclick="installPhantom()" style="display: none;">📱 Install Phantom</button>
+            <!-- Browser Extension Option -->
+            <button class="btn" id="connectBtn" onclick="connectPhantom()">🦄 Connect Browser Extension</button>
+            
+            <div class="option-text">OR</div>
+            
+            <!-- Deep Link Option -->
+            <button class="btn deeplink-phantom" onclick="connectViaDeeplink()">📱 Connect via Phantom App</button>
+            
+            <div class="option-text">Don't have Phantom?</div>
+            
+            <!-- Install Option -->
+            <a href="https://phantom.app/download" target="_blank" class="btn install-phantom">📥 Download Phantom</a>
         </div>
         
         <div id="debug" class="debug" style="display: none;"></div>
@@ -94,9 +116,29 @@
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
 
-        function installPhantom() {
-            log('📱 Redirecting to Phantom installation...');
-            window.open('https://phantom.app/download', '_blank');
+        // Deep Link Connection (works without browser extension)
+        function connectViaDeeplink() {
+            log('📱 Using Phantom deep link...');
+            updateStatus('📱 Opening Phantom app...');
+            
+            var origin = window.location.origin;
+            var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
+            
+            // Phantom Universal Link برای اتصال
+            var phantomUrl = 'https://phantom.app/ul/v1/connect?' + 
+                'app_url=' + encodeURIComponent(origin) +
+                '&redirect_link=' + encodeURIComponent(callback) +
+                '&cluster=mainnet-beta';
+            
+            log('🔗 Deep link URL: ' + phantomUrl);
+            
+            // Try to open in Phantom app
+            window.location.href = phantomUrl;
+            
+            // Fallback: if app doesn't open, show instructions
+            setTimeout(function() {
+                updateStatus('📱 If Phantom app didn\'t open, please install it first or try the browser extension.');
+            }, 3000);
         }
 
         async function detectPhantom() {
@@ -116,11 +158,11 @@
                 return true;
             }
 
-            // Method 3: Wait for wallet to load (sometimes takes time)
+            // Method 3: Wait for wallet to load
             log('⏳ Waiting for wallet to load...');
             var attempts = 0;
-            while (attempts < 10) {
-                await new Promise(resolve => setTimeout(resolve, 100));
+            while (attempts < 5) {
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 if (window.solana && window.solana.isPhantom) {
                     log('✅ Phantom detected after waiting');
@@ -128,16 +170,10 @@
                     return true;
                 }
                 
-                if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) {
-                    log('✅ Phantom detected after waiting (phantom.solana)');
-                    phantom = window.phantom.solana;
-                    return true;
-                }
-                
                 attempts++;
             }
 
-            log('❌ Phantom not detected after 10 attempts');
+            log('❌ Phantom extension not detected');
             return false;
         }
 
@@ -146,20 +182,19 @@
             connectBtn.disabled = true;
             connectBtn.textContent = '🔄 Connecting...';
             
-            log('🦄 Starting Phantom connection...');
-            updateStatus('🦄 Connecting to Phantom...');
+            log('🦄 Starting Phantom extension connection...');
+            updateStatus('🦄 Connecting to Phantom extension...');
 
             try {
                 var isDetected = await detectPhantom();
                 
                 if (!isDetected) {
-                    throw new Error('Phantom wallet not found');
+                    throw new Error('Phantom extension not found');
                 }
 
                 log('🔗 Requesting connection...');
                 updateStatus('🔗 Please approve connection in Phantom...');
                 
-                // Request connection with options
                 var response = await phantom.connect({ onlyIfTrusted: false });
                 
                 if (!response.publicKey) {
@@ -170,7 +205,6 @@
                 log('✅ Connected! Public key: ' + publicKey.substring(0, 8) + '...' + publicKey.substring(publicKey.length - 8));
                 updateStatus('✅ Phantom connected successfully!');
 
-                // Send to server callback
                 var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
                     '&public_key=' + encodeURIComponent(publicKey);
 
@@ -180,19 +214,18 @@
                 }, 1500);
 
             } catch (error) {
-                log('❌ Connection failed: ' + error.message);
+                log('❌ Extension connection failed: ' + error.message);
                 
                 if (error.code === 4001) {
                     updateStatus('❌ Connection rejected by user');
                 } else if (error.message.includes('not found')) {
-                    updateStatus('❌ Phantom wallet not installed');
-                    document.getElementById('installBtn').style.display = 'block';
+                    updateStatus('💡 Extension not found. Try "Connect via Phantom App" instead.');
                 } else {
-                    updateStatus('❌ Connection error: ' + error.message);
+                    updateStatus('❌ Connection error. Try the Phantom app option.');
                 }
                 
                 connectBtn.disabled = false;
-                connectBtn.textContent = '🦄 Try Again';
+                connectBtn.textContent = '🦄 Try Extension Again';
             }
         }
 
@@ -211,27 +244,17 @@
             var isPhantomDetected = await detectPhantom();
             
             if (isPhantomDetected) {
-                updateStatus('✅ Phantom detected! Ready to connect.');
-                document.getElementById('buttons').style.display = 'block';
-                
-                // Auto-connect after 2 seconds if user doesn't click
-                setTimeout(function() {
-                    if (document.getElementById('connectBtn').textContent.includes('Connect')) {
-                        log('⚡ Auto-connecting to Phantom...');
-                        connectPhantom();
-                    }
-                }, 2000);
+                updateStatus('✅ Phantom extension detected! Choose connection method:');
             } else {
-                updateStatus('❌ Phantom wallet not found. Please install it first.');
-                document.getElementById('installBtn').style.display = 'block';
-                log('❌ Phantom not detected on page load');
+                updateStatus('💡 Choose how to connect your Phantom wallet:');
             }
+            
+            document.getElementById('buttons').style.display = 'block';
         }
 
         // Initialize when page loads
         window.addEventListener('load', init);
         
-        // Also try to initialize after DOM is ready (fallback)
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
