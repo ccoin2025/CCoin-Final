@@ -82,41 +82,6 @@
             font-size: 14px;
             line-height: 1.5;
         }
-        .waiting-state {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            margin: 20px 0;
-            display: none;
-        }
-        .waiting-state.show {
-            display: block;
-        }
-        .check-btn, .cancel-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 15px;
-            font-size: 14px;
-            cursor: pointer;
-            margin: 5px;
-            transition: all 0.3s ease;
-        }
-        .cancel-btn {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-        }
-        .check-btn:hover {
-            background: linear-gradient(135deg, #218838, #1ea085);
-        }
-        .cancel-btn:hover {
-            background: linear-gradient(135deg, #c82333, #bd2130);
-        }
-        .countdown {
-            font-size: 24px;
-            color: #fff;
-            margin: 10px 0;
-        }
     </style>
 </head>
 <body>
@@ -132,21 +97,6 @@
             🦄 Connect Phantom App
         </button>
         
-        <div id="waitingState" class="waiting-state">
-            <h3>⏳ Waiting for Phantom...</h3>
-            <div class="countdown" id="countdown">60</div>
-            <div class="instructions">
-                Please complete the connection in Phantom app and return here.
-                <br><br>
-                <strong>Steps:</strong><br>
-                1. Approve the connection in Phantom<br>
-                2. Return to this page<br>
-                3. Click "Check Connection" below
-            </div>
-            <button class="check-btn" onclick="checkConnection()">🔄 Check Connection</button>
-            <button class="cancel-btn" onclick="cancelConnection()">❌ Cancel</button>
-        </div>
-        
         <div class="instructions">
             <strong>Instructions:</strong><br>
             1. Make sure you have Phantom app installed<br>
@@ -161,9 +111,6 @@
     <script>
         var telegramId = '';
         var isConnecting = false;
-        var connectionCheckInterval = null;
-        var countdownInterval = null;
-        var countdownValue = 60;
         
         function log(msg) {
             console.log(msg);
@@ -187,166 +134,141 @@
             if (isConnecting) return;
             
             var connectBtn = document.getElementById('connectBtn');
-            var waitingState = document.getElementById('waitingState');
-            
-            if (!connectBtn || !waitingState) return;
+            if (!connectBtn) return;
             
             isConnecting = true;
             connectBtn.disabled = true;
-            connectBtn.textContent = '🔄 Opening Phantom...';
+            connectBtn.textContent = '🔄 Connecting...';
             
-            log('🚀 Starting Phantom app connection...');
-            updateStatus('📱 Opening Phantom app...', true);
+            log('🚀 Starting Phantom connection...');
+            updateStatus('📱 Connecting to Phantom...', true);
             
+            // بررسی وجود Phantom
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom detected in browser');
+                connectWithPhantomAPI();
+            } else {
+                log('❌ Phantom not detected, trying mobile connection...');
+                connectMobilePhantom();
+            }
+        }
+        
+        async function connectWithPhantomAPI() {
             try {
-                var baseUrl = window.location.origin;
-                var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
+                log('📡 Requesting connection from Phantom...');
                 
-                log('📍 Base URL: ' + baseUrl);
-                log('📍 Callback URL: ' + callbackUrl);
+                const response = await window.solana.connect();
+                const publicKey = response.publicKey.toString();
                 
-                // استفاده از روش browse بدون پارامترهای پیچیده
-                var connectUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(baseUrl) + 
-                    '?connect=true&telegram_id=' + telegramId;
+                log('✅ Connected! Public Key: ' + publicKey);
                 
-                log('🔗 Phantom Browse URL: ' + connectUrl);
-                
-                // باز کردن Phantom در تب جدید
-                var phantomWindow = window.open(connectUrl, '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
-                
-                // بررسی اینکه آیا popup باز شده یا block شده
-                if (!phantomWindow) {
-                    log('❌ Popup blocked, trying direct navigation');
-                    // اگر popup block شد، مستقیم navigate کن
-                    window.location.href = connectUrl;
-                } else {
-                    log('✅ Phantom popup opened');
-                    
-                    // نمایش waiting state
-                    setTimeout(function() {
-                        connectBtn.style.display = 'none';
-                        waitingState.classList.add('show');
-                        startCountdown();
-                        startAutoCheck();
-                    }, 1000);
-                    
-                    // بررسی بستن popup
-                    var checkClosed = setInterval(function() {
-                        if (phantomWindow.closed) {
-                            clearInterval(checkClosed);
-                            log('📱 Phantom popup closed');
-                            // بعد از بسته شدن popup، اتصال را چک کن
-                            setTimeout(checkConnectionSilent, 2000);
-                        }
-                    }, 1000);
-                }
+                // ارسال آدرس به سرور
+                await saveWalletAddress(publicKey);
                 
             } catch (error) {
-                log('❌ Error opening Phantom: ' + error.message);
+                log('❌ Phantom connection failed: ' + error.message);
+                updateStatus('❌ Connection failed: ' + error.message);
+                resetConnection();
+            }
+        }
+        
+        function connectMobilePhantom() {
+            try {
+                // برای موبایل - استفاده از deep link ساده
+                var deepLink = 'https://phantom.app/ul/browse/' + 
+                    encodeURIComponent(window.location.origin) + 
+                    '?connect=wallet&telegram_id=' + telegramId;
+                
+                log('🔗 Mobile deep link: ' + deepLink);
+                
+                // تلاش برای باز کردن Phantom
+                window.location.href = deepLink;
+                
+                // اگر بعد از 3 ثانیه هنوز اینجا هستیم، manual instruction بده
+                setTimeout(function() {
+                    updateStatus('📱 Please manually connect your wallet in Phantom app and return here');
+                    resetConnection();
+                    
+                    // شروع چک کردن اتصال
+                    startManualCheck();
+                }, 3000);
+                
+            } catch (error) {
+                log('❌ Mobile connection failed: ' + error.message);
                 updateStatus('❌ Error: ' + error.message);
                 resetConnection();
             }
         }
         
-        function startCountdown() {
-            countdownValue = 60;
-            var countdownElement = document.getElementById('countdown');
-            
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            
-            countdownInterval = setInterval(function() {
-                countdownValue--;
-                if (countdownElement) {
-                    countdownElement.textContent = countdownValue;
+        async function saveWalletAddress(publicKey) {
+            try {
+                log('💾 Saving wallet address to server...');
+                
+                const response = await fetch('/api/wallet/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: telegramId,
+                        wallet_address: publicKey
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Wallet saved successfully');
+                    
+                    updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + publicKey + '</div>');
+                    
+                    setTimeout(function() {
+                        window.location.href = '/airdrop?telegram_id=' + telegramId;
+                    }, 2000);
+                } else {
+                    throw new Error('Server error');
                 }
                 
-                if (countdownValue <= 0) {
-                    clearInterval(countdownInterval);
-                    updateStatus('⏰ Connection timed out. Please try again.');
-                    resetConnection();
-                }
-            }, 1000);
+            } catch (error) {
+                log('❌ Failed to save wallet: ' + error.message);
+                updateStatus('❌ Failed to save wallet: ' + error.message);
+                resetConnection();
+            }
         }
         
-        function startAutoCheck() {
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-            
-            connectionCheckInterval = setInterval(function() {
-                checkConnectionSilent();
+        function startManualCheck() {
+            var checkInterval = setInterval(function() {
+                fetch('/api/wallet/status?telegram_id=' + telegramId + '&t=' + Date.now())
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data.connected && data.address) {
+                            clearInterval(checkInterval);
+                            updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
+                            
+                            setTimeout(function() {
+                                window.location.href = '/airdrop?telegram_id=' + telegramId;
+                            }, 2000);
+                        }
+                    })
+                    .catch(function(error) {
+                        log('❌ Check error: ' + error.message);
+                    });
             }, 3000);
-        }
-        
-        function checkConnection() {
-            updateStatus('🔍 Checking connection...', true);
-            checkConnectionSilent();
-        }
-        
-        function checkConnectionSilent() {
-            fetch('/api/wallet/status?telegram_id=' + telegramId + '&t=' + Date.now())
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data.connected && data.address) {
-                        if (countdownInterval) {
-                            clearInterval(countdownInterval);
-                        }
-                        if (connectionCheckInterval) {
-                            clearInterval(connectionCheckInterval);
-                        }
-                        
-                        updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
-                        
-                        setTimeout(function() {
-                            window.location.href = '/airdrop?telegram_id=' + telegramId;
-                        }, 2000);
-                    } else {
-                        if (document.getElementById('waitingState') && document.getElementById('waitingState').classList.contains('show')) {
-                            // در حال انتظار - ادامه چک کردن
-                            log('Still waiting for connection...');
-                        } else {
-                            updateStatus('🔍 Connection not found yet. Please try again.');
-                        }
-                    }
-                })
-                .catch(function(error) {
-                    log('❌ Check connection error: ' + error.message);
-                });
-        }
-        
-        function cancelConnection() {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-            resetConnection();
+            
+            // توقف چک کردن بعد از 60 ثانیه
+            setTimeout(function() {
+                clearInterval(checkInterval);
+            }, 60000);
         }
         
         function resetConnection() {
             isConnecting = false;
             var connectBtn = document.getElementById('connectBtn');
-            var waitingState = document.getElementById('waitingState');
-            
             if (connectBtn) {
                 connectBtn.disabled = false;
                 connectBtn.textContent = '🦄 Connect Phantom App';
-                connectBtn.style.display = 'block';
             }
-            
-            if (waitingState) {
-                waitingState.classList.remove('show');
-            }
-            
-            updateStatus('📱 Ready to connect to Phantom app');
         }
         
         function checkExistingConnection() {
@@ -382,7 +304,15 @@
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            updateStatus('📱 Ready to connect to Phantom app');
+            log('🔍 Checking for Phantom...');
+            
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom browser extension detected');
+                updateStatus('📱 Phantom detected - Ready to connect');
+            } else {
+                log('⚠️ Phantom extension not detected - Mobile mode');
+                updateStatus('📱 Ready to connect to Phantom app');
+            }
             
             checkExistingConnection();
         }
@@ -394,24 +324,7 @@
             init();
         }
         
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', function() {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-        });
-        
-        // Check connection when page becomes visible again
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && isConnecting) {
-                setTimeout(checkConnectionSilent, 1000);
-            }
-        });
-        
-        log('🔍 Page loaded safely');
+        log('🔍 Page loaded');
     </script>
 </body>
 </html>
