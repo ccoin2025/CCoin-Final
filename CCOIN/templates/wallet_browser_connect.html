@@ -13,7 +13,6 @@
             padding: 50px 20px;
             min-height: 100vh;
         }
-        
         .container {
             max-width: 400px;
             margin: 0 auto;
@@ -21,7 +20,6 @@
             padding: 40px;
             border-radius: 20px;
         }
-        
         .btn {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
             color: white;
@@ -38,18 +36,15 @@
             font-weight: 600;
             transition: all 0.3s ease;
         }
-
         .btn:hover {
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
             transform: translateY(-2px);
         }
-
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
-        
         .debug {
             background: rgba(0, 0, 0, 0.3);
             padding: 15px;
@@ -61,14 +56,12 @@
             overflow-y: auto;
             font-family: monospace;
         }
-
         .status {
             margin: 20px 0;
             padding: 15px;
             border-radius: 10px;
             background: rgba(255, 255, 255, 0.1);
         }
-
         .loading {
             display: inline-block;
             width: 20px;
@@ -78,11 +71,9 @@
             border-top-color: #fff;
             animation: spin 1s ease-in-out infinite;
         }
-
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-
         .instructions {
             background: rgba(255, 255, 255, 0.05);
             padding: 15px;
@@ -105,7 +96,7 @@
         <button class="btn" id="connectBtn" onclick="connectToPhantom()">
             🦄 Connect Phantom App
         </button>
-
+        
         <div class="instructions">
             <strong>Instructions:</strong><br>
             1. Make sure you have Phantom app installed<br>
@@ -119,7 +110,7 @@
 
     <script>
         var telegramId = '';
-
+        
         function log(msg) {
             console.log(msg);
             var debug = document.getElementById('debug');
@@ -127,13 +118,13 @@
             debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
             debug.scrollTop = debug.scrollHeight;
         }
-
+        
         function updateStatus(msg, loading = false) {
             var status = document.getElementById('status');
             var content = loading ? '<div class="loading"></div> ' + msg : msg;
             status.innerHTML = '<p>' + content + '</p>';
         }
-
+        
         function connectToPhantom() {
             var connectBtn = document.getElementById('connectBtn');
             connectBtn.disabled = true;
@@ -143,31 +134,29 @@
             updateStatus('📱 Opening Phantom app...', true);
             
             try {
-                // ساخت URL های مختلف برای اتصال
                 var baseUrl = window.location.origin;
                 var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
                 
                 log('📍 Base URL: ' + baseUrl);
                 log('📍 Callback URL: ' + callbackUrl);
                 
-                // Method 1: Phantom Connect URL (رسمی)
-                var phantomConnectUrl = 'https://phantom.app/ul/v1/connect?' + 
-                    'dapp_encryption_public_key=' + encodeURIComponent('phantom_connect') +
-                    '&redirect_link=' + encodeURIComponent(callbackUrl) +
-                    '&app_url=' + encodeURIComponent(baseUrl);
+                // اول تلاش برای deep link مستقیم به Phantom app
+                var phantomDeepLink = 'phantom://v1/connect?' +
+                    'app_url=' + encodeURIComponent(baseUrl) +
+                    '&redirect_link=' + encodeURIComponent(callbackUrl);
                 
-                log('🔗 Phantom Connect URL: ' + phantomConnectUrl);
+                log('🔗 Phantom Deep Link: ' + phantomDeepLink);
                 
                 // تلاش برای باز کردن Phantom app
-                window.location.href = phantomConnectUrl;
+                window.location.href = phantomDeepLink;
                 
-                // اگر ۵ ثانیه بعد هنوز در همین صفحه هستیم، احتمالاً app باز نشده
+                // اگر 3 ثانیه بعد هنوز در همین صفحه هستیم، fallback استفاده کن
                 setTimeout(function() {
                     if (document.getElementById('connectBtn').disabled) {
-                        log('⚠️ App might not have opened, trying alternative...');
-                        tryAlternativeConnection();
+                        log('⚠️ Deep link failed, trying universal link...');
+                        tryUniversalLink();
                     }
-                }, 5000);
+                }, 3000);
                 
             } catch (error) {
                 log('❌ Error creating connection URL: ' + error.message);
@@ -176,43 +165,71 @@
                 connectBtn.textContent = '🦄 Try Again';
             }
         }
-
-        function tryAlternativeConnection() {
-            log('🔄 Trying alternative Phantom connection...');
+        
+        function tryUniversalLink() {
+            log('🔄 Trying Phantom universal link...');
             var baseUrl = window.location.origin;
             var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
             
-            // Method 2: Simple Deep Link
-            var simpleDeepLink = 'phantom://v1/connect?' + 
-                'redirect_link=' + encodeURIComponent(callbackUrl) +
-                '&app_url=' + encodeURIComponent(baseUrl);
+            // Universal link برای iOS و Android
+            var universalLink = 'https://phantom.app/ul/browse/' + 
+                encodeURIComponent(baseUrl + '/wallet/connect?telegram_id=' + telegramId) +
+                '?ref=' + encodeURIComponent(callbackUrl);
             
-            log('🔗 Alternative URL: ' + simpleDeepLink);
-            window.location.href = simpleDeepLink;
+            log('🔗 Universal Link: ' + universalLink);
+            window.location.href = universalLink;
             
-            // اگر باز هم کار نکرد، راهنمایی نشان بده
+            // fallback دوم - تلاش با پروتکل solana
             setTimeout(function() {
-                updateStatus('💡 If Phantom app didn\'t open, please make sure it\'s installed');
-                document.getElementById('connectBtn').disabled = false;
-                document.getElementById('connectBtn').textContent = '🦄 Try Again';
+                if (document.getElementById('connectBtn').disabled) {
+                    log('🔄 Trying Solana protocol...');
+                    trySolanaProtocol();
+                }
             }, 3000);
         }
-
+        
+        function trySolanaProtocol() {
+            var baseUrl = window.location.origin;
+            var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
+            
+            // استفاده از پروتکل solana
+            var solanaLink = 'solana:connect?' +
+                'redirect=' + encodeURIComponent(callbackUrl) +
+                '&app_url=' + encodeURIComponent(baseUrl);
+            
+            log('🔗 Solana Protocol: ' + solanaLink);
+            window.location.href = solanaLink;
+            
+            // نهایی fallback - راهنمایی کاربر
+            setTimeout(function() {
+                updateStatus('💡 Please install Phantom app and try again');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('connectBtn').textContent = '🦄 Try Again';
+                
+                // نمایش لینک دستی برای دانلود Phantom
+                var instructions = document.querySelector('.instructions');
+                instructions.innerHTML = '<strong>Phantom App Not Found:</strong><br>' +
+                    '1. <a href="https://phantom.app/download" target="_blank" style="color: #AB9FF2;">Download Phantom App</a><br>' +
+                    '2. Install and set up your wallet<br>' +
+                    '3. Return here and try connecting again';
+            }, 4000);
+        }
+        
         function init() {
             var params = new URLSearchParams(window.location.search);
             telegramId = params.get('telegram_id') || '';
-
+            
             if (!telegramId) {
                 updateStatus('❌ Error: No telegram ID found');
                 log('❌ No telegram_id parameter in URL');
                 return;
             }
-
+            
             log('✅ Telegram ID: ' + telegramId);
             log('📱 Ready to connect to Phantom app');
             updateStatus('📱 Ready to connect to Phantom app');
             
-            // Auto-connect بعد از ۲ ثانیه
+            // Auto-connect بعد از 2 ثانیه
             setTimeout(function() {
                 if (!document.getElementById('connectBtn').disabled) {
                     log('⚡ Auto-connecting to Phantom...');
@@ -220,7 +237,7 @@
                 }
             }, 2000);
         }
-
+        
         // Initialize
         window.addEventListener('load', init);
         
@@ -230,7 +247,7 @@
         } else {
             init();
         }
-
+        
         // Debug: نمایش اطلاعات صفحه
         log('🔍 Page loaded, URL: ' + window.location.href);
         log('🔍 User agent: ' + navigator.userAgent);
