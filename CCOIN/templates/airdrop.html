@@ -512,7 +512,7 @@
     <div id="phantom-modal" class="phantom-modal">
         <div class="phantom-modal-content">
             <h3>Connect Phantom Wallet</h3>
-            <p>To participate in the airdrop, you need to connect your Phantom wallet.</p>
+            <p>To participate in the airdrop, you need to connect your Phantom wallet. This will open in your browser.</p>
             <div class="phantom-modal-buttons">
                 <button class="phantom-modal-btn primary" onclick="connectPhantomWallet()">
                     Connect Phantom
@@ -645,11 +645,29 @@
             document.getElementById('phantom-modal').classList.remove('show');
         }
 
-        // اتصال به کیف پول Phantom
+        // اتصال به کیف پول Phantom - اصلاح شده برای Telegram Web App
         async function connectPhantomWallet() {
             try {
+                // بررسی اینکه آیا در محیط Telegram Web App هستیم
+                if (window.Telegram && window.Telegram.WebApp) {
+                    // در محیط Telegram، کاربر را به صفحه مخصوص browser redirect کنید
+                    const telegramId = '{{ request.session.telegram_id }}';
+                    if (telegramId) {
+                        showToast('Redirecting to browser for wallet connection...', 'info');
+                        setTimeout(() => {
+                            window.location.href = `/wallet/browser-connect?telegram_id=${telegramId}`;
+                        }, 1000);
+                        return;
+                    }
+                }
+
+                // برای محیط مرورگر معمولی
                 if (!window.solana || !window.solana.isPhantom) {
-                    showToast('Phantom wallet not found! Please install it.', 'error');
+                    // اگر Phantom نصب نیست، کاربر را به صفحه نصب هدایت کن
+                    showToast('Redirecting to install Phantom wallet...', 'info');
+                    setTimeout(() => {
+                        window.open('https://phantom.app/', '_blank');
+                    }, 1000);
                     return;
                 }
 
@@ -679,7 +697,17 @@
                 }
             } catch (error) {
                 console.error('Error connecting wallet:', error);
-                showToast('Failed to connect wallet!', 'error');
+                
+                // اگر خطا رخ داد، کاربر را به صفحه browser redirect کن
+                const telegramId = '{{ request.session.telegram_id }}';
+                if (telegramId && window.Telegram && window.Telegram.WebApp) {
+                    showToast('Redirecting to browser for wallet connection...', 'info');
+                    setTimeout(() => {
+                        window.location.href = `/wallet/browser-connect?telegram_id=${telegramId}`;
+                    }, 1000);
+                } else {
+                    showToast('Failed to connect wallet!', 'error');
+                }
             }
         }
 
