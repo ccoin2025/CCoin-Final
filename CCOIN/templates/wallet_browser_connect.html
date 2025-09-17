@@ -13,13 +13,15 @@
             padding: 50px 20px;
             min-height: 100vh;
         }
+        
         .container {
             max-width: 400px;
             margin: 0 auto;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             padding: 40px;
             border-radius: 20px;
         }
+        
         .btn {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
             color: white;
@@ -31,8 +33,19 @@
             width: 100%;
             margin: 10px 0;
         }
+
+        .btn:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         .debug {
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
             padding: 10px;
             border-radius: 10px;
             margin: 20px 0;
@@ -41,19 +54,25 @@
             max-height: 200px;
             overflow-y: auto;
         }
+
+        .install-phantom {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your real Phantom wallet to participate in CCoin airdrop</p>
+        <p>Connect your Phantom wallet to participate in CCoin airdrop</p>
         
         <div id="status">
             <p>⏳ Checking for Phantom wallet...</p>
         </div>
         
         <div id="buttons" style="display: none;">
-            <button class="btn" onclick="connectPhantom()">🦄 Connect Phantom Wallet</button>
+            <button class="btn" id="connectBtn" onclick="connectPhantom()">🦄 Connect Phantom Wallet</button>
+            <button class="btn install-phantom" id="installBtn" onclick="installPhantom()" style="display: none;">📱 Install Phantom</button>
         </div>
         
         <div id="debug" class="debug" style="display: none;"></div>
@@ -61,7 +80,8 @@
 
     <script>
         var telegramId = '';
-        
+        var phantom = null;
+
         function log(msg) {
             console.log(msg);
             var debug = document.getElementById('debug');
@@ -69,75 +89,154 @@
             debug.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
             debug.scrollTop = debug.scrollHeight;
         }
-        
+
         function updateStatus(msg) {
             document.getElementById('status').innerHTML = '<p>' + msg + '</p>';
         }
-        
-        async function connectPhantom() {
-            log('🦄 Starting real Phantom connection...');
-            updateStatus('🦄 Connecting to Phantom...');
+
+        function installPhantom() {
+            log('📱 Redirecting to Phantom installation...');
+            window.open('https://phantom.app/download', '_blank');
+        }
+
+        async function detectPhantom() {
+            log('🔍 Checking for Phantom wallet...');
             
-            try {
-                // Check if Phantom is available
-                if (typeof window.phantom !== 'undefined') {
-                    log('✅ Phantom detected in browser');
-                    
-                    // Connect to Phantom
-                    const response = await window.phantom.solana.connect();
-                    const publicKey = response.publicKey.toString();
-                    
-                    log('✅ Connected! Public key: ' + publicKey.substring(0, 8) + '...' + publicKey.substring(publicKey.length - 8));
-                    updateStatus('✅ Phantom connected successfully!');
-                    
-                    // Send to server
-                    var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
-                                     '&public_key=' + encodeURIComponent(publicKey);
-                    
-                    setTimeout(function() {
-                        window.location.href = callbackUrl;
-                    }, 1000);
-                    
-                } else {
-                    // No Phantom in browser, try deeplink
-                    log('⚠️ Phantom not in browser, trying deeplink...');
-                    updateStatus('🔗 Opening Phantom app...');
-                    
-                    var origin = window.location.origin;
-                    var callback = origin + '/wallet/callback?telegram_id=' + telegramId;
-                    
-                    var phantomUrl = 'https://phantom.app/ul/v1/connect?' +
-                                   'app_url=' + encodeURIComponent(origin) +
-                                   '&redirect_link=' + encodeURIComponent(callback) +
-                                   '&cluster=mainnet-beta';
-                    
-                    window.open(phantomUrl, '_blank');
+            // Method 1: Check window.solana (current standard)
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom detected via window.solana');
+                phantom = window.solana;
+                return true;
+            }
+
+            // Method 2: Check window.phantom (older method)
+            if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) {
+                log('✅ Phantom detected via window.phantom');
+                phantom = window.phantom.solana;
+                return true;
+            }
+
+            // Method 3: Wait for wallet to load (sometimes takes time)
+            log('⏳ Waiting for wallet to load...');
+            var attempts = 0;
+            while (attempts < 10) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                if (window.solana && window.solana.isPhantom) {
+                    log('✅ Phantom detected after waiting');
+                    phantom = window.solana;
+                    return true;
                 }
                 
+                if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) {
+                    log('✅ Phantom detected after waiting (phantom.solana)');
+                    phantom = window.phantom.solana;
+                    return true;
+                }
+                
+                attempts++;
+            }
+
+            log('❌ Phantom not detected after 10 attempts');
+            return false;
+        }
+
+        async function connectPhantom() {
+            var connectBtn = document.getElementById('connectBtn');
+            connectBtn.disabled = true;
+            connectBtn.textContent = '🔄 Connecting...';
+            
+            log('🦄 Starting Phantom connection...');
+            updateStatus('🦄 Connecting to Phantom...');
+
+            try {
+                var isDetected = await detectPhantom();
+                
+                if (!isDetected) {
+                    throw new Error('Phantom wallet not found');
+                }
+
+                log('🔗 Requesting connection...');
+                updateStatus('🔗 Please approve connection in Phantom...');
+                
+                // Request connection with options
+                var response = await phantom.connect({ onlyIfTrusted: false });
+                
+                if (!response.publicKey) {
+                    throw new Error('No public key received from Phantom');
+                }
+
+                var publicKey = response.publicKey.toString();
+                log('✅ Connected! Public key: ' + publicKey.substring(0, 8) + '...' + publicKey.substring(publicKey.length - 8));
+                updateStatus('✅ Phantom connected successfully!');
+
+                // Send to server callback
+                var callbackUrl = window.location.origin + '/wallet/callback?telegram_id=' + telegramId + 
+                    '&public_key=' + encodeURIComponent(publicKey);
+
+                log('🔄 Redirecting to callback...');
+                setTimeout(function() {
+                    window.location.href = callbackUrl;
+                }, 1500);
+
             } catch (error) {
-                log('❌ Phantom connection failed: ' + error.message);
-                updateStatus('❌ Failed to connect. Please install Phantom wallet.');
+                log('❌ Connection failed: ' + error.message);
+                
+                if (error.code === 4001) {
+                    updateStatus('❌ Connection rejected by user');
+                } else if (error.message.includes('not found')) {
+                    updateStatus('❌ Phantom wallet not installed');
+                    document.getElementById('installBtn').style.display = 'block';
+                } else {
+                    updateStatus('❌ Connection error: ' + error.message);
+                }
+                
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🦄 Try Again';
             }
         }
-        
-        function init() {
+
+        async function init() {
             var params = new URLSearchParams(window.location.search);
             telegramId = params.get('telegram_id') || '';
-            
+
             if (!telegramId) {
                 updateStatus('❌ Error: No telegram ID');
+                log('❌ No telegram_id parameter found');
                 return;
             }
-            
+
             log('✅ Telegram ID: ' + telegramId);
-            updateStatus('✅ Ready to connect to Phantom');
-            document.getElementById('buttons').style.display = 'block';
             
-            // Auto-connect after 2 seconds
-            setTimeout(connectPhantom, 2000);
+            var isPhantomDetected = await detectPhantom();
+            
+            if (isPhantomDetected) {
+                updateStatus('✅ Phantom detected! Ready to connect.');
+                document.getElementById('buttons').style.display = 'block';
+                
+                // Auto-connect after 2 seconds if user doesn't click
+                setTimeout(function() {
+                    if (document.getElementById('connectBtn').textContent.includes('Connect')) {
+                        log('⚡ Auto-connecting to Phantom...');
+                        connectPhantom();
+                    }
+                }, 2000);
+            } else {
+                updateStatus('❌ Phantom wallet not found. Please install it first.');
+                document.getElementById('installBtn').style.display = 'block';
+                log('❌ Phantom not detected on page load');
+            }
         }
+
+        // Initialize when page loads
+        window.addEventListener('load', init);
         
-        window.onload = init;
+        // Also try to initialize after DOM is ready (fallback)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
