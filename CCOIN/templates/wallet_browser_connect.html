@@ -205,13 +205,11 @@
                 log('📍 Base URL: ' + baseUrl);
                 log('📍 Callback URL: ' + callbackUrl);
                 
-                // حذف کلید ثابت و استفاده از روش ساده‌تر
-                var connectUrl = 'https://phantom.app/ul/v1/connect?' +
-                    'cluster=devnet&' +
-                    'app_url=' + encodeURIComponent(baseUrl) + '&' +
-                    'redirect_link=' + encodeURIComponent(callbackUrl);
+                // استفاده از روش browse بدون پارامترهای پیچیده
+                var connectUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(baseUrl) + 
+                    '?connect=true&telegram_id=' + telegramId;
                 
-                log('🔗 Phantom Connect URL: ' + connectUrl);
+                log('🔗 Phantom Browse URL: ' + connectUrl);
                 
                 // باز کردن Phantom در تب جدید
                 var phantomWindow = window.open(connectUrl, '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
