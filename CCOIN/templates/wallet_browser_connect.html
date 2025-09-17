@@ -205,52 +205,47 @@
                 log('📍 Base URL: ' + baseUrl);
                 log('📍 Callback URL: ' + callbackUrl);
                 
-                // استفاده از Universal Link به جای Deep Link برای جلوگیری از ERR_UNKNOWN_URL_SCHEME
-                var phantomUniversalLink = 'https://phantom.app/ul/browse/' + 
-                    encodeURIComponent(baseUrl) +
-                    '?ref=' + encodeURIComponent(callbackUrl);
+                // ساخت URL صحیح برای Phantom Connect
+                var connectUrl = 'https://phantom.app/ul/v1/connect?' +
+                    'dapp_encryption_public_key=44qRbj3hKqUMfDSVUgkA7QnGcQKNQmbTWcTVVqKJ4zbE&' +
+                    'cluster=devnet&' +
+                    'app_url=' + encodeURIComponent(baseUrl) + '&' +
+                    'redirect_link=' + encodeURIComponent(callbackUrl);
                 
-                log('🔗 Phantom Universal Link: ' + phantomUniversalLink);
+                log('🔗 Phantom Connect URL: ' + connectUrl);
                 
-                // تلاش برای باز کردن Phantom با safe method
-                var iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = phantomUniversalLink;
-                document.body.appendChild(iframe);
+                // باز کردن Phantom در تب جدید
+                var phantomWindow = window.open(connectUrl, '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
                 
-                // بعد از 2 ثانیه iframe را حذف کن
-                setTimeout(function() {
-                    if (iframe && iframe.parentNode) {
-                        iframe.parentNode.removeChild(iframe);
-                    }
-                }, 2000);
-                
-                // اگر iframe کار نکرد، از window.open استفاده کن
-                setTimeout(function() {
-                    try {
-                        var popup = window.open(phantomUniversalLink, '_blank');
-                        setTimeout(function() {
-                            if (popup) {
-                                popup.close();
-                            }
-                        }, 3000);
-                    } catch (popupError) {
-                        log('Popup blocked: ' + popupError.message);
-                        // Fallback: direct navigation
-                        window.location.href = phantomUniversalLink;
-                    }
-                }, 1000);
-                
-                // نمایش waiting state بعد از 2 ثانیه
-                setTimeout(function() {
-                    connectBtn.style.display = 'none';
-                    waitingState.classList.add('show');
-                    startCountdown();
-                    startAutoCheck();
-                }, 2000);
+                // بررسی اینکه آیا popup باز شده یا block شده
+                if (!phantomWindow) {
+                    log('❌ Popup blocked, trying direct navigation');
+                    // اگر popup block شد، مستقیم navigate کن
+                    window.location.href = connectUrl;
+                } else {
+                    log('✅ Phantom popup opened');
+                    
+                    // نمایش waiting state
+                    setTimeout(function() {
+                        connectBtn.style.display = 'none';
+                        waitingState.classList.add('show');
+                        startCountdown();
+                        startAutoCheck();
+                    }, 1000);
+                    
+                    // بررسی بستن popup
+                    var checkClosed = setInterval(function() {
+                        if (phantomWindow.closed) {
+                            clearInterval(checkClosed);
+                            log('📱 Phantom popup closed');
+                            // بعد از بسته شدن popup، اتصال را چک کن
+                            setTimeout(checkConnectionSilent, 2000);
+                        }
+                    }, 1000);
+                }
                 
             } catch (error) {
-                log('❌ Error creating connection URL: ' + error.message);
+                log('❌ Error opening Phantom: ' + error.message);
                 updateStatus('❌ Error: ' + error.message);
                 resetConnection();
             }
@@ -316,8 +311,9 @@
                             window.location.href = '/airdrop?telegram_id=' + telegramId;
                         }, 2000);
                     } else {
-                        if (document.getElementById('waitingState').classList.contains('show')) {
+                        if (document.getElementById('waitingState') && document.getElementById('waitingState').classList.contains('show')) {
                             // در حال انتظار - ادامه چک کردن
+                            log('Still waiting for connection...');
                         } else {
                             updateStatus('🔍 Connection not found yet. Please try again.');
                         }
