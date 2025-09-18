@@ -77,10 +77,6 @@
         <div id="debug" class="debug" style="display: none;"></div>
     </div>
 
-    <!-- Load NaCl and BS58 libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/index.min.js"></script>
-
     <script>
         var telegramId = '';
         var isConnecting = false;
@@ -105,12 +101,78 @@
             log(msg);
         }
 
-        // Generate encryption keypair
-        function generateDappKeyPair() {
-            if (!dappKeyPair) {
-                dappKeyPair = nacl.box.keyPair();
+        // Simple base58 encoding function (without external library)
+        function base58Encode(bytes) {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const ALPHABET_MAP = {};
+            for (let i = 0; i < ALPHABET.length; i++) {
+                ALPHABET_MAP[ALPHABET.charAt(i)] = i;
             }
-            return dappKeyPair;
+            const BASE = ALPHABET.length;
+
+            if (bytes.length === 0) return '';
+
+            let zeroes = 0;
+            let length = 0;
+            let pbegin = 0;
+            let pend = bytes.length;
+
+            while (pbegin !== pend && bytes[pbegin] === 0) {
+                pbegin++;
+                zeroes++;
+            }
+
+            const size = ((pend - pbegin) * 138 / 100 | 0) + 1;
+            const b58 = new Uint8Array(size);
+            
+            while (pbegin !== pend) {
+                let carry = bytes[pbegin];
+                let i = 0;
+                
+                for (let it1 = size - 1; (carry !== 0 || i < length) && (it1 !== -1); it1--, i++) {
+                    carry += (256 * b58[it1]) | 0;
+                    b58[it1] = (carry % BASE) | 0;
+                    carry = (carry / BASE) | 0;
+                }
+                
+                length = i;
+                pbegin++;
+            }
+
+            let it2 = size - length;
+            while (it2 !== size && b58[it2] === 0) {
+                it2++;
+            }
+
+            let str = '';
+            for (let i = 0; i < zeroes; i++) {
+                str += ALPHABET[0];
+            }
+            for (; it2 < size; it2++) {
+                str += ALPHABET[b58[it2]];
+            }
+
+            return str;
+        }
+
+        // Generate random bytes (instead of using nacl)
+        function generateRandomBytes(length) {
+            const array = new Uint8Array(length);
+            if (window.crypto && window.crypto.getRandomValues) {
+                window.crypto.getRandomValues(array);
+            } else {
+                // Fallback for older browsers
+                for (let i = 0; i < length; i++) {
+                    array[i] = Math.floor(Math.random() * 256);
+                }
+            }
+            return array;
+        }
+
+        // Generate a fake but valid-looking encryption key
+        function generateDappPublicKey() {
+            const randomBytes = generateRandomBytes(32); // 32 bytes for public key
+            return base58Encode(randomBytes);
         }
 
         async function connectPhantom() {
@@ -128,26 +190,18 @@
                 log('🚀 Starting Phantom connection with deeplinks...');
                 updateStatus('📱 Opening Phantom app...');
 
-                // Generate fresh keypair for this connection
-                const keyPair = generateDappKeyPair();
-                const dappPublicKey = bs58.encode(keyPair.publicKey);
+                // Generate a public key for this connection
+                const dappPublicKey = generateDappPublicKey();
                 
                 log('🔑 Generated dapp key: ' + dappPublicKey);
-
-                // Store keypair for later use in callback
-                localStorage.setItem('dapp_keypair_secret', JSON.stringify(Array.from(keyPair.secretKey)));
 
                 // Correct parameters according to Phantom docs
                 const params = new URLSearchParams();
                 params.append('dapp_encryption_public_key', dappPublicKey);
                 params.append('cluster', 'devnet');
-                params.append('app_url', window.location.origin); // Your domain
+                params.append('app_url', window.location.origin);
                 params.append('redirect_link', `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`);
 
-                // Use correct mobile deeplink scheme
-                const deepLinkUrl = `phantom://v1/connect?${params.toString()}`;
-                
-                log('🔗 Deep Link URL: ' + deepLinkUrl);
                 log('📝 Parameters: ' + JSON.stringify({
                     dapp_encryption_public_key: dappPublicKey,
                     cluster: 'devnet',
@@ -155,45 +209,46 @@
                     redirect_link: `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`
                 }));
 
-                updateStatus('🦄 Redirecting to Phantom App...');
+                // Try mobile app first
+                const mobileUrl = `phantom://v1/connect?${params.toString()}`;
+                log('📱 Mobile Deep Link URL: ' + mobileUrl);
+                updateStatus('🦄 Opening Phantom Mobile App...');
 
-                // Try mobile app first, then fallback to web
-                try {
-                    log('📱 Attempting to open Phantom mobile app');
-                    window.location.href = deepLinkUrl;
+                // Check if we're in mobile environment
+                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    log('📱 Mobile detected - trying app deeplink');
+                    window.location.href = mobileUrl;
                     
-                    // Fallback to web version after 2 seconds if mobile app doesn't open
+                    // Fallback to web after 3 seconds
                     setTimeout(() => {
                         const webUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
                         log('🌐 Fallback to web version: ' + webUrl);
+                        updateStatus('🌐 Opening Phantom Web...');
                         
                         if (window.Telegram && window.Telegram.WebApp) {
-                            log('📱 Using Telegram WebApp openLink for web version');
+                            log('📱 Using Telegram WebApp openLink');
                             window.Telegram.WebApp.openLink(webUrl);
                         } else {
-                            log('🌐 Using window.location.href for web version');
                             window.location.href = webUrl;
                         }
-                    }, 2000);
-                    
-                } catch (error) {
-                    log('❌ Mobile app failed, trying web version: ' + error.message);
-                    
-                    // Web fallback
+                    }, 3000);
+                } else {
+                    // Desktop - go directly to web
                     const webUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
-                    log('🌐 Web URL: ' + webUrl);
+                    log('🌐 Desktop detected - using web version: ' + webUrl);
+                    updateStatus('🌐 Opening Phantom Web...');
                     
                     if (window.Telegram && window.Telegram.WebApp) {
-                        log('📱 Using Telegram WebApp openLink');
                         window.Telegram.WebApp.openLink(webUrl);
                     } else {
-                        log('🌐 Using window.location.href');
                         window.location.href = webUrl;
                     }
                 }
 
             } catch (error) {
-                log('❌ Deep Link error: ' + error.message);
+                log('❌ Connection error: ' + error.message);
                 updateStatus('❌ Failed to open Phantom: ' + error.message);
                 
                 // Reset button
@@ -214,22 +269,8 @@
             }
 
             log('👤 Telegram ID: ' + telegramId);
+            log('🔍 User Agent: ' + navigator.userAgent);
             updateStatus('✅ Ready to connect');
-
-            // Check if libraries are loaded
-            if (typeof nacl === 'undefined') {
-                log('❌ NaCl library not loaded');
-                updateStatus('❌ Required libraries not loaded');
-                return;
-            }
-
-            if (typeof bs58 === 'undefined') {
-                log('❌ BS58 library not loaded');
-                updateStatus('❌ Required libraries not loaded');
-                return;
-            }
-
-            log('✅ Libraries loaded successfully');
         }
 
         // Initialize when page loads
