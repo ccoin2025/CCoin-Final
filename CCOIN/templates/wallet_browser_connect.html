@@ -56,35 +56,6 @@
             overflow-y: auto;
             font-family: monospace;
         }
-        .manual-input {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            margin: 20px 0;
-            display: none;
-        }
-        .manual-input.show {
-            display: block;
-        }
-        .manual-input input {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 14px;
-            margin: 10px 0;
-            font-family: monospace;
-            box-sizing: border-box;
-        }
-        .manual-input input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-        .manual-input input:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.2);
-        }
         .status {
             background: rgba(255, 255, 255, 0.05);
             padding: 15px;
@@ -104,22 +75,11 @@
         
         <div id="status" class="status" style="display: none;"></div>
         
-        <div id="manualInput" class="manual-input">
-            <h3>📝 Enter Your Phantom Wallet Address</h3>
-            <p>If automatic connection failed, copy your wallet address from Phantom app and paste it here:</p>
-            <input type="text" id="walletAddress" placeholder="Enter your Solana wallet address" />
-            <br>
-            <button class="btn" onclick="submitManualAddress()" style="background: linear-gradient(135deg, #28a745, #20c997);">
-                ✅ Connect Wallet
-            </button>
-        </div>
-        
         <div id="debug" class="debug" style="display: none;"></div>
     </div>
 
     <script>
         var telegramId = '';
-        var isPhantomDetected = false;
         
         function log(msg) {
             console.log(msg);
@@ -140,131 +100,36 @@
             log(msg);
         }
         
-        async function detectPhantom() {
-            try {
-                // تشخیص Phantom wallet
-                if (window.solana && window.solana.isPhantom) {
-                    isPhantomDetected = true;
-                    log('✅ Phantom wallet detected');
-                    return true;
-                } else {
-                    log('❌ Phantom wallet not detected');
-                    return false;
-                }
-            } catch (error) {
-                log('❌ Error detecting Phantom: ' + error.message);
-                return false;
-            }
-        }
-        
-        async function connectToPhantom() {
+        function connectToPhantom() {
             var connectBtn = document.getElementById('connectBtn');
-            var manualInput = document.getElementById('manualInput');
             
             if (!connectBtn) return;
             
             connectBtn.disabled = true;
-            connectBtn.textContent = '🔄 Connecting...';
-            updateStatus('🔍 Checking for Phantom wallet...');
+            connectBtn.textContent = '🔄 Opening Phantom...';
+            updateStatus('🚀 Opening Phantom app...');
             
-            // تشخیص Phantom
-            var phantomDetected = await detectPhantom();
-            
-            if (phantomDetected) {
-                try {
-                    updateStatus('🦄 Connecting to Phantom...');
-                    
-                    // درخواست اتصال
-                    const response = await window.solana.connect();
-                    const walletAddress = response.publicKey.toString();
-                    
-                    log('✅ Phantom connected: ' + walletAddress);
-                    updateStatus('✅ Phantom connected successfully!');
-                    
-                    // ارسال آدرس به سرور
-                    await saveWalletAddress(walletAddress);
-                    
-                } catch (error) {
-                    log('❌ Phantom connection failed: ' + error.message);
-                    updateStatus('❌ Phantom connection failed');
-                    showManualInput();
-                }
-            } else {
-                updateStatus('📱 Phantom not found - please install Phantom wallet');
-                showManualInput();
-            }
-        }
-        
-        function showManualInput() {
-            var connectBtn = document.getElementById('connectBtn');
-            var manualInput = document.getElementById('manualInput');
-            
-            connectBtn.disabled = false;
-            connectBtn.textContent = '🦄 Try Again';
-            manualInput.classList.add('show');
-            
-            // focus روی input
-            var walletInput = document.getElementById('walletAddress');
-            if (walletInput) {
-                walletInput.focus();
-            }
-        }
-        
-        async function saveWalletAddress(address) {
             try {
-                const response = await fetch('/api/wallet/connect', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        wallet_address: address
-                    })
-                });
+                var baseUrl = window.location.origin;
+                var redirectUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
                 
-                const data = await response.json();
+                // استفاده از deep link مناسب برای Phantom
+                var phantomUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(redirectUrl) + '?ref=ccoin';
                 
-                if (response.ok && data.success) {
-                    log('✅ Wallet saved successfully');
-                    updateStatus('✅ Wallet saved! Redirecting...');
-                    
-                    // هدایت به صفحه airdrop
-                    setTimeout(function() {
-                        window.location.href = '/airdrop?telegram_id=' + telegramId;
-                    }, 2000);
-                } else {
-                    log('❌ Error saving wallet: ' + (data.error || 'Server error'));
-                    updateStatus('❌ Failed to save wallet');
-                    showManualInput();
-                }
+                log('🔗 Opening Phantom URL: ' + phantomUrl);
+                updateStatus('📱 Redirecting to Phantom app...');
+                
+                // redirect به Phantom
+                window.location.href = phantomUrl;
                 
             } catch (error) {
-                log('❌ Failed to save wallet: ' + error.message);
-                updateStatus('❌ Failed to save wallet');
-                showManualInput();
+                log('❌ Error opening Phantom: ' + error.message);
+                updateStatus('❌ Failed to open Phantom app');
+                
+                // reset button
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🦄 Try Again';
             }
-        }
-        
-        async function submitManualAddress() {
-            var walletInput = document.getElementById('walletAddress');
-            if (!walletInput) return;
-            
-            var address = walletInput.value.trim();
-            
-            if (!address) {
-                updateStatus('❌ Please enter a wallet address');
-                return;
-            }
-            
-            // بررسی فرمت ساده
-            if (address.length < 32 || address.length > 44) {
-                updateStatus('❌ Invalid wallet address format');
-                return;
-            }
-            
-            updateStatus('💾 Saving wallet address...');
-            await saveWalletAddress(address);
         }
         
         function init() {
@@ -273,21 +138,13 @@
             
             if (!telegramId) {
                 log('❌ No telegram_id parameter in URL');
+                updateStatus('❌ Invalid request - missing telegram ID');
                 return;
             }
             
             log('✅ Telegram ID: ' + telegramId);
             log('📱 Ready to connect to Phantom wallet');
-            
-            // Enter key listener برای manual input
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Enter' && document.getElementById('manualInput').classList.contains('show')) {
-                    submitManualAddress();
-                }
-            });
-            
-            // تشخیص اولیه Phantom
-            setTimeout(detectPhantom, 1000);
+            updateStatus('✅ Ready to connect');
         }
         
         // Safe initialization
