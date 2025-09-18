@@ -7,18 +7,12 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: #1a1a1a;
             color: white;
             text-align: center;
             padding: 50px 20px;
             min-height: 100vh;
-        }
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
+            margin: 0;
         }
         .btn {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
@@ -28,13 +22,9 @@
             border-radius: 25px;
             font-size: 18px;
             cursor: pointer;
-            width: 100%;
-            margin: 15px 0;
-            text-decoration: none;
-            display: inline-block;
-            box-sizing: border-box;
             font-weight: 600;
             transition: all 0.3s ease;
+            margin: 20px 0;
         }
         .btn:hover {
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
@@ -46,124 +36,29 @@
             transform: none;
         }
         .debug {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.5);
             padding: 15px;
             border-radius: 10px;
-            margin: 20px 0;
+            margin: 20px auto;
             font-size: 12px;
             text-align: left;
             max-height: 300px;
             overflow-y: auto;
             font-family: monospace;
-        }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #ffffff30;
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .instructions {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .waiting-state {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            margin: 20px 0;
+            max-width: 600px;
             display: none;
-        }
-        .waiting-state.show {
-            display: block;
-        }
-        .check-btn, .cancel-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 15px;
-            font-size: 14px;
-            cursor: pointer;
-            margin: 5px;
-            transition: all 0.3s ease;
-        }
-        .cancel-btn {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-        }
-        .check-btn:hover {
-            background: linear-gradient(135deg, #218838, #1ea085);
-        }
-        .cancel-btn:hover {
-            background: linear-gradient(135deg, #c82333, #bd2130);
-        }
-        .countdown {
-            font-size: 24px;
-            color: #fff;
-            margin: 10px 0;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your Phantom app to participate in CCoin airdrop</p>
-        
-        <div id="status" class="status">
-            <p>📱 Ready to connect to Phantom app</p>
-        </div>
-        
-        <button class="btn" id="connectBtn" onclick="connectToPhantom()">
-            🦄 Connect Phantom App
-        </button>
-        
-        <div id="waitingState" class="waiting-state">
-            <h3>⏳ Waiting for Phantom...</h3>
-            <div class="countdown" id="countdown">60</div>
-            <div class="instructions">
-                Please complete the connection in Phantom app and return here.
-                <br><br>
-                <strong>Steps:</strong><br>
-                1. Approve the connection in Phantom<br>
-                2. Return to this page<br>
-                3. Click "Check Connection" below
-            </div>
-            <button class="check-btn" onclick="checkConnection()">🔄 Check Connection</button>
-            <button class="cancel-btn" onclick="cancelConnection()">❌ Cancel</button>
-        </div>
-        
-        <div class="instructions">
-            <strong>Instructions:</strong><br>
-            1. Make sure you have Phantom app installed<br>
-            2. Click the button above<br>
-            3. Approve connection in Phantom app<br>
-            4. You'll be redirected back automatically
-        </div>
-        
-        <div id="debug" class="debug" style="display: none;"></div>
-    </div>
+    <button class="btn" id="connectBtn" onclick="connectToPhantom()">
+        🦄 Connect Phantom App
+    </button>
+    
+    <div id="debug" class="debug"></div>
 
     <script>
         var telegramId = '';
-        var isConnecting = false;
-        var connectionCheckInterval = null;
-        var countdownInterval = null;
-        var countdownValue = 60;
         
         function log(msg) {
             console.log(msg);
@@ -175,176 +70,50 @@
             }
         }
         
-        function updateStatus(msg, loading = false) {
-            var status = document.getElementById('status');
-            if (status) {
-                var content = loading ? '<div class="loading"></div> ' + msg : msg;
-                status.innerHTML = '<p>' + content + '</p>';
-            }
-        }
-        
         function connectToPhantom() {
-            if (isConnecting) return;
-            
             var connectBtn = document.getElementById('connectBtn');
-            var waitingState = document.getElementById('waitingState');
+            if (!connectBtn) return;
             
-            if (!connectBtn || !waitingState) return;
-            
-            isConnecting = true;
             connectBtn.disabled = true;
             connectBtn.textContent = '🔄 Opening Phantom...';
             
             log('🚀 Starting Phantom app connection...');
-            updateStatus('📱 Opening Phantom app...', true);
             
             try {
                 var baseUrl = window.location.origin;
+                var callbackUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
                 
-                // استفاده از deep link ساده
-                var phantomUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(baseUrl + '/wallet/callback?telegram_id=' + telegramId);
+                // استفاده از deep link صحیح برای باز کردن اپ
+                var phantomAppUrl = 'phantom://browse/' + encodeURIComponent(callbackUrl);
                 
-                log('🔗 Phantom URL: ' + phantomUrl);
+                log('🔗 Phantom App URL: ' + phantomAppUrl);
                 
-                // redirect مستقیم به Phantom
-                window.location.href = phantomUrl;
+                // تلاش برای باز کردن اپ
+                var iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = phantomAppUrl;
+                document.body.appendChild(iframe);
                 
-                // نمایش waiting state بعد از کمی delay
+                // اگر deep link کار نکرد، fallback به URL مستقیم
                 setTimeout(function() {
-                    connectBtn.style.display = 'none';
-                    waitingState.classList.add('show');
-                    startCountdown();
-                    startAutoCheck();
-                }, 1000);
+                    document.body.removeChild(iframe);
+                    
+                    // تلاش مستقیم
+                    window.location.href = phantomAppUrl;
+                }, 500);
+                
+                // تایمر برای reset کردن دکمه
+                setTimeout(function() {
+                    connectBtn.disabled = false;
+                    connectBtn.textContent = '🦄 Connect Phantom App';
+                    log('⏰ Connection timeout - please try again');
+                }, 5000);
                 
             } catch (error) {
                 log('❌ Error opening Phantom: ' + error.message);
-                updateStatus('❌ Error: ' + error.message);
-                resetConnection();
-            }
-        }
-        
-        function startCountdown() {
-            countdownValue = 60;
-            var countdownElement = document.getElementById('countdown');
-            
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            
-            countdownInterval = setInterval(function() {
-                countdownValue--;
-                if (countdownElement) {
-                    countdownElement.textContent = countdownValue;
-                }
-                
-                if (countdownValue <= 0) {
-                    clearInterval(countdownInterval);
-                    updateStatus('⏰ Connection timed out. Please try again.');
-                    resetConnection();
-                }
-            }, 1000);
-        }
-        
-        function startAutoCheck() {
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-            
-            connectionCheckInterval = setInterval(function() {
-                checkConnectionSilent();
-            }, 3000);
-        }
-        
-        function checkConnection() {
-            updateStatus('🔍 Checking connection...', true);
-            checkConnectionSilent();
-        }
-        
-        function checkConnectionSilent() {
-            fetch('/api/wallet/status?telegram_id=' + telegramId + '&t=' + Date.now())
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data.connected && data.address) {
-                        if (countdownInterval) {
-                            clearInterval(countdownInterval);
-                        }
-                        if (connectionCheckInterval) {
-                            clearInterval(connectionCheckInterval);
-                        }
-                        
-                        updateStatus('✅ Wallet connected successfully!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
-                        
-                        setTimeout(function() {
-                            window.location.href = '/airdrop?telegram_id=' + telegramId;
-                        }, 2000);
-                    } else {
-                        if (document.getElementById('waitingState') && document.getElementById('waitingState').classList.contains('show')) {
-                            // در حال انتظار - ادامه چک کردن
-                            log('Still waiting for connection...');
-                        } else {
-                            updateStatus('🔍 Connection not found yet. Please try again.');
-                        }
-                    }
-                })
-                .catch(function(error) {
-                    log('❌ Check connection error: ' + error.message);
-                });
-        }
-        
-        function cancelConnection() {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-            resetConnection();
-        }
-        
-        function resetConnection() {
-            isConnecting = false;
-            var connectBtn = document.getElementById('connectBtn');
-            var waitingState = document.getElementById('waitingState');
-            
-            if (connectBtn) {
                 connectBtn.disabled = false;
                 connectBtn.textContent = '🦄 Connect Phantom App';
-                connectBtn.style.display = 'block';
             }
-            
-            if (waitingState) {
-                waitingState.classList.remove('show');
-            }
-            
-            updateStatus('📱 Ready to connect to Phantom app');
-        }
-        
-        function checkExistingConnection() {
-            fetch('/api/wallet/status?telegram_id=' + telegramId)
-                .then(function(response) {
-                    if (!response.ok) {
-                        return;
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data && data.connected && data.address) {
-                        updateStatus('✅ Wallet already connected!<br><div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 10px; word-break: break-all; font-family: monospace; font-size: 12px;">' + data.address + '</div>');
-                        var connectBtn = document.getElementById('connectBtn');
-                        if (connectBtn) {
-                            connectBtn.textContent = '🔄 Change Wallet';
-                        }
-                    }
-                })
-                .catch(function(error) {
-                    log('Error checking wallet status: ' + error.message);
-                });
         }
         
         function init() {
@@ -352,15 +121,12 @@
             telegramId = params.get('telegram_id') || '';
             
             if (!telegramId) {
-                updateStatus('❌ Error: No telegram ID found');
                 log('❌ No telegram_id parameter in URL');
                 return;
             }
             
             log('✅ Telegram ID: ' + telegramId);
-            updateStatus('📱 Ready to connect to Phantom app');
-            
-            checkExistingConnection();
+            log('📱 Ready to connect to Phantom app');
         }
         
         // Safe initialization
@@ -370,24 +136,7 @@
             init();
         }
         
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', function() {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-            }
-        });
-        
-        // Check connection when page becomes visible again
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && isConnecting) {
-                setTimeout(checkConnectionSilent, 1000);
-            }
-        });
-        
-        log('🔍 Page loaded safely');
+        log('🔍 Page loaded');
     </script>
 </body>
 </html>
