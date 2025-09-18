@@ -40,6 +40,17 @@
             background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
             transform: translateY(-2px);
         }
+        .debug {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-size: 12px;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -50,46 +61,96 @@
         <button class="btn" onclick="openInPhantom()">
             🦄 Open in Phantom App
         </button>
+        
+        <div id="debug" class="debug" style="display: none;"></div>
     </div>
 
     <script>
+        function log(msg) {
+            console.log(msg);
+            var debug = document.getElementById('debug');
+            if (debug) {
+                debug.style.display = 'block';
+                debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
+                debug.scrollTop = debug.scrollHeight;
+            }
+        }
+        
         function openInPhantom() {
+            log('🚀 Starting Phantom app connection...');
+            
             // URL فعلی با telegram_id
             var currentUrl = window.location.href;
+            log('📍 Current URL: ' + currentUrl);
             
             // اگر قبلاً در Phantom browser هستیم، مستقیم connect کن
             if (window.solana && window.solana.isPhantom) {
+                log('✅ Already in Phantom browser, connecting directly');
                 connectDirectly();
                 return;
             }
             
-            // اگر در mobile browser عادی هستیم، به Phantom redirect کن
-            var phantomBrowseUrl = 'https://phantom.app/ul/browse/' + 
-                                  encodeURIComponent(currentUrl) + 
-                                  '?ref=' + encodeURIComponent(window.location.origin);
+            // تلاش با deep link اول
+            var phantomAppUrl = 'phantom://ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
+            log('🔗 Trying Phantom deep link: ' + phantomAppUrl);
             
-            console.log('Redirecting to Phantom:', phantomBrowseUrl);
-            window.location.href = phantomBrowseUrl;
+            // ایجاد invisible iframe برای deep link
+            var iframe = document.createElement('iframe');
+            iframe.style.visibility = 'hidden';
+            iframe.style.width = '1px';
+            iframe.style.height = '1px';
+            iframe.src = phantomAppUrl;
+            document.body.appendChild(iframe);
+            
+            log('📱 Attempting to open Phantom app...');
+            
+            // پاک کردن iframe بعد از 2 ثانیه
+            setTimeout(function() {
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+                log('🧹 Cleaned up iframe');
+            }, 2000);
+            
+            // اگر deep link کار نکرد، fallback به universal link
+            setTimeout(function() {
+                log('⏰ Deep link timeout, trying universal link...');
+                var universalUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
+                log('🌐 Universal link: ' + universalUrl);
+                
+                // تلاش با window.open ابتدا
+                var phantomWindow = window.open(universalUrl, '_blank');
+                
+                if (!phantomWindow || phantomWindow.closed) {
+                    log('🔄 Window.open failed, using location.href');
+                    window.location.href = universalUrl;
+                } else {
+                    log('✅ Window opened successfully');
+                }
+            }, 1500);
         }
         
         async function connectDirectly() {
             try {
-                console.log('Inside Phantom browser, connecting wallet...');
+                log('🔌 Inside Phantom browser, connecting wallet...');
                 
                 // اتصال به wallet
                 const response = await window.solana.connect();
                 const walletAddress = response.publicKey.toString();
                 
-                console.log('Wallet connected:', walletAddress);
+                log('✅ Wallet connected: ' + walletAddress);
                 
                 // ارسال آدرس به سرور
                 var params = new URLSearchParams(window.location.search);
                 var telegramId = params.get('telegram_id');
                 
                 if (!telegramId) {
+                    log('❌ Error: Missing telegram ID');
                     alert('Error: Missing telegram ID');
                     return;
                 }
+                
+                log('📤 Sending wallet address to server...');
                 
                 const apiResponse = await fetch('/api/wallet/connect', {
                     method: 'POST',
@@ -105,14 +166,16 @@
                 const data = await apiResponse.json();
                 
                 if (apiResponse.ok && data.success) {
-                    console.log('Wallet saved successfully');
+                    log('✅ Wallet saved successfully, redirecting to airdrop...');
                     // هدایت به صفحه airdrop
                     window.location.href = '/airdrop?telegram_id=' + telegramId;
                 } else {
+                    log('❌ Error saving wallet: ' + (data.detail || 'Server error'));
                     alert('Error saving wallet: ' + (data.detail || 'Server error'));
                 }
                 
             } catch (error) {
+                log('❌ Error connecting wallet: ' + error.message);
                 console.error('Error connecting wallet:', error);
                 alert('Failed to connect wallet: ' + error.message);
             }
@@ -120,13 +183,22 @@
         
         // چک کن اگر قبلاً در Phantom browser هستیم
         window.addEventListener('load', function() {
+            log('🔍 Page loaded, checking Phantom browser...');
+            
             if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom browser detected');
                 // نمایش متن متفاوت
                 document.querySelector('h1').textContent = '🦄 Phantom Wallet Detected';
                 document.querySelector('p').textContent = 'Great! You are in Phantom browser. Click to connect your wallet.';
                 document.querySelector('.btn').textContent = '🔗 Connect Wallet';
                 document.querySelector('.btn').onclick = connectDirectly;
+            } else {
+                log('📱 Regular browser detected, will redirect to Phantom app');
             }
+            
+            var params = new URLSearchParams(window.location.search);
+            var telegramId = params.get('telegram_id');
+            log('👤 Telegram ID: ' + (telegramId || 'Not found'));
         });
     </script>
 </body>
