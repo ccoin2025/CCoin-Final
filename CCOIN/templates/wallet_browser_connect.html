@@ -16,7 +16,7 @@
         .container {
             max-width: 400px;
             margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255,255,255,0.1);
             padding: 40px;
             border-radius: 20px;
         }
@@ -45,7 +45,7 @@
             cursor: not-allowed;
         }
         .debug {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0,0,0,0.3);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
@@ -56,7 +56,7 @@
             font-family: monospace;
         }
         .status {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255,255,255,0.05);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
@@ -77,10 +77,15 @@
         <div id="debug" class="debug" style="display: none;"></div>
     </div>
 
+    <!-- Load NaCl and BS58 libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/index.min.js"></script>
+
     <script>
         var telegramId = '';
         var isConnecting = false;
-        
+        var dappKeyPair = null;
+
         function log(msg) {
             console.log(msg);
             var debug = document.getElementById('debug');
@@ -90,7 +95,7 @@
                 debug.scrollTop = debug.scrollHeight;
             }
         }
-        
+
         function updateStatus(msg) {
             var status = document.getElementById('status');
             if (status) {
@@ -99,60 +104,94 @@
             }
             log(msg);
         }
-        
-        // استفاده از کلید معتبر مطابق کد قدیمی
-        function getValidDappKey() {
-            return "EZpYThFwJV2C9ACVG4xnxPZHdDUqiLFcYDZPy8YX6ysN";
+
+        // Generate encryption keypair
+        function generateDappKeyPair() {
+            if (!dappKeyPair) {
+                dappKeyPair = nacl.box.keyPair();
+            }
+            return dappKeyPair;
         }
-        
+
         async function connectPhantom() {
             if (isConnecting) {
                 log('⏳ Already connecting, please wait...');
                 return;
             }
-            
+
             isConnecting = true;
             var connectBtn = document.getElementById('connectBtn');
             connectBtn.disabled = true;
             connectBtn.textContent = '🔄 Opening Phantom...';
-            
+
             try {
-                log('🚀 Starting Phantom connection with Connect API...');
+                log('🚀 Starting Phantom connection with deeplinks...');
                 updateStatus('📱 Opening Phantom app...');
+
+                // Generate fresh keypair for this connection
+                const keyPair = generateDappKeyPair();
+                const dappPublicKey = bs58.encode(keyPair.publicKey);
                 
-                // استفاده از کلید معتبر و تست شده
-                const dappPublicKey = getValidDappKey();
-                log('🔑 Using validated dapp key: ' + dappPublicKey);
-                
-                // پارامترهای Deep Link - دقیقاً مطابق مستندات رسمی
+                log('🔑 Generated dapp key: ' + dappPublicKey);
+
+                // Store keypair for later use in callback
+                localStorage.setItem('dapp_keypair_secret', JSON.stringify(Array.from(keyPair.secretKey)));
+
+                // Correct parameters according to Phantom docs
                 const params = new URLSearchParams();
                 params.append('dapp_encryption_public_key', dappPublicKey);
                 params.append('cluster', 'devnet');
-                params.append('app_url', 'https://phantom.app');
+                params.append('app_url', window.location.origin); // Your domain
                 params.append('redirect_link', `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`);
+
+                // Use correct mobile deeplink scheme
+                const deepLinkUrl = `phantom://v1/connect?${params.toString()}`;
                 
-                const deepLinkUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
                 log('🔗 Deep Link URL: ' + deepLinkUrl);
-                
-                // تست پارامترها
                 log('📝 Parameters: ' + JSON.stringify({
                     dapp_encryption_public_key: dappPublicKey,
                     cluster: 'devnet',
-                    app_url: 'https://phantom.app',
+                    app_url: window.location.origin,
                     redirect_link: `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`
                 }));
-                
-                updateStatus('🦄 Redirecting to Phantom...');
-                
-                // هدایت به Phantom
-                if (window.Telegram && window.Telegram.WebApp) {
-                    log('📱 Using Telegram WebApp openLink');
-                    window.Telegram.WebApp.openLink(deepLinkUrl);
-                } else {
-                    log('🌐 Using window.location.href');
+
+                updateStatus('🦄 Redirecting to Phantom App...');
+
+                // Try mobile app first, then fallback to web
+                try {
+                    log('📱 Attempting to open Phantom mobile app');
                     window.location.href = deepLinkUrl;
+                    
+                    // Fallback to web version after 2 seconds if mobile app doesn't open
+                    setTimeout(() => {
+                        const webUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
+                        log('🌐 Fallback to web version: ' + webUrl);
+                        
+                        if (window.Telegram && window.Telegram.WebApp) {
+                            log('📱 Using Telegram WebApp openLink for web version');
+                            window.Telegram.WebApp.openLink(webUrl);
+                        } else {
+                            log('🌐 Using window.location.href for web version');
+                            window.location.href = webUrl;
+                        }
+                    }, 2000);
+                    
+                } catch (error) {
+                    log('❌ Mobile app failed, trying web version: ' + error.message);
+                    
+                    // Web fallback
+                    const webUrl = `https://phantom.app/ul/v1/connect?${params.toString()}`;
+                    log('🌐 Web URL: ' + webUrl);
+                    
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        log('📱 Using Telegram WebApp openLink');
+                        window.Telegram.WebApp.openLink(webUrl);
+                    } else {
+                        log('🌐 Using window.location.href');
+                        window.location.href = webUrl;
+                    }
                 }
-                
+
             } catch (error) {
                 log('❌ Deep Link error: ' + error.message);
                 updateStatus('❌ Failed to open Phantom: ' + error.message);
@@ -163,29 +202,38 @@
                 isConnecting = false;
             }
         }
-        
+
         function init() {
             var params = new URLSearchParams(window.location.search);
             telegramId = params.get('telegram_id') || '';
-            
+
             if (!telegramId) {
                 log('❌ No telegram_id parameter in URL');
                 updateStatus('❌ Invalid request - missing telegram ID');
                 return;
             }
-            
+
             log('👤 Telegram ID: ' + telegramId);
             updateStatus('✅ Ready to connect');
-            
-            // چک اگر Phantom browser است
-            if (window.solana && window.solana.isPhantom) {
-                log('⚠️ Already in Phantom browser - this should not happen with Connect API');
+
+            // Check if libraries are loaded
+            if (typeof nacl === 'undefined') {
+                log('❌ NaCl library not loaded');
+                updateStatus('❌ Required libraries not loaded');
+                return;
             }
+
+            if (typeof bs58 === 'undefined') {
+                log('❌ BS58 library not loaded');
+                updateStatus('❌ Required libraries not loaded');
+                return;
+            }
+
+            log('✅ Libraries loaded successfully');
         }
-        
+
         // Initialize when page loads
         window.addEventListener('load', init);
-        
         log('🔍 Page loaded');
     </script>
 </body>
