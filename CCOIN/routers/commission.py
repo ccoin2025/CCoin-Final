@@ -9,15 +9,15 @@ from datetime import datetime
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET
-from solana.publickey import PublicKey  # Added for Solana Pay
-from solana.keypair import Keypair
-from solana_pay import encodeURL, BigNumber  # Assume installed or import
+from solders.pubkey import Pubkey  # اصلاح import برای Solana
+from solders.keypair import Keypair  # اصلاح import برای Keypair
+from solana_pay import encode_url, BigNumber  # برای Solana Pay (نیاز به نصب: pip install solana-pay)
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-@router.get("/pay", response_class=JSONResponse)  # Changed to JSON for JS integration
+@router.get("/pay", response_class=JSONResponse)
 @limiter.limit("10/minute")
 async def commission_payment_page(
     request: Request, 
@@ -45,14 +45,14 @@ async def commission_payment_page(
         raise HTTPException(status_code=400, detail="Wallet not connected")
     
     # Create Solana Pay URL
-    recipient = PublicKey(ADMIN_WALLET)
+    recipient = Pubkey.from_string(ADMIN_WALLET)  # استفاده از Pubkey به جای PublicKey
     amount = BigNumber(COMMISSION_AMOUNT)
     reference = Keypair().public_key
     label = 'CCoin Commission'
     message = 'Payment for airdrop'
     memo = f'User: {telegram_id}'
     
-    pay_url = encodeURL({
+    pay_url = encode_url({
         'recipient': recipient,
         'amount': amount,
         'reference': reference,
@@ -64,7 +64,7 @@ async def commission_payment_page(
     print(f"Generated Solana Pay URL for user: {telegram_id}")
     
     return {
-        "pay_url": pay_url,
+        "pay_url": str(pay_url),  # تبدیل به string برای JSON
         "reference": str(reference),
         "amount": COMMISSION_AMOUNT,
         "recipient": ADMIN_WALLET
@@ -159,10 +159,12 @@ async def confirm_commission_payment(
         
         # Confirm with reference (Solana Pay)
         if reference:
+            from solana.rpc.api import Client
             from solana.rpc.commitment import Confirmed
+            solana_client = Client(SOLANA_RPC)
             sigs = solana_client.find_reference(Pubkey.from_string(reference), commitment=Confirmed)
             if sigs.value:
-                signature = sigs.value[0].signature  # Override if needed
+                signature = str(sigs.value[0].signature)  # Override if needed
         
         # به‌روزرسانی وضعیت کاربر
         user.commission_paid = True
@@ -215,9 +217,7 @@ async def commission_webhook(
         body = await request.json()
         print(f"Commission webhook received: {body}")
         
-        # پردازش webhook data
-        # این قسمت بسته به سرویس ارائه‌دهنده پرداخت متفاوت است
-        
+        # پردازش webhook data (بسته به سرویس)
         return {
             "success": True,
             "message": "Webhook processed successfully"
@@ -253,7 +253,7 @@ def log_commission_transaction(telegram_id: str, signature: str, amount: float):
     }
     print(f"Commission transaction log: {log_entry}")
     
-    # می‌توانید این لاگ‌ها را در فایل یا دیتابیس ذخیره کنید (e.g., to file)
+    # ذخیره لاگ در فایل
     with open('commission_logs.txt', 'a') as f:
         f.write(str(log_entry) + '\n')
     
