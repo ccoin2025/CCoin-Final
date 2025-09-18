@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Commission Callback</title>
     <style>
-        /* استایل‌های موجود */
+        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; }
+        .container { max-width: 400px; margin: 0 auto; background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; }
+        .btn { background: linear-gradient(135deg, #AB9FF2, #7B68EE); color: white; border: none; padding: 20px 30px; border-radius: 25px; font-size: 18px; cursor: pointer; width: 100%; margin: 15px 0; text-decoration: none; display: inline-block; box-sizing: border-box; font-weight: 600; transition: all 0.3s ease; }
+        .btn:hover { background: linear-gradient(135deg, #9A8CF1, #6A5ACD); transform: translateY(-2px); }
     </style>
 </head>
 <body>
@@ -14,26 +17,47 @@
             <h1>💰 Payment Successful!</h1>
             <p>Your commission payment has been confirmed. You're now eligible for the airdrop!</p>
             {% if signature %}
-            <p>Transaction Signature: <a href="https://solscan.io/tx/{{ signature }}" target="_blank">{{ signature }}</a></p>
+            <p>Transaction Signature: <a href="https://solscan.io/tx/{{ signature }}" target="_blank" style="color: #AB9FF2;">{{ signature }}</a></p>
             {% endif %}
         {% else %}
             <h1>❌ Payment Failed</h1>
             <p>{{ error or "Commission payment was not completed. Please try again." }}</p>
         {% endif %}
         
-        <button class="btn" onclick="returnToAirdrop()">Return to Airdrop</button>
+        <button class="btn" onclick="returnToAirdrop()">
+            Return to Airdrop
+        </button>
         
         <p>Returning to airdrop...</p>
     </div>
 
     <script>
+        async function confirmOnChain() {
+            var params = new URLSearchParams(window.location.search);
+            var signature = params.get('signature');
+            var telegramId = params.get('telegram_id');
+            
+            if (signature) {
+                const res = await fetch('/confirm_commission', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({signature: signature, telegram_id: telegramId})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    console.log('Confirmed on-chain');
+                }
+            }
+        }
+        
         function returnToAirdrop() {
-            const params = new URLSearchParams(window.location.search);
-            const telegramId = params.get('telegram_id');
+            var params = new URLSearchParams(window.location.search);
+            var telegramId = params.get('telegram_id');
             window.location.href = `/airdrop?telegram_id=${telegramId}`;
         }
         
         setTimeout(returnToAirdrop, 5000);
+        confirmOnChain(); // Poll for confirmation
     </script>
 </body>
 </html>
