@@ -6,14 +6,12 @@
     <title>Commission Payment</title>
     <style>
         body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; }
-        .container { max-width: 400px; margin: 0 auto; background: rgba(255, 255, 0.1); padding: 40px; border-radius: 20px; }
+        .container { max-width: 400px; margin: 0 auto; background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; }
         .btn { background: linear-gradient(135deg, #AB9FF2, #7B68EE); color: white; border: none; padding: 20px 30px; border-radius: 25px; font-size: 18px; cursor: pointer; width: 100%; margin: 15px 0; text-decoration: none; display: inline-block; box-sizing: border-box; font-weight: 600; transition: all 0.3s ease; }
         .btn:hover { background: linear-gradient(135deg, #9A8CF1, #6A5ACD); transform: translateY(-2px); }
         .debug { background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 12px; text-align: left; max-height: 300px; overflow-y: auto; font-family: monospace; }
     </style>
     <script src="https://unpkg.com/@solana/web3.js@1.95.0/dist/index.iife.js"></script>
-    <script src="https://unpkg.com/@solana/pay@0.0.3/dist/index.iife.js"></script>
-    <script src="https://unpkg.com/big-number@2.0.0/dist/big-number.js"></script> <!-- For BigNumber -->
 </head>
 <body>
     <div class="container">
@@ -38,28 +36,40 @@
         }
         
         async function initPayment() {
-            log('Starting Solana Pay...');
+            log('Starting payment...');
             
             var params = new URLSearchParams(window.location.search);
             var telegramId = params.get('telegram_id');
-            var recipient = 'YOUR_ADMIN_WALLET_PUBKEY'; // From config
-            var amount = new BigNumber(0.01);
-            var reference = solanaWeb3.Keypair.generate().publicKey; // Unique reference
-            var label = 'CCoin Commission';
-            var message = 'Payment for airdrop';
+            if (!telegramId) {
+                log('Error: Missing telegram_id');
+                alert('Error: Missing telegram ID');
+                return;
+            }
             
-            var payUrl = solanaPay.encodeURL({
-                recipient: new solanaWeb3.PublicKey(recipient),
-                amount,
-                reference,
-                label,
-                message
-            });
-            
-            var deeplink = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(JSON.stringify({url: payUrl}))}&redirect_link=${encodeURIComponent(window.location.origin + '/commission/callback?telegram_id=' + telegramId)}&cluster=mainnet-beta`;
-            log('Deeplink: ' + deeplink);
-            
-            window.location.href = deeplink;
+            try {
+                // دریافت URL پرداخت از endpoint
+                const response = await fetch(`/commission/pay?telegram_id=${telegramId}`);
+                const data = await response.json();
+                
+                if (!data.success && data.error) {
+                    log('Error: ' + data.error);
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                const payUrl = data.pay_url;
+                const redirectUrl = encodeURIComponent(window.location.origin + '/commission/callback?telegram_id=' + telegramId);
+                
+                // ساخت deeplink برای Phantom
+                const deeplink = `https://phantom.app/ul/v1/pay?params=${encodeURIComponent(payUrl)}&redirect_link=${redirectUrl}&cluster=mainnet-beta`;
+                log('Deeplink: ' + deeplink);
+                
+                // هدایت به Phantom
+                window.location.href = deeplink;
+            } catch (error) {
+                log('Error initiating payment: ' + error.message);
+                alert('Failed to initiate payment: ' + error.message);
+            }
         }
         
         function returnToApp() {
