@@ -113,14 +113,40 @@
                 var baseUrl = window.location.origin;
                 var redirectUrl = baseUrl + '/wallet/callback?telegram_id=' + telegramId;
                 
-                // استفاده از deep link مناسب برای Phantom
-                var phantomUrl = 'https://phantom.app/ul/browse/' + encodeURIComponent(redirectUrl) + '?ref=ccoin';
+                // استفاده از deep link صحیح برای Phantom app
+                var phantomAppUrl = 'phantom://browse/' + encodeURIComponent(redirectUrl);
                 
-                log('🔗 Opening Phantom URL: ' + phantomUrl);
-                updateStatus('📱 Redirecting to Phantom app...');
+                log('🔗 Phantom App Deep Link: ' + phantomAppUrl);
+                updateStatus('📱 Attempting to open Phantom app...');
                 
-                // redirect به Phantom
-                window.location.href = phantomUrl;
+                // ایجاد invisible iframe برای deep link
+                var iframe = document.createElement('iframe');
+                iframe.style.visibility = 'hidden';
+                iframe.style.width = '1px';
+                iframe.style.height = '1px';
+                iframe.src = phantomAppUrl;
+                document.body.appendChild(iframe);
+                
+                // پاک کردن iframe بعد از 2 ثانیه
+                setTimeout(function() {
+                    if (iframe.parentNode) {
+                        iframe.parentNode.removeChild(iframe);
+                    }
+                }, 2000);
+                
+                // اگر deep link کار نکرد، به روش مستقیم
+                setTimeout(function() {
+                    try {
+                        window.location.href = phantomAppUrl;
+                    } catch (e) {
+                        log('❌ Deep link failed: ' + e.message);
+                        updateStatus('❌ Please open Phantom app manually');
+                        
+                        // reset button
+                        connectBtn.disabled = false;
+                        connectBtn.textContent = '🦄 Try Again';
+                    }
+                }, 1000);
                 
             } catch (error) {
                 log('❌ Error opening Phantom: ' + error.message);
