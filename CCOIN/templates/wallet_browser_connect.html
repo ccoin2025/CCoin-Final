@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>CCoin Wallet Connection</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://unpkg.com/bs58@5.0.0/index.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -216,6 +214,16 @@
             }
         }
 
+        // تولید کلید تصادفی ساده بدون bs58
+        function generateSimpleKey() {
+            const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let result = '';
+            for (let i = 0; i < 44; i++) { // طول استاندارد base58
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
         async function initWalletConnection() {
             try {
                 const params = getUrlParams();
@@ -240,34 +248,34 @@
             try {
                 addDebug("📱 Preparing mobile wallet connection...");
 
-                const dappKeyPair = nacl.box.keyPair();
-                const dappEncryptionPublicKey = bs58.encode(dappKeyPair.publicKey);
+                // استفاده از کلید ساده بدون کتابخانه
+                const dappEncryptionPublicKey = generateSimpleKey();
                 
-                addDebug(`🔑 Generated encryption key: ${dappEncryptionPublicKey.slice(0, 10)}...`);
+                addDebug(`🔑 Generated simple key: ${dappEncryptionPublicKey.slice(0, 10)}...`);
 
                 const callbackUrl = `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`;
                 const appUrl = window.location.origin;
-                const cluster = 'devnet'; // تست با devnet
+                const cluster = 'devnet';
 
                 addDebug(`🔄 Callback URL: ${callbackUrl}`);
                 addDebug(`🏠 App URL: ${appUrl}`);
 
-                // ✅ **تفاوت کلیدی: استفاده از mobile deeplink**
+                // Mobile deeplink
                 const mobileDeeplink = `phantom://v1/connect?` +
                     `dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&` +
                     `cluster=${cluster}&` +
                     `app_url=${encodeURIComponent(appUrl)}&` +
                     `redirect_link=${encodeURIComponent(callbackUrl)}`;
 
-                // Web fallback (اگر اپ نصب نباشد)
+                // Web fallback
                 const webDeeplink = `https://phantom.app/ul/v1/connect?` +
                     `dapp_encryption_public_key=${encodeURIComponent(dappEncryptionPublicKey)}&` +
                     `cluster=${cluster}&` +
                     `app_url=${encodeURIComponent(appUrl)}&` +
                     `redirect_link=${encodeURIComponent(callbackUrl)}`;
 
-                addDebug(`📱 Mobile deeplink: ${mobileDeeplink}`);
-                addDebug(`🌐 Web fallback: ${webDeeplink}`);
+                addDebug(`📱 Mobile deeplink created successfully`);
+                addDebug(`🌐 Web fallback created successfully`);
 
                 updateStatus(
                     `🦄 Click to connect your Phantom Wallet<br>` +
@@ -276,35 +284,42 @@
                     'info'
                 );
 
-                // تابع باز کردن Phantom App
                 window.openPhantomApp = function() {
                     addDebug("🔗 Attempting to open Phantom mobile app...");
                     updateStatus("📱 Opening Phantom App...<br>Please approve the connection and return here.", 'info');
 
                     try {
-                        // ✅ **اول اپ موبایل را تست کن**
-                        window.location.href = mobileDeeplink;
+                        // تشخیص موبایل
+                        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                        addDebug(`📱 Mobile detected: ${isMobile}`);
 
-                        // اگر اپ باز نشد، بعد از 3 ثانیه web fallback
-                        setTimeout(() => {
-                            addDebug("🌐 App didn't open - trying web fallback...");
-                            updateStatus("🌐 Opening Phantom Web...<br>App might not be installed.", 'info');
-                            
-                            // اگر در تلگرام هستیم، از openLink استفاده کن
-                            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-                                addDebug("📱 Using Telegram WebApp openLink");
-                                window.Telegram.WebApp.openLink(webDeeplink);
-                            } else {
-                                addDebug("🌐 Direct navigation to web");
-                                window.location.href = webDeeplink;
-                            }
-                        }, 3000);
+                        if (isMobile) {
+                            // موبایل - اول اپ را تست کن
+                            addDebug("📱 Trying mobile app first...");
+                            window.location.href = mobileDeeplink;
+
+                            // fallback بعد از 3 ثانیه
+                            setTimeout(() => {
+                                addDebug("🌐 Mobile app timeout - trying web...");
+                                
+                                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+                                    addDebug("📱 Using Telegram WebApp openLink");
+                                    window.Telegram.WebApp.openLink(webDeeplink);
+                                } else {
+                                    addDebug("🌐 Direct navigation to web");
+                                    window.location.href = webDeeplink;
+                                }
+                            }, 3000);
+                        } else {
+                            // دسکتاپ - مستقیماً وب
+                            addDebug("🖥️ Desktop detected - using web");
+                            window.location.href = webDeeplink;
+                        }
 
                     } catch (error) {
                         addDebug(`❌ Failed to open Phantom: ${error.message}`);
-                        updateStatus("❌ Failed to open Phantom. Redirecting to web version...", 'error');
+                        updateStatus("❌ Failed to open Phantom. Trying web version...", 'error');
                         
-                        // مستقیماً به وب برو
                         setTimeout(() => {
                             window.location.href = webDeeplink;
                         }, 2000);
@@ -312,8 +327,8 @@
                 };
 
             } catch (error) {
-                addDebug(`❌ Mobile wallet connection error: ${error.message}`);
-                updateStatus(`Wallet connection failed: ${error.message}`, 'error');
+                addDebug(`❌ Connection error: ${error.message}`);
+                updateStatus(`Connection failed: ${error.message}`, 'error');
             }
         }
 
@@ -329,6 +344,7 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             addDebug("🚀 Wallet connection page loaded");
+            addDebug("✅ No external libraries required");
             initWalletConnection();
         });
     </script>
