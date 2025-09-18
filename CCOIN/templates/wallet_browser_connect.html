@@ -5,52 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Connect Phantom Wallet</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            text-align: center;
-            padding: 50px 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-            border: none;
-            padding: 20px 30px;
-            border-radius: 25px;
-            font-size: 18px;
-            cursor: pointer;
-            width: 100%;
-            margin: 15px 0;
-            text-decoration: none;
-            display: inline-block;
-            box-sizing: border-box;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        .btn:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
-        }
-        .debug {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-size: 12px;
-            text-align: left;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-        }
+        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; }
+        .container { max-width: 400px; margin: 0 auto; background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; }
+        .btn { background: linear-gradient(135deg, #AB9FF2, #7B68EE); color: white; border: none; padding: 20px 30px; border-radius: 25px; font-size: 18px; cursor: pointer; width: 100%; margin: 15px 0; text-decoration: none; display: inline-block; box-sizing: border-box; font-weight: 600; transition: all 0.3s ease; }
+        .btn:hover { background: linear-gradient(135deg, #9A8CF1, #6A5ACD); transform: translateY(-2px); }
+        .debug { background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 12px; text-align: left; max-height: 300px; overflow-y: auto; font-family: monospace; }
     </style>
     <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
     <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
@@ -58,9 +17,9 @@
 <body>
     <div class="container">
         <h1>🦄 Connect Phantom Wallet</h1>
-        <p>Connect your Phantom wallet to proceed with the airdrop.</p>
+        <p>Connect your Phantom wallet to CCoin to participate in the airdrop</p>
         
-        <button class="btn" id="connectBtn" onclick="initConnect()">🦄 Connect Wallet</button>
+        <button class="btn" onclick="initConnect()">🦄 Open Phantom App</button>
         
         <div id="debug" class="debug" style="display: none;"></div>
     </div>
@@ -68,89 +27,63 @@
     <script>
         function log(msg) {
             console.log(msg);
-            const debug = document.getElementById('debug');
+            var debug = document.getElementById('debug');
             if (debug) {
                 debug.style.display = 'block';
                 debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
                 debug.scrollTop = debug.scrollHeight;
             }
         }
-
+        
         async function initConnect() {
-            log('🚀 Initiating Phantom wallet connection...');
+            log('🚀 Starting Phantom connection...');
             
             const params = new URLSearchParams(window.location.search);
             const telegramId = params.get('telegram_id');
             if (!telegramId) {
-                log('❌ Error: Missing telegram_id');
+                log('❌ Missing telegram_id');
                 alert('Error: Missing telegram_id');
                 return;
             }
             
-            // Generate encryption keypair for secure session
+            // Generate encryption keypair
             const keypair = nacl.box.keyPair();
             const dappEncryptionPublicKey = bs58.encode(keypair.publicKey);
-            sessionStorage.setItem('dappPrivateKey', bs58.encode(keypair.secretKey)); // Store securely
+            sessionStorage.setItem('dappPrivateKey', bs58.encode(keypair.secretKey)); // Temporary storage for decryption
+            
             log('🔑 Generated dapp public key: ' + dappEncryptionPublicKey);
             
-            // Deeplink parameters
-            const appUrl = encodeURIComponent('https://yourapp.com'); // Your app's metadata URL
-            const callbackUrl = encodeURIComponent(`${window.location.origin}/wallet_callback?telegram_id=${telegramId}`);
-            const cluster = 'mainnet-beta'; // Solana network (use 'devnet' for testing)
+            const appUrl = encodeURIComponent('https://yourapp.com'); // Replace with your app URL
+            const callbackUrl = encodeURIComponent(`${window.location.origin}/wallet/callback?telegram_id=${telegramId}`);
+            const cluster = 'mainnet-beta'; // or 'devnet'
             
-            // Direct connect deeplink (triggers prompt immediately)
             const deeplink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&dapp_encryption_public_key=${dappEncryptionPublicKey}&redirect_link=${callbackUrl}&cluster=${cluster}`;
-            log('🔗 Connecting via deeplink: ' + deeplink);
+            log('🔗 Deeplink: ' + deeplink);
             
-            // Redirect to Phantom (no iframe, direct for reliability)
             window.location.href = deeplink;
         }
-
-        // Fallback for direct connect if already in Phantom browser
+        
+        // If already in Phantom browser
         window.addEventListener('load', async () => {
-            log('🔍 Page loaded, checking environment...');
-            const telegramId = new URLSearchParams(window.location.search).get('telegram_id');
-            log('👤 Telegram ID: ' + (telegramId || 'Not found'));
+            log('🔍 Page loaded');
             
             if (window.solana && window.solana.isPhantom) {
-                log('✅ Detected Phantom browser, attempting auto-connect');
-                document.getElementById('connectBtn').style.display = 'none';
+                log('✅ In Phantom browser, auto-connecting');
                 try {
-                    const response = await window.solana.connect({ onlyIfTrusted: false });
+                    const response = await window.solana.connect();
                     const walletAddress = response.publicKey.toString();
-                    log('✅ Direct connect successful: ' + walletAddress);
-                    await saveWallet(telegramId, walletAddress);
+                    log('✅ Connected: ' + walletAddress);
+                    // POST to /api/wallet/save
+                    await fetch('/api/wallet/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: new URLSearchParams(window.location.search).get('telegram_id'), wallet_address: walletAddress })
+                    });
                 } catch (error) {
-                    log('❌ Direct connect failed: ' + error.message);
-                    alert('Failed to connect wallet: ' + error.message);
+                    log('❌ Connect error: ' + error.message);
                 }
-            } else {
-                log('📱 Regular browser detected, awaiting user action');
             }
         });
-
-        async function saveWallet(telegramId, walletAddress) {
-            try {
-                log('📤 Sending wallet address to server...');
-                const apiResponse = await fetch('/api/wallet/connect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: telegramId, wallet_address: walletAddress })
-                });
-                const data = await apiResponse.json();
-                
-                if (apiResponse.ok && data.success) {
-                    log('✅ Wallet saved, redirecting to callback...');
-                    window.location.href = `/wallet_callback?telegram_id=${telegramId}&wallet=${walletAddress}`;
-                } else {
-                    log('❌ Error saving wallet: ' + (data.detail || 'Server error'));
-                    alert('Error saving wallet: ' + (data.detail || 'Server error'));
-                }
-            } catch (error) {
-                log('❌ Server error: ' + error.message);
-                alert('Server error: ' + error.message);
-            }
-        }
     </script>
 </body>
 </html>
