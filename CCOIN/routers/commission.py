@@ -21,29 +21,16 @@ async def commission_payment_page(
     telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """صفحه پرداخت commission در مرورگر خارجی"""
-    
-    print(f"Commission payment request for telegram_id: {telegram_id}")
-    
-    # بررسی کاربر
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        print(f"User not found: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
-    # بررسی اینکه آیا قبلاً پرداخت شده
     if user.commission_paid:
-        print(f"Commission already paid for user: {telegram_id}")
         return RedirectResponse(url=f"/commission/success?telegram_id={telegram_id}&already_paid=true")
     
-    # بررسی اتصال کیف پول
     if not user.wallet_address:
-        print(f"No wallet connected for user: {telegram_id}")
         raise HTTPException(status_code=400, detail="Wallet not connected")
     
-    print(f"Rendering payment page for user: {telegram_id}")
-    
-    # ارسال صفحه پرداخت
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
         "telegram_id": telegram_id,
@@ -62,19 +49,11 @@ async def commission_success(
     already_paid: bool = Query(False, description="Commission already paid flag"),
     db: Session = Depends(get_db)
 ):
-    """صفحه موفقیت پرداخت"""
-    
-    print(f"Commission success page for telegram_id: {telegram_id}")
-    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    success_message = "Commission payment completed successfully!" 
-    if already_paid:
-        success_message = "Commission already paid!"
-    
-    print(f"Success message: {success_message}")
+    success_message = "Commission payment completed successfully!" if not already_paid else "Commission already paid!"
     
     return templates.TemplateResponse("commission_success.html", {
         "request": request,
@@ -91,8 +70,6 @@ async def get_commission_status(
     telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """دریافت وضعیت پرداخت commission برای کاربر"""
-    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -114,61 +91,46 @@ async def confirm_commission_payment(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """تأیید پرداخت commission"""
-    
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-        signature = body.get("signature")
-        reference = body.get("reference")
+        reference_b58 = body.get("reference")
+        signature = body.get("signature")  # Optional
         
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Telegram ID required")
-            
-        if not signature:
-            raise HTTPException(status_code=400, detail="Transaction signature required")
+        if not telegram_id or not reference_b58:
+            raise HTTPException(status_code=400, detail="Telegram ID and reference required")
         
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
         if user.commission_paid:
-            return {
-                "success": True,
-                "message": "Commission already paid",
-                "already_paid": True
-            }
+            return {"success": True, "message": "Commission already paid", "already_paid": True}
         
-        # به‌روزرسانی وضعیت کاربر
-        user.commission_paid = True
-        user.commission_transaction_hash = signature
-        user.commission_payment_date = datetime.utcnow()
+        # Confirm با findReference
+        reference = Pubkey.from_string(base58.decode(reference_b58))
+        max_attempts = 30
+        for attempt in range(max_attempts):
+            response = solana_client.find_reference(reference, commitment='confirmed')
+            if response.value and not response.value.meta.err:
+                user.commission_paid = True
+                user.commission_transaction_hash = signature or response.value.signature
+                user.commission_payment_date = datetime.utcnow()
+                if hasattr(user, 'commission_reference'):
+                    user.commission_reference = reference_b58
+                db.commit()
+                return {"success": True, "message": "Commission payment confirmed successfully!", "signature": signature, "timestamp": datetime.utcnow().isoformat()}
+            time.sleep(1)
         
-        # اضافه کردن reference اگر موجود باشد
-        if reference and hasattr(user, 'commission_reference'):
-            user.commission_reference = reference
-        
-        db.commit()
-        
-        print(f"Commission payment confirmed for user {telegram_id} with signature {signature}")
-        
-        return {
-            "success": True,
-            "message": "Commission payment confirmed successfully!",
-            "signature": signature,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        raise HTTPException(status_code=400, detail="Transaction not confirmed after retries")
         
     except Exception as e:
         db.rollback()
-        print(f"Error confirming commission payment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to confirm payment: {str(e)}")
 
 @router.get("/config", response_class=JSONResponse)
 @limiter.limit("20/minute")
 async def get_commission_config(request: Request):
-    """دریافت تنظیمات پرداخت commission"""
-    
     return {
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET,
@@ -182,41 +144,22 @@ async def commission_webhook(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Webhook برای دریافت اطلاعات پرداخت از سرویس‌های خارجی"""
-    
     try:
         body = await request.json()
-        print(f"Commission webhook received: {body}")
-        
-        # پردازش webhook data
-        # این قسمت بسته به سرویس ارائه‌دهنده پرداخت متفاوت است
-        
-        return {
-            "success": True,
-            "message": "Webhook processed successfully"
-        }
+        # پردازش webhook (مثل از Phantom یا Solana notifier)
+        telegram_id = body.get('telegram_id')
+        reference = body.get('reference')
+        # Confirm مشابه بالا
+        return {"success": True, "message": "Webhook processed successfully"}
         
     except Exception as e:
-        print(f"Commission webhook error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
 
-# Helper function برای بررسی اعتبار آدرس Solana
 def is_valid_solana_address(address: str) -> bool:
-    """بررسی اعتبار آدرس کیف پول Solana"""
-    if not address or not isinstance(address, str):
-        return False
-    
-    # بررسی طول آدرس (32-44 کاراکتر معمولاً)
-    if len(address) < 32 or len(address) > 44:
-        return False
-    
-    # بررسی کاراکترهای مجاز (Base58)
     allowed_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-    return all(c in allowed_chars for c in address)
+    return 32 <= len(address) <= 44 and all(c in allowed_chars for c in address)
 
-# Helper function برای لاگ تراکنش‌ها
 def log_commission_transaction(telegram_id: str, signature: str, amount: float):
-    """ثبت لاگ تراکنش commission"""
     log_entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "telegram_id": telegram_id,
@@ -225,6 +168,4 @@ def log_commission_transaction(telegram_id: str, signature: str, amount: float):
         "type": "commission_payment"
     }
     print(f"Commission transaction log: {log_entry}")
-    
-    # می‌توانید این لاگ‌ها را در فایل یا دیتابیس ذخیره کنید
     return log_entry
