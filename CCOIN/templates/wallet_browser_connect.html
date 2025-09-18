@@ -126,16 +126,38 @@
             var currentUrl = window.location.href;
             log('📍 Current URL: ' + currentUrl);
             
-            // استفاده از universal link برای بهتر کار کردن
-            var phantomUrl = 'https://phantom.app/ul/browse/' + 
-                           encodeURIComponent(currentUrl) + 
-                           '?ref=' + encodeURIComponent(window.location.origin);
-            
-            log('🌐 Redirecting to: ' + phantomUrl);
             updateStatus('📱 Opening Phantom app...');
             
-            // مستقیم redirect کن
-            window.location.href = phantomUrl;
+            // تلاش با custom scheme ابتدا
+            var customScheme = 'phantom://ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
+            log('🔗 Trying custom scheme: ' + customScheme);
+            
+            // ایجاد invisible iframe
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = customScheme;
+            document.body.appendChild(iframe);
+            
+            // پاک کردن iframe
+            setTimeout(function() {
+                document.body.removeChild(iframe);
+                log('🧹 Iframe removed');
+            }, 1000);
+            
+            // fallback به direct assignment
+            setTimeout(function() {
+                log('🔄 Trying direct location change...');
+                try {
+                    window.location.href = customScheme;
+                } catch (e) {
+                    log('❌ Custom scheme failed: ' + e.message);
+                    
+                    // آخرین fallback: universal link
+                    var universalLink = 'https://phantom.app/ul/browse/' + encodeURIComponent(currentUrl) + '?ref=' + encodeURIComponent(window.location.origin);
+                    log('🌐 Fallback to universal link: ' + universalLink);
+                    window.location.href = universalLink;
+                }
+            }, 2000);
         }
         
         async function connectDirectly() {
