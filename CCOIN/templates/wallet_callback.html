@@ -2,160 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Wallet Connection Result</title>
-    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Phantom Wallet Connection</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Urbanist', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-        }
-
-        .result-container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
             text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 50px 20px;
+            min-height: 100vh;
+        }
+        .container {
             max-width: 400px;
-            width: 90%;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
         }
-
-        .logo {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        .success-icon {
-            color: #28a745;
-            font-size: 64px;
-            margin: 20px 0;
-        }
-
-        .error-icon {
-            color: #dc3545;
-            font-size: 64px;
-            margin: 20px 0;
-        }
-
-        h1 {
-            font-size: 28px;
-            margin-bottom: 20px;
-            font-weight: 800;
-        }
-
-        .wallet-address {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            font-family: monospace;
-            word-break: break-all;
-            font-size: 14px;
-        }
-
-        .description {
-            font-size: 16px;
-            opacity: 0.9;
-            margin-bottom: 30px;
-            line-height: 1.5;
-        }
-
-        .return-button {
+        .btn {
             background: linear-gradient(135deg, #AB9FF2, #7B68EE);
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 20px 30px;
             border-radius: 25px;
             font-size: 18px;
-            font-weight: 600;
             cursor: pointer;
-            margin-top: 20px;
-            transition: all 0.3s ease;
             width: 100%;
+            margin: 15px 0;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+            font-weight: 600;
+            transition: all 0.3s ease;
         }
-
-        .return-button:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
-        }
-
-        .error-message {
-            background: rgba(255, 0, 0, 0.2);
-            border: 1px solid rgba(255, 0, 0, 0.5);
-            color: #ffcccb;
-            border-radius: 10px;
-            padding: 15px;
+        .status {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
             margin: 20px 0;
         }
     </style>
 </head>
 <body>
-    <div class="result-container">
-        {% if success %}
-            <div class="success-icon">✅</div>
-            <h1>Wallet Connected!</h1>
-            <div class="description">
-                Your Phantom wallet has been successfully connected to CCoin.
-            </div>
-            {% if wallet_address %}
-                <div class="wallet-address">
-                    {{ wallet_address }}
-                </div>
-            {% endif %}
-        {% else %}
-            <div class="error-icon">❌</div>
-            <h1>Connection Failed</h1>
-            <div class="description">
-                There was an issue connecting your wallet.
-            </div>
-            {% if error %}
-                <div class="error-message">
-                    {{ error }}
-                </div>
-            {% endif %}
-        {% endif %}
-
-        <button class="return-button" onclick="returnToApp()">
-            🚀 Return to CCoin App
+    <div class="container">
+        <h1>🦄 Phantom Wallet</h1>
+        
+        <div class="status">
+            <h2>✅ Connection Successful!</h2>
+            <p>Your Phantom wallet has been connected successfully.</p>
+        </div>
+        
+        <button class="btn" onclick="continueToAirdrop()">
+            🎁 Continue to Airdrop
         </button>
     </div>
 
     <script>
-        function returnToApp() {
-            const telegramId = "{{ telegram_id }}";
-            let telegramUrl = `https://t.me/CTG_COIN_BOT/app`;
+        function continueToAirdrop() {
+            var params = new URLSearchParams(window.location.search);
+            var telegramId = params.get('telegram_id') || '';
             
             if (telegramId) {
-                telegramUrl += `?startapp=wallet_connected`;
-            }
-
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.openTelegramLink(telegramUrl);
+                window.location.href = '/airdrop?telegram_id=' + telegramId;
             } else {
-                window.location.href = telegramUrl;
+                alert('Error: Missing telegram ID');
             }
         }
-
-        // خودکار بازگشت به اپ بعد از 5 ثانیه در صورت موفقیت
-        {% if success %}
-            setTimeout(() => {
-                returnToApp();
-            }, 5000);
-        {% endif %}
+        
+        // Auto redirect after 3 seconds
+        setTimeout(function() {
+            continueToAirdrop();
+        }, 3000);
     </script>
 </body>
 </html>
