@@ -166,9 +166,9 @@
                 const data = await apiResponse.json();
                 
                 if (apiResponse.ok && data.success) {
-                    log('✅ Wallet saved successfully, redirecting to airdrop...');
-                    // هدایت به صفحه airdrop - مستقیم بدون callback
-                    window.location.href = '/airdrop?telegram_id=' + telegramId;
+                    log('✅ Wallet saved successfully, redirecting to home...');
+                    // به جای airdrop به home برو که 401 ندهد
+                    window.location.href = '/load?telegram_id=' + telegramId;
                 } else {
                     log('❌ Error saving wallet: ' + (data.detail || 'Server error'));
                     alert('Error saving wallet: ' + (data.detail || 'Server error'));
