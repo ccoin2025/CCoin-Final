@@ -1,386 +1,172 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+import os
+from datetime import datetime
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from datetime import datetime
-import re
-import os
+from CCOIN.config import DAPP_PRIVATE_KEY, SOLANA_RPC
+from solders.pubkey import Pubkey
+import base58
+import nacl.public  # جایگزین tweetnacl
+import nacl.encoding
+import structlog
+import json
 
 router = APIRouter()
-templates = Jinja2Templates(directory="CCOIN/templates")
+limiter = Limiter(key_func=get_remote_address)
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
+logger = structlog.get_logger()
 
-@router.get("/wallet/browser/connect")
-async def wallet_browser_connect(request: Request):
-    """صفحه اتصال کیف پول در مرورگر خارجی"""
-    telegram_id = request.query_params.get("telegram_id")
+@router.get("/browser/connect", response_class=HTMLResponse)
+@limiter.limit("10/minute")
+async def wallet_browser_connect(request: Request, telegram_id: str = Query(..., description="Telegram user ID")):
+    """نمایش صفحه اتصال کیف پول در مرورگر"""
+    
+    logger.info(f"Wallet connect request for telegram_id: {telegram_id}")
+    
     return templates.TemplateResponse("wallet_browser_connect.html", {
         "request": request,
         "telegram_id": telegram_id
     })
 
-@router.get("/wallet-browser-connect")
-async def wallet_browser_connect_old(request: Request):
-    """صفحه اتصال کیف پول - ساده‌شده"""
-    return templates.TemplateResponse("wallet_browser_connect.html", {"request": request})
-
-@router.get("/api/wallet/status")
-async def wallet_status(telegram_id: str, db: Session = Depends(get_db)):
-    """بررسی وضعیت اتصال wallet"""
+@router.post("/connect", response_class=JSONResponse)
+@limiter.limit("5/minute")
+async def wallet_connect(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """اتصال کیف پول کاربر"""
+    
     try:
-        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
-        if user and user.wallet_address:
-            return JSONResponse({
-                "connected": True,
-                "address": user.wallet_address,
-                "success": True
-            })
-        else:
-            return JSONResponse({
-                "connected": False,
-                "address": None,
-                "success": True
-            })
-    except Exception as e:
-        print(f"Error checking wallet status: {e}")
-        return JSONResponse({
-            "connected": False,
-            "address": None,
-            "success": False,
-            "error": str(e)
-        })
-
-@router.get("/api/tasks/status")
-async def tasks_status(telegram_id: str, db: Session = Depends(get_db)):
-    """بررسی وضعیت تسک‌ها و دعوت دوستان"""
-    try:
-        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
-        if not user:
-            return JSONResponse({
-                "tasks_completed": False,
-                "friends_invited": False,
-                "success": True
-            })
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        encrypted_wallet_data = body.get("wallet_data")
         
-        # بررسی تکمیل تسک‌ها
-        tasks_completed = any(task.completed for task in user.tasks) if user.tasks else False
+        if not telegram_id or not encrypted_wallet_data:
+            logger.error(f"Missing telegram_id or wallet_data for wallet connect: {telegram_id}")
+            raise HTTPException(status_code=400, detail="Telegram ID and wallet data are required")
         
-        # بررسی دعوت دوستان
-        friends_invited = len(user.referrals) > 0 if user.referrals else False
-        
-        return JSONResponse({
-            "tasks_completed": tasks_completed,
-            "friends_invited": friends_invited,
-            "success": True
-        })
-    except Exception as e:
-        print(f"Error checking tasks status: {e}")
-        return JSONResponse({
-            "tasks_completed": False,
-            "friends_invited": False,
-            "success": False,
-            "error": str(e)
-        })
-
-@router.get("/api/commission/status")
-async def commission_status(telegram_id: str, db: Session = Depends(get_db)):
-    """بررسی وضعیت پرداخت کمیسیون"""
-    try:
-        user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
-        if user and user.commission_paid:
-            return JSONResponse({
-                "paid": True,
-                "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
-                "transaction_hash": user.commission_transaction_hash,
-                "success": True
-            })
-        else:
-            return JSONResponse({
-                "paid": False,
-                "payment_date": None,
-                "transaction_hash": None,
-                "success": True
-            })
-    except Exception as e:
-        print(f"Error checking commission status: {e}")
-        return JSONResponse({
-            "paid": False,
-            "payment_date": None,
-            "transaction_hash": None,
-            "success": False,
-            "error": str(e)
-        })
-
-@router.post("/api/commission/pay")
-async def pay_commission(request: Request, db: Session = Depends(get_db)):
-    """ایجاد درخواست پرداخت کمیسیون"""
-    try:
-        data = await request.json()
-        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
-
-        if not telegram_id:
-            return JSONResponse({
-                "success": False,
-                "error": "Missing telegram_id"
-            })
-
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
-            return JSONResponse({
-                "success": False,
-                "error": "User not found"
-            })
-
-        if user.commission_paid:
-            return JSONResponse({
-                "success": False,
-                "error": "Commission already paid"
-            })
-
-        if not user.wallet_address:
-            return JSONResponse({
-                "success": False,
-                "error": "Wallet not connected"
-            })
-
-        # مبلغ کمیسیون (مثلاً 0.01 SOL)
-        commission_amount = 0.01  # SOL
-        recipient_address = os.getenv("ADMIN_WALLET", "So11111111111111111111111111111111111111112")
-
-        # URL callback برای بازگشت از Phantom
-        callback_url = f"{request.base_url}commission/callback?telegram_id={telegram_id}"
-
-        return JSONResponse({
+            logger.error(f"User not found: {telegram_id}")
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # رمزگشایی wallet_data با استفاده از DAPP_PRIVATE_KEY
+        try:
+            private_key = nacl.public.PrivateKey(
+                bytes.fromhex(DAPP_PRIVATE_KEY),
+                encoder=nacl.encoding.RawEncoder
+            )
+            decrypted_data = private_key.decrypt(
+                base58.b58decode(encrypted_wallet_data),
+                encoder=nacl.encoding.RawEncoder
+            )
+            wallet_info = json.loads(decrypted_data.decode())
+            wallet_address = wallet_info.get("wallet_address")
+            
+            if not is_valid_solana_address(wallet_address):
+                logger.error(f"Invalid Solana address for user {telegram_id}: {wallet_address}")
+                raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
+        
+        except Exception as e:
+            logger.error(f"Decryption failed for user {telegram_id}: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Failed to decrypt wallet data: {str(e)}")
+        
+        # به‌روزرسانی آدرس کیف پول کاربر
+        user.wallet_address = wallet_address
+        user.wallet_connected = True
+        user.wallet_connection_date = datetime.utcnow()
+        db.commit()
+        
+        logger.info(f"Wallet connected for user {telegram_id}: {wallet_address}")
+        
+        log_wallet_connection(telegram_id, wallet_address)
+        
+        return {
             "success": True,
-            "amount": commission_amount,
-            "recipient": recipient_address,
-            "reference": telegram_id,
-            "callback_url": callback_url
-        })
-
+            "message": "Wallet connected successfully",
+            "wallet_address": wallet_address
+        }
+        
     except Exception as e:
-        print(f"Error initiating commission payment: {e}")
-        return JSONResponse({
-            "success": False,
-            "error": f"Server error: {str(e)}"
-        })
+        db.rollback()
+        logger.error(f"Error connecting wallet for user {telegram_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to connect wallet: {str(e)}")
 
-@router.get("/commission/browser/pay")
-async def commission_browser_pay(request: Request):
-    """صفحه پرداخت کمیسیون در مرورگر خارجی"""
-    telegram_id = request.query_params.get("telegram_id")
-    return templates.TemplateResponse("commission_browser_pay.html", {
+@router.get("/status", response_class=JSONResponse)
+@limiter.limit("20/minute")
+async def get_wallet_status(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """دریافت وضعیت اتصال کیف پول"""
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        logger.error(f"User not found for wallet status: {telegram_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "wallet_connected": user.wallet_connected,
+        "wallet_address": user.wallet_address,
+        "connection_date": user.wallet_connection_date
+    }
+
+@router.get("/callback", response_class=HTMLResponse)
+@limiter.limit("10/minute")
+async def wallet_callback(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """صفحه callback بعد از اتصال کیف پول"""
+    
+    logger.info(f"Wallet callback for telegram_id: {telegram_id}")
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        logger.error(f"User not found for wallet callback: {telegram_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return templates.TemplateResponse("wallet_callback.html", {
         "request": request,
-        "telegram_id": telegram_id
+        "telegram_id": telegram_id,
+        "wallet_address": user.wallet_address,
+        "success_message": "Wallet connected successfully!" if user.wallet_connected else "Wallet connection failed."
     })
 
-@router.get("/commission/callback")
-async def commission_callback(request: Request, db: Session = Depends(get_db)):
-    """Callback برای تایید پرداخت کمیسیون"""
-    try:
-        telegram_id = request.query_params.get("telegram_id")
-        signature = request.query_params.get("signature")
-
-        if not telegram_id:
-            return templates.TemplateResponse("commission_callback.html", {
-                "request": request,
-                "success": False,
-                "error": "Missing telegram_id",
-                "telegram_id": telegram_i
-            })
-
-        # Call confirm
-        await confirm_commission_payment(request, db)
-
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": True,
-            "signature": signature,
-            "telegram_id": telegram_id
-        })
-
-    except Exception as e:
-        print(f"Commission callback error: {e}")
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": False,
-            "error": f"Server error: {str(e)}",
-            "telegram_id": request.query_params.get("telegram_id")
-        })
-
-@router.post("/api/wallet/save")
-async def save_wallet(request: Request, db: Session = Depends(get_db)):
-    """ذخیره آدرس wallet - بهبود یافته"""
-    try:
-        data = await request.json()
-        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
-        wallet_address = data.get("wallet_address")
-
-        if not telegram_id or not wallet_address:
-            return JSONResponse({
-                "success": False,
-                "error": "Missing telegram_id or wallet_address"
-            })
-
-        # اعتبارسنجی آدرس کیف پول Solana
-        if not is_valid_solana_address(wallet_address):
-            return JSONResponse({
-                "success": False,
-                "error": "Invalid Solana wallet address format"
-            })
-
-        # Retry for DB if fail
-        retries = 3
-        for attempt in range(retries):
-            try:
-                user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                if user:
-                    user.wallet_address = wallet_address
-                    db.commit()
-                    return JSONResponse({
-                        "success": True,
-                        "message": "Wallet connected successfully",
-                        "address": wallet_address
-                    })
-                else:
-                    return JSONResponse({
-                        "success": False,
-                        "error": "User not found"
-                    })
-            except:
-                if attempt < retries - 1:
-                    time.sleep(1)
-                else:
-                    raise
-
-    except Exception as e:
-        print(f"Error saving wallet: {e}")
-        db.rollback()
-        return JSONResponse({
-            "success": False,
-            "error": f"Server error: {str(e)}"
-        })
-
-@router.post("/api/wallet/disconnect")
-async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
-    """قطع اتصال wallet"""
-    try:
-        data = await request.json()
-        telegram_id = str(data.get("telegram_id"))  # تبدیل به string
-
-        if not telegram_id:
-            return JSONResponse({
-                "success": False,
-                "error": "Missing telegram_id"
-            })
-
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if user:
-            user.wallet_address = None
-            db.commit()
-            return JSONResponse({
-                "success": True,
-                "message": "Wallet disconnected successfully"
-            })
-        else:
-            return JSONResponse({
-                "success": False,
-                "error": "User not found"
-            })
-
-    except Exception as e:
-        print(f"Error disconnecting wallet: {e}")
-        db.rollback()
-        return JSONResponse({
-            "success": False,
-            "error": f"Server error: {str(e)}"
-        })
-
+# Helper function برای بررسی اعتبار آدرس Solana
 def is_valid_solana_address(address: str) -> bool:
-    """اعتبارسنجی آدرس Solana"""
+    """بررسی اعتبار آدرس کیف پول Solana"""
     if not address or not isinstance(address, str):
         return False
-    # آدرس Solana باید 32-44 کاراکتر باشد و فقط حروف و اعداد base58
-    pattern = r'^[1-9A-HJ-NP-Za-km-z]{32,44}$'
-    return bool(re.match(pattern, address))
+    
+    # بررسی طول آدرس (32-44 کاراکتر)
+    if len(address) < 32 or len(address) > 44:
+        return False
+    
+    # بررسی کاراکترهای مجاز (Base58)
+    allowed_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    return all(c in allowed_chars for c in address)
 
-@router.get("/wallet/callback")
-async def wallet_callback(request: Request, db: Session = Depends(get_db)):
-    """Callback handler برای Deep Link Phantom - بهبود یافته"""
-    try:
-        # دریافت پارامترهای بازگشتی از Phantom
-        telegram_id = request.query_params.get("telegram_id")
-
-        # پارامترهای موفقیت
-        phantom_encryption_public_key = request.query_params.get("phantom_encryption_public_key")
-        nonce = request.query_params.get("nonce")
-        data = request.query_params.get("data")
-        session = request.query_params.get("session")
-
-        # پارامترهای خطا
-        error_code = request.query_params.get("errorCode")
-        error_message = request.query_params.get("errorMessage")
-
-        print(f"[PHANTOM CALLBACK] telegram_id: {telegram_id}")
-        print(f"[PHANTOM CALLBACK] error_code: {error_code}")
-        print(f"[PHANTOM CALLBACK] error_message: {error_message}")
-        print(f"[PHANTOM CALLBACK] phantom_key: {phantom_encryption_public_key}")
-
-        if error_code:
-            return templates.TemplateResponse("wallet_callback.html", {
-                "request": request,
-                "success": False,
-                "error": f"Phantom Error {error_code}: {error_message}",
-                "telegram_id": telegram_id
-            })
-
-        # موفقیت - decrypt و ذخیره
-        if telegram_id and phantom_encryption_public_key and nonce and data:
-            user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
-            if user:
-                try:
-                    # Full decryption
-                    phantom_pubkey = base58.b58decode(phantom_encryption_public_key)
-                    # Assume dapp_private_key from session or backend (for security, store in backend session)
-                    dapp_private_key = base58.b58decode(os.getenv('DAPP_PRIVATE_KEY'))  # Example, use secure storage
-                    shared_secret = tweetnacl.box.before(phantom_pubkey, dapp_private_key)  # Assume tweetnacl imported
-                    decrypted = tweetnacl.box.open.after(base58.b58decode(data), base58.b58decode(nonce), shared_secret)
-                    json_data = json.loads(decrypted.decode('utf-8'))
-                    wallet_address = json_data['public_key']
-                    
-                    user.wallet_address = wallet_address
-                    db.commit()
-
-                    return templates.TemplateResponse("wallet_callback.html", {
-                        "request": request,
-                        "success": True,
-                        "wallet_address": wallet_address,
-                        "telegram_id": telegram_id
-                    })
-
-                except Exception as decode_error:
-                    print(f"Decode error: {decode_error}")
-                    return templates.TemplateResponse("wallet_callback.html", {
-                        "request": request,
-                        "success": False,
-                        "error": f"Failed to process wallet data: {str(decode_error)}",
-                        "telegram_id": telegram_id
-                    })
-
-        # پارامترهای ناقص
-        return templates.TemplateResponse("wallet_callback.html", {
-            "request": request,
-            "success": False,
-            "error": "Incomplete connection data received",
-            "telegram_id": telegram_id
-        })
-
-    except Exception as e:
-        print(f"Callback error: {e}")
-        return templates.TemplateResponse("wallet_callback.html", {
-            "request": request,
-            "success": False,
-            "error": f"Server error: {str(e)}",
-            "telegram_id": request.query_params.get("telegram_id")
-        })
+# Helper function برای لاگ اتصال کیف پول
+def log_wallet_connection(telegram_id: str, wallet_address: str):
+    """ثبت لاگ اتصال کیف پول"""
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "telegram_id": telegram_id,
+        "wallet_address": wallet_address,
+        "type": "wallet_connection"
+    }
+    logger.info(f"Wallet connection log: {log_entry}")
+    
+    # ذخیره لاگ در فایل
+    with open('wallet_logs.txt', 'a') as f:
+        f.write(str(log_entry) + '\n')
+    
+    return log_entry
