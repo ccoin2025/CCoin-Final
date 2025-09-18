@@ -9,9 +9,11 @@ from datetime import datetime
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET
-from solders.pubkey import Pubkey  # اصلاح import برای Solana
-from solders.keypair import Keypair  # اصلاح import برای Keypair
-from solana_pay import encode_url, BigNumber  # برای Solana Pay (نیاز به نصب: pip install solana-pay)
+from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed
+from solders.pubkey import Pubkey
+from solders.keypair import Keypair
+import base58
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -24,7 +26,7 @@ async def commission_payment_page(
     telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """ایجاد Solana Pay URL برای پرداخت"""
+    """ایجاد URL برای پرداخت کمیسیون با فرمت Solana Pay"""
     
     print(f"Commission payment request for telegram_id: {telegram_id}")
     
@@ -44,30 +46,24 @@ async def commission_payment_page(
         print(f"No wallet connected for user: {telegram_id}")
         raise HTTPException(status_code=400, detail="Wallet not connected")
     
-    # Create Solana Pay URL
-    recipient = Pubkey.from_string(ADMIN_WALLET)  # استفاده از Pubkey به جای PublicKey
-    amount = BigNumber(COMMISSION_AMOUNT)
-    reference = Keypair().public_key
+    # ایجاد URL پرداخت به سبک Solana Pay
+    recipient = ADMIN_WALLET
+    amount = COMMISSION_AMOUNT  # e.g., 0.01 SOL
+    reference = str(Keypair().public_key)  # Reference یکتا برای تراکنش
     label = 'CCoin Commission'
     message = 'Payment for airdrop'
     memo = f'User: {telegram_id}'
     
-    pay_url = encode_url({
-        'recipient': recipient,
-        'amount': amount,
-        'reference': reference,
-        'label': label,
-        'message': message,
-        'memo': memo
-    })
+    # ساخت دستی URL برای Solana Pay
+    pay_url = f"solana:{recipient}?amount={amount}&reference={reference}&label={label}&message={message}&memo={memo}"
     
-    print(f"Generated Solana Pay URL for user: {telegram_id}")
+    print(f"Generated Solana Pay URL for user: {telegram_id}: {pay_url}")
     
     return {
-        "pay_url": str(pay_url),  # تبدیل به string برای JSON
-        "reference": str(reference),
-        "amount": COMMISSION_AMOUNT,
-        "recipient": ADMIN_WALLET
+        "pay_url": pay_url,
+        "reference": reference,
+        "amount": amount,
+        "recipient": recipient
     }
 
 @router.get("/success", response_class=HTMLResponse)
@@ -157,21 +153,23 @@ async def confirm_commission_payment(
                 "already_paid": True
             }
         
-        # Confirm with reference (Solana Pay)
+        # تأیید تراکنش با reference
+        solana_client = Client(SOLANA_RPC)
         if reference:
-            from solana.rpc.api import Client
-            from solana.rpc.commitment import Confirmed
-            solana_client = Client(SOLANA_RPC)
             sigs = solana_client.find_reference(Pubkey.from_string(reference), commitment=Confirmed)
             if sigs.value:
                 signature = str(sigs.value[0].signature)  # Override if needed
+        
+        # اعتبارسنجی تراکنش
+        tx_info = solana_client.get_transaction(signature, encoding="json", commitment="confirmed")
+        if not tx_info.value or tx_info.value.meta.err:
+            raise HTTPException(status_code=400, detail="Transaction failed or not found")
         
         # به‌روزرسانی وضعیت کاربر
         user.commission_paid = True
         user.commission_transaction_hash = signature
         user.commission_payment_date = datetime.utcnow()
         
-        # اضافه کردن reference اگر موجود باشد
         if reference and hasattr(user, 'commission_reference'):
             user.commission_reference = reference
         
@@ -233,7 +231,7 @@ def is_valid_solana_address(address: str) -> bool:
     if not address or not isinstance(address, str):
         return False
     
-    # بررسی طول آدرس (32-44 کاراکتر معمولاً)
+    # بررسی طول آدرس (32-44 کاراکتر)
     if len(address) < 32 or len(address) > 44:
         return False
     
