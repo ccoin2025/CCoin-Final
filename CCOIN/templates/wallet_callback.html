@@ -36,6 +36,10 @@
             font-weight: 600;
             transition: all 0.3s ease;
         }
+        .btn:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
         .status {
             background: rgba(255, 255, 255, 0.05);
             padding: 20px;
@@ -43,37 +47,107 @@
             margin: 20px 0;
         }
     </style>
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
+    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>🦄 Phantom Wallet</h1>
-        
-        <div class="status">
-            <h2>✅ Connection Successful!</h2>
-            <p>Your Phantom wallet has been connected successfully.</p>
+        <div class="status" id="status">
+            <h2>Processing...</h2>
+            <p>Please wait while we verify your wallet connection.</p>
         </div>
-        
-        <button class="btn" onclick="continueToAirdrop()">
+        <button class="btn" id="backBtn" onclick="backToMiniApp()" style="display:none;">
+            🎁 Return to Mini App
+        </button>
+        <button class="btn" id="airdropBtn" onclick="continueToAirdrop()" style="display:none;">
             🎁 Continue to Airdrop
         </button>
     </div>
 
     <script>
-        function continueToAirdrop() {
-            var params = new URLSearchParams(window.location.search);
-            var telegramId = params.get('telegram_id') || '';
-            
-            if (telegramId) {
-                window.location.href = '/airdrop?telegram_id=' + telegramId;
-            } else {
-                alert('Error: Missing telegram ID');
+        async function handleCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const telegramId = params.get('telegram_id');
+            const errorCode = params.get('errorCode');
+            const phantomEncKey = params.get('phantom_encryption_public_key');
+            const nonce = params.get('nonce');
+            const data = params.get('data');
+            let walletAddress = params.get('wallet'); // Fallback from connect.html
+
+            if (errorCode) {
+                document.getElementById('status').innerHTML = `<h2>❌ Connection Failed</h2><p>Error: ${params.get('errorMessage') || 'Unknown error'}</p>`;
+                return;
+            }
+
+            if (!telegramId) {
+                document.getElementById('status').innerHTML = `<h2>❌ Error</h2><p>Missing telegram_id</p>`;
+                return;
+            }
+
+            // Decrypt Phantom data (if provided)
+            if (phantomEncKey && nonce && data) {
+                try {
+                    const phantomPubKey = bs58.decode(phantomEncKey);
+                    const dappPrivateKey = bs58.decode(sessionStorage.getItem('dappPrivateKey') || '');
+                    const sharedSecret = nacl.box.before(phantomPubKey, dappPrivateKey);
+                    const decrypted = nacl.box.open.after(bs58.decode(data), bs58.decode(nonce), sharedSecret);
+                    if (decrypted) {
+                        const json = JSON.parse(new TextDecoder().decode(decrypted));
+                        walletAddress = json.public_key;
+                    } else {
+                        throw new Error('Decryption failed');
+                    }
+                } catch (error) {
+                    console.error('Decryption error:', error);
+                    document.getElementById('status').innerHTML = `<h2>❌ Error</h2><p>Failed to process wallet data</p>`;
+                    return;
+                }
+            }
+
+            if (!walletAddress) {
+                document.getElementById('status').innerHTML = `<h2>❌ Error</h2><p>No wallet address received</p>`;
+                return;
+            }
+
+            // Save to backend
+            try {
+                const apiResponse = await fetch('/api/wallet/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: telegramId, wallet_address: walletAddress })
+                });
+                const data = await apiResponse.json();
+
+                if (apiResponse.ok && data.success) {
+                    document.getElementById('status').innerHTML = `<h2>✅ Connection Successful!</h2><p>Wallet: ${walletAddress.substring(0, 8)}...</p>`;
+                    document.getElementById('backBtn').style.display = 'block';
+                    document.getElementById('airdropBtn').style.display = 'block';
+                } else {
+                    document.getElementById('status').innerHTML = `<h2>❌ Error</h2><p>${data.detail || 'Server error'}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = `<h2>❌ Error</h2><p>Server error: ${error.message}</p>`;
             }
         }
-        
-        // Auto redirect after 3 seconds
-        setTimeout(function() {
-            continueToAirdrop();
-        }, 3000);
+
+        function backToMiniApp() {
+            const telegramId = new URLSearchParams(window.location.search).get('telegram_id');
+            const walletAddress = new URLSearchParams(window.location.search).get('wallet') || 'unknown';
+            const encodedData = btoa(`connected_${walletAddress}`);
+            window.open(`https://t.me/yourbot/app?startapp=${encodedData}`, '_blank');
+        }
+
+        function continueToAirdrop() {
+            const telegramId = new URLSearchParams(window.location.search).get('telegram_id');
+            if (telegramId) {
+                window.location.href = `/airdrop?telegram_id=${telegramId}`;
+            } else {
+                alert('Error: Missing telegram_id');
+            }
+        }
+
+        window.addEventListener('load', handleCallback);
     </script>
 </body>
 </html>
