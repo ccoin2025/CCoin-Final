@@ -11,7 +11,7 @@ from CCOIN.models.user import User
 from CCOIN.config import DAPP_PRIVATE_KEY, SOLANA_RPC
 from solders.pubkey import Pubkey
 import base58
-import nacl.public  # جایگزین tweetnacl
+import nacl.public
 import nacl.encoding
 import structlog
 import json
@@ -55,7 +55,12 @@ async def wallet_connect(
             logger.error(f"User not found: {telegram_id}")
             raise HTTPException(status_code=404, detail="User not found")
         
-        # رمزگشایی wallet_data با استفاده از DAPP_PRIVATE_KEY
+        # بررسی وجود DAPP_PRIVATE_KEY
+        if not DAPP_PRIVATE_KEY:
+            logger.error("DAPP_PRIVATE_KEY is not configured")
+            raise HTTPException(status_code=500, detail="Server configuration error: Missing private key")
+        
+        # رمزگشایی wallet_data
         try:
             private_key = nacl.public.PrivateKey(
                 bytes.fromhex(DAPP_PRIVATE_KEY),
