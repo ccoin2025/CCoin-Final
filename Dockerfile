@@ -14,4 +14,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-CMD ["gunicorn", "CCOIN.main:app", "--bind", "0.0.0.0:8000"]
+web: uvicorn CCOIN.main:app --host 0.0.0.0 --port $PORT
