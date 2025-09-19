@@ -25,9 +25,7 @@ logger = structlog.get_logger()
 @limiter.limit("10/minute")
 async def wallet_browser_connect(request: Request, telegram_id: str = Query(..., description="Telegram user ID")):
     """نمایش صفحه اتصال کیف پول در مرورگر"""
-    
     logger.info(f"Wallet connect request for telegram_id: {telegram_id}")
-    
     return templates.TemplateResponse("wallet_browser_connect.html", {
         "request": request,
         "telegram_id": telegram_id
@@ -40,63 +38,39 @@ async def wallet_connect(
     db: Session = Depends(get_db)
 ):
     """اتصال کیف پول کاربر"""
-    
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-        encrypted_wallet_data = body.get("wallet_data")
+        wallet_address = body.get("wallet_address")
         
-        if not telegram_id or not encrypted_wallet_data:
-            logger.error(f"Missing telegram_id or wallet_data for wallet connect: {telegram_id}")
-            raise HTTPException(status_code=400, detail="Telegram ID and wallet data are required")
-        
+        if not telegram_id or not wallet_address:
+            logger.error(f"Missing telegram_id or wallet_address: {telegram_id}")
+            raise HTTPException(status_code=400, detail="Telegram ID and wallet address are required")
+
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             logger.error(f"User not found: {telegram_id}")
             raise HTTPException(status_code=404, detail="User not found")
-        
-        # بررسی وجود DAPP_PRIVATE_KEY
-        if not DAPP_PRIVATE_KEY:
-            logger.error("DAPP_PRIVATE_KEY is not configured")
-            raise HTTPException(status_code=500, detail="Server configuration error: Missing private key")
-        
-        # رمزگشایی wallet_data
-        try:
-            private_key = nacl.public.PrivateKey(
-                bytes.fromhex(DAPP_PRIVATE_KEY),
-                encoder=nacl.encoding.RawEncoder
-            )
-            decrypted_data = private_key.decrypt(
-                base58.b58decode(encrypted_wallet_data),
-                encoder=nacl.encoding.RawEncoder
-            )
-            wallet_info = json.loads(decrypted_data.decode())
-            wallet_address = wallet_info.get("wallet_address")
-            
-            if not is_valid_solana_address(wallet_address):
-                logger.error(f"Invalid Solana address for user {telegram_id}: {wallet_address}")
-                raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
-        
-        except Exception as e:
-            logger.error(f"Decryption failed for user {telegram_id}: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Failed to decrypt wallet data: {str(e)}")
-        
+
+        if not is_valid_solana_address(wallet_address):
+            logger.error(f"Invalid Solana address for user {telegram_id}: {wallet_address}")
+            raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
+
         # به‌روزرسانی آدرس کیف پول کاربر
         user.wallet_address = wallet_address
         user.wallet_connected = True
         user.wallet_connection_date = datetime.utcnow()
         db.commit()
-        
+
         logger.info(f"Wallet connected for user {telegram_id}: {wallet_address}")
-        
         log_wallet_connection(telegram_id, wallet_address)
-        
+
         return {
             "success": True,
             "message": "Wallet connected successfully",
             "wallet_address": wallet_address
         }
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error connecting wallet for user {telegram_id}: {str(e)}")
@@ -110,16 +84,15 @@ async def get_wallet_status(
     db: Session = Depends(get_db)
 ):
     """دریافت وضعیت اتصال کیف پول"""
-    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.error(f"User not found for wallet status: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return {
-        "wallet_connected": user.wallet_connected,
+        "wallet_connected": getattr(user, 'wallet_connected', False),
         "wallet_address": user.wallet_address,
-        "connection_date": user.wallet_connection_date
+        "connection_date": getattr(user, 'wallet_connection_date', None)
     }
 
 @router.get("/callback", response_class=HTMLResponse)
@@ -130,19 +103,18 @@ async def wallet_callback(
     db: Session = Depends(get_db)
 ):
     """صفحه callback بعد از اتصال کیف پول"""
-    
     logger.info(f"Wallet callback for telegram_id: {telegram_id}")
     
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.error(f"User not found for wallet callback: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return templates.TemplateResponse("wallet_callback.html", {
         "request": request,
         "telegram_id": telegram_id,
         "wallet_address": user.wallet_address,
-        "success_message": "Wallet connected successfully!" if user.wallet_connected else "Wallet connection failed."
+        "success_message": "Wallet connected successfully!" if getattr(user, 'wallet_connected', False) else "Wallet connection failed."
     })
 
 # Helper function برای بررسی اعتبار آدرس Solana
