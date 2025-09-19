@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Connect Phantom Wallet</title>
+    <!-- بارگذاری مستقیم کتابخانه‌ها -->
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
+    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -83,40 +86,7 @@
         <div id="debug" class="debug"></div>
     </div>
 
-    <!-- بارگذاری کتابخانه‌ها از CDN -->
     <script>
-        // بررسی و بارگذاری TweetNaCl
-        function loadTweetNaCl() {
-            return new Promise((resolve, reject) => {
-                if (typeof nacl !== 'undefined') {
-                    resolve();
-                    return;
-                }
-
-                const script = document.createElement('script');
-                script.src = 'https://unpkg.com/tweetnacl@1.0.3/nacl.min.js';
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error('Failed to load TweetNaCl'));
-                document.head.appendChild(script);
-            });
-        }
-
-        // بررسی و بارگذاری BS58
-        function loadBS58() {
-            return new Promise((resolve, reject) => {
-                if (typeof bs58 !== 'undefined') {
-                    resolve();
-                    return;
-                }
-
-                const script = document.createElement('script');
-                script.src = 'https://unpkg.com/bs58@5.0.0/index.js';
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error('Failed to load BS58'));
-                document.head.appendChild(script);
-            });
-        }
-
         // متغیرهای سراسری
         let dappKeyPair = null;
         let dappPublicKey = '';
@@ -134,20 +104,97 @@
             }
         }
 
-        async function initializeCrypto() {
+        // تابع ساده برای encode base58 بدون وابستگی
+        function simpleBase58Encode(bytes) {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let result = '';
+            let num = 0n;
+            
+            // تبدیل bytes به bigint
+            for (let i = 0; i < bytes.length; i++) {
+                num = num * 256n + BigInt(bytes[i]);
+            }
+            
+            // تبدیل به base58
+            while (num > 0n) {
+                result = alphabet[Number(num % 58n)] + result;
+                num = num / 58n;
+            }
+            
+            // اضافه کردن leading zeros
+            for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
+                result = '1' + result;
+            }
+            
+            return result;
+        }
+
+        // تابع ساده برای decode base58
+        function simpleBase58Decode(str) {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let num = 0n;
+            
+            for (let char of str) {
+                const index = alphabet.indexOf(char);
+                if (index === -1) throw new Error('Invalid base58 character');
+                num = num * 58n + BigInt(index);
+            }
+            
+            // تبدیل به bytes
+            const bytes = [];
+            while (num > 0n) {
+                bytes.unshift(Number(num % 256n));
+                num = num / 256n;
+            }
+            
+            // اضافه کردن leading zeros
+            for (let i = 0; i < str.length && str[i] === '1'; i++) {
+                bytes.unshift(0);
+            }
+            
+            return new Uint8Array(bytes);
+        }
+
+        function checkLibraries() {
+            log('🔍 Checking cryptographic libraries...');
+            
+            // چک کردن TweetNaCl
+            if (typeof nacl === 'undefined') {
+                log('❌ TweetNaCl library not loaded');
+                return false;
+            }
+            log('✅ TweetNaCl library loaded');
+
+            // چک کردن BS58 (یا استفاده از fallback)
+            if (typeof bs58 === 'undefined') {
+                log('⚠️ BS58 library not loaded, using fallback implementation');
+                window.bs58 = {
+                    encode: simpleBase58Encode,
+                    decode: simpleBase58Decode
+                };
+            }
+            log('✅ BS58 functions available');
+
+            return true;
+        }
+
+        function initializeCrypto() {
             try {
-                log('📦 Loading cryptographic libraries...');
-                await loadTweetNaCl();
-                await loadBS58();
-                
                 log('🔑 Generating encryption keypair...');
+                
+                if (!checkLibraries()) {
+                    throw new Error('Required cryptographic libraries not available');
+                }
+
                 dappKeyPair = nacl.box.keyPair();
                 dappPublicKey = bs58.encode(dappKeyPair.publicKey);
+                
                 log('✅ Keypair generated successfully');
+                log('🔑 Public key: ' + dappPublicKey.substring(0, 8) + '...');
                 
                 return true;
             } catch (error) {
-                log('❌ Failed to initialize crypto: ' + error.message);
+                log('❌ Failed to generate keypair: ' + error.message);
                 return false;
             }
         }
@@ -174,29 +221,28 @@
                     return;
                 }
 
-                // بارگذاری کتابخانه‌ها
-                const cryptoReady = await initializeCrypto();
+                // تولید کلیدهای رمزنگاری
+                const cryptoReady = initializeCrypto();
                 if (!cryptoReady) {
-                    throw new Error('Failed to initialize cryptographic libraries');
+                    throw new Error('Failed to initialize cryptographic functions');
                 }
 
                 connectBtn.innerHTML = '<span class="loading-spinner"></span>Opening Phantom...';
-                log('🚀 Starting Phantom deeplink connection...');
+                log('🚀 Creating Phantom deeplink...');
 
                 // ساخت URL‌ها
                 const redirectUrl = `${window.location.origin}/wallet/callback?telegram_id=${telegramId}`;
                 
                 const params = new URLSearchParams({
                     dapp_encryption_public_key: dappPublicKey,
-                    cluster: "devnet", // یا "mainnet-beta"
+                    cluster: "devnet",
                     app_url: window.location.origin,
                     redirect_link: redirectUrl
                 });
 
-                // استفاده از Universal Link صحیح Phantom
                 const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
                 
-                log('🔗 Phantom deeplink created');
+                log('🔗 Phantom deeplink ready');
                 log('📋 Redirect URL: ' + redirectUrl);
                 
                 // ذخیره اطلاعات در localStorage
@@ -206,11 +252,23 @@
                 localStorage.setItem('connection_timestamp', Date.now().toString());
 
                 log('💾 Data saved to localStorage');
-                log('🌍 Redirecting to Phantom...');
+                log('🌍 Opening Phantom app...');
 
-                // اضافه کردن تاخیر کوتاه برای نمایش پیام‌ها
+                // هدایت به Phantom
                 setTimeout(() => {
-                    window.location.href = phantomDeeplink;
+                    try {
+                        window.location.href = phantomDeeplink;
+                    } catch (e) {
+                        log('❌ Failed to redirect: ' + e.message);
+                        // fallback: کپی URL
+                        if (navigator.clipboard) {
+                            navigator.clipboard.writeText(phantomDeeplink).then(() => {
+                                alert('Failed to open Phantom automatically. URL copied to clipboard - please paste it in your browser.');
+                            });
+                        } else {
+                            alert('Please manually open this URL:\n\n' + phantomDeeplink);
+                        }
+                    }
                 }, 500);
 
             } catch (error) {
@@ -219,7 +277,7 @@
                 
                 connectBtn.disabled = false;
                 connectBtn.innerHTML = '🦄 Open in Phantom App';
-                alert('Failed to initialize connection. Error: ' + error.message);
+                alert('Failed to initialize connection.\n\nError: ' + error.message + '\n\nPlease try refreshing the page.');
             }
         }
 
@@ -231,14 +289,12 @@
                     throw new Error('Phantom wallet not found in browser');
                 }
 
-                // اتصال به wallet
                 log('🤝 Requesting wallet connection...');
                 const response = await window.solana.connect();
                 const walletAddress = response.publicKey.toString();
 
                 log('✅ Wallet connected: ' + walletAddress);
 
-                // ارسال آدرس به سرور
                 log('📤 Sending wallet address to server...');
                 const apiResponse = await fetch('/wallet/connect', {
                     method: 'POST',
@@ -261,7 +317,6 @@
                 if (data.success) {
                     log('✅ Wallet saved successfully!');
                     
-                    // هدایت به callback page
                     const callbackUrl = `/wallet/callback?telegram_id=${telegramId}&wallet_connected=true&wallet_address=${walletAddress}`;
                     log('🔄 Redirecting to callback...');
                     
@@ -280,7 +335,7 @@
         }
 
         // بررسی محیط هنگام بارگذاری صفحه
-        window.addEventListener('load', async function() {
+        window.addEventListener('load', function() {
             log('🔍 Page loaded, checking environment...');
             log('👤 Telegram ID: ' + (telegramId || 'Not found'));
             
@@ -300,21 +355,27 @@
 
             if (phantomEncryptionPublicKey && data && nonce) {
                 log('🎉 Received Phantom response, processing...');
-                await handlePhantomResponse(phantomEncryptionPublicKey, data, nonce);
+                handlePhantomResponse(phantomEncryptionPublicKey, data, nonce);
             } else {
                 log('📱 Regular browser detected, ready for deeplink');
+                
+                // پیش-چک کردن کتابخانه‌ها
+                if (checkLibraries()) {
+                    log('✅ All libraries ready');
+                } else {
+                    log('⚠️ Some libraries may need fallback implementations');
+                }
             }
         });
 
-        async function handlePhantomResponse(phantomPublicKey, encryptedData, nonce) {
+        function handlePhantomResponse(phantomPublicKey, encryptedData, nonce) {
             try {
                 log('🔓 Processing Phantom response...');
 
-                // بارگذاری کتابخانه‌ها اگر لازم باشد
-                await loadTweetNaCl();
-                await loadBS58();
+                if (!checkLibraries()) {
+                    throw new Error('Cryptographic libraries not available');
+                }
 
-                // بازیابی کلیدهای ذخیره شده
                 const dappSecretKey = localStorage.getItem('dapp_keypair_secret');
                 const storedTelegramId = localStorage.getItem('telegram_id');
 
@@ -324,7 +385,6 @@
 
                 log('🔐 Decrypting response data...');
 
-                // رمزگشایی پاسخ
                 const decryptedBytes = nacl.box.open(
                     bs58.decode(encryptedData),
                     bs58.decode(nonce),
@@ -341,8 +401,7 @@
 
                 log('✅ Wallet address extracted: ' + walletAddress);
 
-                // ارسال به سرور
-                await sendWalletToServer(storedTelegramId, walletAddress, decryptedData.session);
+                sendWalletToServer(storedTelegramId, walletAddress, decryptedData.session);
 
             } catch (error) {
                 log('❌ Error processing Phantom response: ' + error.message);
@@ -377,13 +436,11 @@
                 if (data.success) {
                     log('✅ Wallet connection saved successfully!');
                     
-                    // پاک کردن localStorage
                     localStorage.removeItem('dapp_keypair_public');
                     localStorage.removeItem('dapp_keypair_secret');
                     localStorage.removeItem('telegram_id');
                     localStorage.removeItem('connection_timestamp');
 
-                    // هدایت به callback
                     const callbackUrl = `/wallet/callback?telegram_id=${telegramId}&wallet_connected=true&wallet_address=${walletAddress}`;
                     log('🔄 Redirecting to success page...');
                     
