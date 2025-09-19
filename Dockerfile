@@ -12,9 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies with --root-user-action option
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir --root-user-action=ignore -r requirements.txt
 
 # Clean up build dependencies
 RUN apt-get purge -y --auto-remove gcc libffi-dev libsodium-dev
