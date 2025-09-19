@@ -145,5 +145,29 @@ def log_wallet_connection(telegram_id: str, wallet_address: str):
     # ذخیره لاگ در فایل
     with open('wallet_logs.txt', 'a') as f:
         f.write(str(log_entry) + '\n')
+
+
+@router.get("/test-return")
+async def test_return_to_telegram(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID")
+):
+    """تست بازگشت به تلگرام"""
+    return HTMLResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <body>
+        <h1>Test Return to Telegram</h1>
+        <button onclick="returnToTelegram()">Return to Telegram</button>
+        <script>
+            function returnToTelegram() {{
+                const telegramUrl = 'https://t.me/CTG_COIN_BOT/app?startapp=test';
+                window.location.href = telegramUrl;
+            }}
+        </script>
+    </body>
+    </html>
+    """)    
+    
     
     return log_entry
