@@ -308,7 +308,7 @@ app.include_router(airdrop.router, prefix="/airdrop")
 app.include_router(about.router, prefix="/about")
 app.include_router(usertasks.router, prefix="/usertasks")
 app.include_router(users.router, prefix="/users")
-app.include_router(wallet.router)
+app.include_router(wallet.router, prefix="/wallet")
 app.include_router(commission.router, prefix="/commission")
 
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
