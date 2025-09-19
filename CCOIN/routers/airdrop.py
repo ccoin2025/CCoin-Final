@@ -388,3 +388,42 @@ async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
         "total_tasks": len(user.tasks) if user.tasks else 0,
         "completed_count": len([t for t in user.tasks if t.completed]) if user.tasks else 0
     }
+
+@router.get("/referral_status")
+@limiter.limit("10/minute")
+async def get_referral_status(request: Request, db: Session = Depends(get_db)):
+    """Check if user has successfully invited friends"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # روش اول: شمارش کاربرانی که توسط این کاربر دعوت شده‌اند
+    referral_count = db.query(User).filter(User.referred_by == user.id).count()
+    
+    # روش دوم: چک کردن relationship اگر درست کار کند
+    relationship_count = 0
+    try:
+        if hasattr(user, 'referrals') and user.referrals:
+            relationship_count = len(user.referrals)
+    except:
+        pass
+
+    # انتخاب بهترین روش
+    final_count = max(referral_count, relationship_count)
+    has_referrals = final_count > 0
+
+    print(f"Referral check for user {telegram_id}: referral_count={referral_count}, relationship_count={relationship_count}, final={final_count}")
+
+    return {
+        "has_referrals": has_referrals,
+        "referral_count": final_count,
+        "referral_code": user.referral_code,
+        "debug_info": {
+            "direct_count": referral_count,
+            "relationship_count": relationship_count
+        }
+    }
