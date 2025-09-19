@@ -14,4 +14,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "CCOIN.main:app", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "CCOIN.main:app", "--bind", "0.0.0.0:8000"]
