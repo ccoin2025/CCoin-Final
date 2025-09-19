@@ -22,26 +22,32 @@ let connectedWallet = INITIAL_WALLET_ADDRESS;
 let phantomProvider = null;
 let phantomDetected = false;
 
+function log(msg) {
+    console.log('[Airdrop] ' + msg);
+}
+
 // **جدید: تابع چک کردن وضعیت از سرور**
 async function checkAllStatusFromServer() {
     try {
-        // چک کردن وضعیت wallet
-        const walletResponse = await fetch('/airdrop/check_wallet_status');
+        console.log('🔍 Checking all status from server...');
+        
+        // چک کردن وضعیت wallet و commission
+        const walletResponse = await fetch('/airdrop/commission_status');
         if (walletResponse.ok) {
             const walletData = await walletResponse.json();
-            if (walletData.connected && walletData.wallet_address) {
+            if (walletData.wallet_connected && walletData.wallet_address) {
                 connectedWallet = walletData.wallet_address;
                 tasksCompleted.wallet = true;
-                log('✅ Wallet status updated from server');
+                log('✅ Wallet status updated from server: ' + connectedWallet.substring(0, 8) + '...');
+            } else {
+                tasksCompleted.wallet = false;
+                connectedWallet = null;
+                log('❌ Wallet not connected');
             }
-        }
-
-        // چک کردن وضعیت commission
-        const commissionResponse = await fetch('/airdrop/commission_status');
-        if (commissionResponse.ok) {
-            const commissionData = await commissionResponse.json();
-            tasksCompleted.pay = commissionData.commission_paid;
-            log('✅ Commission status updated from server');
+            
+            // چک commission از همین response
+            tasksCompleted.pay = walletData.commission_paid;
+            log('💰 Commission status: ' + (walletData.commission_paid ? 'Paid' : 'Not paid'));
         }
 
         // چک کردن وضعیت referrals
@@ -49,11 +55,29 @@ async function checkAllStatusFromServer() {
         if (referralResponse.ok) {
             const referralData = await referralResponse.json();
             tasksCompleted.invite = referralData.has_referrals;
-            log('✅ Referral status updated from server');
+            log('👥 Referral status: ' + (referralData.has_referrals ? `${referralData.referral_count} friends invited` : 'No friends invited'));
+        } else {
+            log('❌ Failed to get referral status');
+        }
+
+        // چک کردن وضعیت tasks
+        try {
+            const tasksResponse = await fetch('/airdrop/tasks_status');
+            if (tasksResponse.ok) {
+                const tasksData = await tasksResponse.json();
+                tasksCompleted.task = tasksData.tasks_completed;
+                log('📋 Tasks status: ' + (tasksData.tasks_completed ? `${tasksData.completed_count}/${tasksData.total_tasks} completed` : 'No tasks completed'));
+            }
+        } catch (error) {
+            // fallback: اگر endpoint موجود نیست، از مقدار اولیه استفاده کن
+            log('⚠️ Tasks endpoint not available, using initial value');
         }
 
         // بروزرسانی UI
         updateAllTasksUI();
+        
+        // لاگ وضعیت نهایی
+        log('📊 Final status: Wallet=' + tasksCompleted.wallet + ', Tasks=' + tasksCompleted.task + ', Invite=' + tasksCompleted.invite + ', Commission=' + tasksCompleted.pay);
         
     } catch (error) {
         console.error('Error checking status from server:', error);
@@ -61,7 +85,7 @@ async function checkAllStatusFromServer() {
     }
 }
 
-// **Fix: BS58 utility functions**
+// Fix: BS58 utility functions
 function ensureBS58() {
     if (typeof bs58 === 'undefined') {
         if (typeof window.bs58 !== 'undefined') {
@@ -72,6 +96,26 @@ function ensureBS58() {
         return false;
     }
     return true;
+}
+
+function encodeBase58(data) {
+    if (!ensureBS58()) {
+        return btoa(String.fromCharCode.apply(null, data));
+    }
+    try {
+        if (typeof bs58 === 'function') {
+            return bs58(data);
+        } else if (bs58.encode) {
+            return bs58.encode(data);
+        } else if (bs58.default && bs58.default.encode) {
+            return bs58.default.encode(data);
+        } else {
+            throw new Error('BS58 encode function not available');
+        }
+    } catch (error) {
+        console.error('BS58 encoding error:', error);
+        return btoa(String.fromCharCode.apply(null, data));
+    }
 }
 
 // **Fixed: Countdown Timer**
@@ -92,16 +136,47 @@ function updateCountdown() {
         document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
         document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
         document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+    } else {
+        document.getElementById('days').textContent = '00';
+        document.getElementById('hours').textContent = '00';
+        document.getElementById('minutes').textContent = '00';
+        document.getElementById('seconds').textContent = '00';
     }
-}
-
-function log(msg) {
-    console.log('[Airdrop] ' + msg);
 }
 
 // **اصلاح شده: تشخیص محیط Telegram**
 function isTelegramEnvironment() {
     return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+}
+
+// **اصلاح شده: باز کردن لینک در مرورگر خارجی**
+function openExternalLink(url) {
+    console.log("🔗 Opening external link:", url);
+
+    if (isTelegramEnvironment()) {
+        console.log("📱 Telegram environment detected, using Telegram API");
+        try {
+            if (window.Telegram.WebApp.openTelegramLink) {
+                window.Telegram.WebApp.openTelegramLink(url);
+                return;
+            }
+
+            if (window.Telegram.WebApp.openLink) {
+                window.Telegram.WebApp.openLink(url, { try_instant_view: false });
+                return;
+            }
+
+            console.log("🔄 Falling back to window.open");
+            window.open(url, '_blank');
+
+        } catch (error) {
+            console.error("Error opening Telegram link:", error);
+            window.location.href = url;
+        }
+    } else {
+        console.log("🌐 Standard browser environment");
+        window.open(url, '_blank');
+    }
 }
 
 // **جدید: نمایش modal برای اتصال wallet**
@@ -150,20 +225,17 @@ async function handleWalletConnection() {
     }
 }
 
-// **جدید: Toggle wallet dropdown**
+// **جدید: Toggle wallet dropdown بدون نمایش آدرس**
 function toggleWalletDropdown() {
     const dropdown = document.getElementById('wallet-dropdown-content');
-    const addressElement = document.getElementById('dropdown-wallet-address');
     
     if (dropdown) {
         if (dropdown.classList.contains('show')) {
             dropdown.classList.remove('show');
+            log('📱 Wallet dropdown closed');
         } else {
-            // نمایش آدرس wallet
-            if (addressElement && connectedWallet) {
-                addressElement.textContent = connectedWallet;
-            }
             dropdown.classList.add('show');
+            log('📱 Wallet dropdown opened');
         }
     }
 }
@@ -226,6 +298,11 @@ function closeWalletDropdown() {
     }
 }
 
+// **بازطراحی: connectWallet**
+async function connectWallet() {
+    handleWalletConnection();
+}
+
 // **اصلاح شده: پرداخت کمیسیون**
 async function payCommission() {
     if (!connectedWallet) {
@@ -238,7 +315,7 @@ async function payCommission() {
         return;
     }
 
-    log('💰 Starting commission payment process...');
+    console.log("💰 Starting commission payment process...");
 
     try {
         const commissionButton = document.getElementById('commission-button');
@@ -252,10 +329,10 @@ async function payCommission() {
         const commissionUrl = `/commission/pay?telegram_id=${USER_ID}`;
 
         if (isTelegramEnvironment()) {
-            log('📱 Telegram environment - opening external payment page');
+            console.log("📱 Telegram environment - opening external payment page");
             window.Telegram.WebApp.openLink(commissionUrl, { try_instant_view: false });
         } else {
-            log('🌐 Browser environment - opening in new tab');
+            console.log("🌐 Browser environment - opening in new tab");
             window.open(commissionUrl, '_blank');
         }
 
@@ -269,8 +346,15 @@ async function payCommission() {
         }, 3000);
 
     } catch (error) {
-        log('❌ Commission payment error: ' + error.message);
+        console.error("❌ Commission payment error:", error);
         showToast("Failed to open payment page", "error");
+
+        const commissionButton = document.getElementById('commission-button');
+        const commissionIcon = document.getElementById('commission-icon');
+        if (commissionButton && commissionIcon) {
+            commissionButton.classList.remove('loading');
+            commissionIcon.className = 'fas fa-chevron-right right-icon';
+        }
     }
 }
 
@@ -283,7 +367,9 @@ function updateWalletUI() {
     const taskBox = document.querySelector('#connect-wallet .task-box');
 
     if (tasksCompleted.wallet && connectedWallet) {
-        leftText.textContent = 'Wallet Connected';
+        // نمایش آدرس کوتاه شده روی دکمه
+        const shortAddress = connectedWallet.substring(0, 6) + '...' + connectedWallet.substring(connectedWallet.length - 4);
+        leftText.innerHTML = `Wallet Connected<br><small style="font-size:10px; opacity:0.7;">${shortAddress}</small>`;
         rightIcon.className = 'fas fa-check right-icon';
         button.classList.add('wallet-connected');
         button.classList.add('completed');
@@ -432,11 +518,14 @@ function handleWalletConnectionSuccess() {
             // پاک کردن URL
             const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
             window.history.replaceState({}, document.title, cleanUrl);
+        } else {
+            console.error("Invalid wallet address format:", walletAddress);
+            showToast("Invalid wallet address received", "error");
         }
     }
 }
 
-// **Handler functions**
+// **Handler functions for other tasks**
 async function handleTaskCompletion() {
     if (tasksCompleted.task) {
         showToast("Tasks already completed!", "info");
@@ -453,6 +542,41 @@ async function handleInviteCheck() {
     window.location.href = "/friends";
 }
 
+// **Check status periodically**
+async function checkAllStatus() {
+    try {
+        // Check wallet status
+        const walletResponse = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
+        if (walletResponse.ok) {
+            const walletData = await walletResponse.json();
+            if (walletData.connected && walletData.address) {
+                connectedWallet = walletData.address;
+                tasksCompleted.wallet = true;
+            }
+        }
+
+        // Check tasks status
+        const tasksResponse = await fetch(`/api/tasks/status?telegram_id=${USER_ID}`);
+        if (tasksResponse.ok) {
+            const tasksData = await tasksResponse.json();
+            tasksCompleted.task = tasksData.tasks_completed;
+            tasksCompleted.invite = tasksData.friends_invited;
+        }
+
+        // Check commission status
+        const commissionResponse = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
+        if (commissionResponse.ok) {
+            const commissionData = await commissionResponse.json();
+            tasksCompleted.pay = commissionData.commission_paid;
+        }
+
+        updateAllTasksUI();
+
+    } catch (error) {
+        console.error('Error checking status:', error);
+    }
+}
+
 // **Event listeners**
 document.addEventListener('click', function(event) {
     const walletDropdown = document.getElementById('wallet-dropdown-content');
@@ -465,14 +589,24 @@ document.addEventListener('click', function(event) {
     }
 });
 
+// **کلیک خارج از modal برای بستن**
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('phantomModal');
+    if (event.target === modal) {
+        closePhantomModal();
+    }
+});
+
 // **Initialization**
 document.addEventListener('DOMContentLoaded', function() {
     log('🚀 Airdrop page initialized');
+    log('👤 User ID: ' + USER_ID);
+    log('📊 Initial status: Wallet=' + INITIAL_WALLET_CONNECTED + ', Tasks=' + INITIAL_TASKS_COMPLETED + ', Invite=' + INITIAL_INVITED_FRIENDS + ', Commission=' + INITIAL_COMMISSION_PAID);
     
     // چک کردن URL برای wallet connection success
     handleWalletConnectionSuccess();
     
-    // چک کردن وضعیت از سرور
+    // چک کردن وضعیت از سرور (اولویت دارد)
     checkAllStatusFromServer();
     
     // بروزرسانی UI اولیه
@@ -486,4 +620,14 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(checkAllStatusFromServer, 30000);
     
     log('✅ All initialization completed');
+});
+
+// **Window load event**
+window.addEventListener('load', function() {
+    log('🌍 Window loaded');
+    
+    // بروزرسانی اضافی بعد از load کامل
+    setTimeout(() => {
+        checkAllStatusFromServer();
+    }, 1000);
 });
