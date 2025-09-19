@@ -454,13 +454,13 @@
                         <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
                         <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
                     </button>
-                    
+
                     <!-- منوی کشویی برای زمانی که ولت متصل است -->
                     <div class="wallet-dropdown-content" id="wallet-dropdown-content">
                         <div class="wallet-info-dropdown">
-                            <div>Connected Wallet:</div>
-                            <div class="wallet-address-dropdown" id="dropdown-wallet-address">
-                                <!-- آدرس کیف پول اینجا نمایش داده می‌شود -->
+                            <div>🦄 Phantom Wallet Connected</div>
+                            <div style="font-size: 12px; color: #888; margin: 8px 0;">
+                                Your wallet is successfully connected to CCoin
                             </div>
                             <div class="wallet-actions-dropdown">
                                 <button class="wallet-action-btn change-btn" onclick="changeWallet()">
@@ -566,13 +566,13 @@
         function toggleWalletDropdown() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             const dropdownAddress = document.getElementById('dropdown-wallet-address');
-            
+
             if (currentWalletAddress && dropdownAddress) {
                 dropdownAddress.textContent = currentWalletAddress;
             }
-            
+
             dropdown.classList.toggle('show');
-            
+
             if (dropdown.classList.contains('show')) {
                 document.addEventListener('click', closeDropdownOnOutsideClick);
             } else {
@@ -584,7 +584,7 @@
         function closeDropdownOnOutsideClick(event) {
             const dropdown = document.getElementById('wallet-dropdown-content');
             const walletButton = document.querySelector('.wallet-connect-button');
-            
+
             if (!dropdown.contains(event.target) && !walletButton.contains(event.target)) {
                 dropdown.classList.remove('show');
                 document.removeEventListener('click', closeDropdownOnOutsideClick);
@@ -609,14 +609,14 @@
             try {
                 document.getElementById('wallet-dropdown-content').classList.remove('show');
                 document.removeEventListener('click', closeDropdownOnOutsideClick);
-                
+
                 const response = await fetch('/api/wallet/disconnect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: telegramId })
                 });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showToast('Wallet disconnected successfully!', 'success');
                     updateWalletUI(false, '');
@@ -863,27 +863,27 @@
 
             // تنظیم countdown
             const countdownDate = new Date("2025-12-31T23:59:59").getTime();
-            
+
             function updateCountdown() {
                 const now = new Date().getTime();
                 const timeLeft = countdownDate - now;
-                
+
                 const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-                
+
                 document.getElementById("days").textContent = String(days).padStart(2, '0');
                 document.getElementById("hours").textContent = String(hours).padStart(2, '0');
                 document.getElementById("minutes").textContent = String(minutes).padStart(2, '0');
                 document.getElementById("seconds").textContent = String(seconds).padStart(2, '0');
-                
+
                 if (timeLeft < 0) {
                     clearInterval(countdownInterval);
                     document.querySelector('.countdown').innerHTML = "EXPIRED";
                 }
             }
-            
+
             const countdownInterval = setInterval(updateCountdown, 1000);
             updateCountdown();
         });
