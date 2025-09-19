@@ -52,6 +52,8 @@
             font-family: monospace;
         }
     </style>
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
+    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
 </head>
 <body>
     <div class="container">
@@ -59,7 +61,7 @@
         <p>Connect your Phantom wallet to CCoin to participate in the airdrop</p>
         
         <button class="btn" onclick="openInPhantom()">
-            🦄 Open in Phantom App
+            🦄 Connect Phantom Wallet
         </button>
         
         <div id="debug" class="debug"></div>
@@ -77,7 +79,7 @@
         }
 
         function openInPhantom() {
-            log('🚀 Starting Phantom connection...');
+            log('🚀 Starting Phantom wallet connection...');
             
             // اگر قبلاً در Phantom browser هستیم
             if (window.solana && window.solana.isPhantom) {
@@ -98,42 +100,35 @@
             
             log('👤 Telegram ID: ' + telegramId);
             
-            // ایجاد URL برای deeplink
-            var appUrl = window.location.origin;
-            var redirectUrl = appUrl + '/wallet/callback?telegram_id=' + telegramId;
+            // تولید encryption keypair
+            var dappKeyPair = nacl.box.keyPair();
+            var dappEncryptionPublicKey = bs58.encode(dappKeyPair.publicKey);
             
-            // Phantom deeplink URL
-            var phantomUrl = 'https://phantom.app/ul/v1/browse/' + encodeURIComponent(appUrl + '/wallet/browser/connect?telegram_id=' + telegramId);
+            // ذخیره private key برای decryption
+            sessionStorage.setItem('dappPrivateKey', bs58.encode(dappKeyPair.secretKey));
+            sessionStorage.setItem('telegramId', telegramId);
             
-            log('🔗 Phantom URL: ' + phantomUrl);
+            // پارامترهای connect deeplink
+            var appUrl = encodeURIComponent(window.location.origin);
+            var redirectLink = encodeURIComponent(window.location.origin + '/wallet/callback?telegram_id=' + telegramId);
+            var cluster = 'mainnet-beta';
             
-            // تلاش اول: استفاده از window.open
+            // ایجاد connect deeplink با encryption
+            var connectUrl = 'https://phantom.app/ul/v1/connect?' +
+                'dapp_encryption_public_key=' + dappEncryptionPublicKey +
+                '&cluster=' + cluster +
+                '&app_url=' + appUrl +
+                '&redirect_link=' + redirectLink;
+            
+            log('🔗 Connect URL: ' + connectUrl);
+            
+            // باز کردن در Phantom
             try {
-                var newWindow = window.open(phantomUrl, '_blank');
-                if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
-                    log('⚠️ Popup blocked, trying direct navigation...');
-                    throw new Error('Popup blocked');
-                }
-                log('✅ Opened in new window');
+                window.location.href = connectUrl;
+                log('✅ Redirecting to Phantom for connection...');
             } catch (e) {
-                log('⚠️ Window.open failed: ' + e.message);
-                
-                // تلاش دوم: navigation مستقیم
-                try {
-                    window.location.href = phantomUrl;
-                    log('✅ Direct navigation attempted');
-                } catch (e2) {
-                    log('❌ Direct navigation failed: ' + e2.message);
-                    
-                    // تلاش سوم: کپی URL به clipboard
-                    if (navigator.clipboard) {
-                        navigator.clipboard.writeText(phantomUrl).then(function() {
-                            alert('URL copied to clipboard. Please paste it in your browser to open Phantom.');
-                        });
-                    } else {
-                        alert('Please manually open this URL in Phantom:\n\n' + phantomUrl);
-                    }
-                }
+                log('❌ Failed to redirect: ' + e.message);
+                alert('Failed to open Phantom. Please make sure Phantom app is installed.');
             }
         }
 
@@ -213,6 +208,91 @@
                 log('📱 Regular browser detected, will redirect to Phantom');
             }
         });
+
+        // Handle Phantom callback (اگر از deeplink برگشته)
+        window.addEventListener('load', function() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
+            var data = urlParams.get('data');
+            var nonce = urlParams.get('nonce');
+            
+            if (phantomEncryptionPublicKey && data && nonce) {
+                log('🔄 Processing Phantom callback...');
+                handlePhantomCallback(phantomEncryptionPublicKey, data, nonce);
+            }
+        });
+
+        function handlePhantomCallback(phantomPublicKey, encryptedData, nonce) {
+            try {
+                log('🔓 Decrypting Phantom response...');
+                
+                var dappPrivateKey = sessionStorage.getItem('dappPrivateKey');
+                var telegramId = sessionStorage.getItem('telegramId');
+                
+                if (!dappPrivateKey || !telegramId) {
+                    throw new Error('Missing session data');
+                }
+                
+                // Decrypt the response
+                var sharedSecret = nacl.box.before(
+                    bs58.decode(phantomPublicKey),
+                    bs58.decode(dappPrivateKey)
+                );
+                
+                var decryptedData = nacl.box.after.open(
+                    bs58.decode(encryptedData),
+                    bs58.decode(nonce),
+                    sharedSecret
+                );
+                
+                var connectData = JSON.parse(new TextDecoder().decode(decryptedData));
+                var walletAddress = connectData.public_key;
+                
+                log('✅ Wallet address received: ' + walletAddress);
+                
+                // ارسال به سرور
+                sendWalletToServer(telegramId, walletAddress);
+                
+            } catch (error) {
+                log('❌ Error processing callback: ' + error.message);
+                console.error('Callback error:', error);
+                alert('Failed to process wallet connection: ' + error.message);
+            }
+        }
+
+        async function sendWalletToServer(telegramId, walletAddress) {
+            try {
+                log('📤 Sending wallet to server...');
+                
+                const response = await fetch('/wallet/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: telegramId,
+                        wallet_address: walletAddress
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    log('✅ Wallet connection saved successfully!');
+                    alert('Wallet connected successfully!\n\nAddress: ' + walletAddress);
+                    
+                    // Redirect to success page
+                    window.location.href = '/wallet/callback?telegram_id=' + telegramId;
+                } else {
+                    log('❌ Server error: ' + (data.detail || 'Unknown error'));
+                    alert('Error saving wallet: ' + (data.detail || 'Server error'));
+                }
+                
+            } catch (error) {
+                log('❌ Network error: ' + error.message);
+                alert('Network error: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>
