@@ -77,7 +77,7 @@
                 debug.scrollTop = debug.scrollHeight;
             }
         }
-        
+
         function openInPhantom() {
             log('🚀 Starting Phantom app connection...');
             
@@ -106,6 +106,7 @@
             
             // Standard v1/connect deeplink for immediate prompt
             var deeplink = `https://phantom.app/ul/v1/connect?app_url=${appUrl}&dapp_encryption_public_key=${dappEncryptionPublicKey}&redirect_link=${callbackUrl}&cluster=${cluster}`;
+            
             log('🔗 Trying Phantom deep link: ' + deeplink);
             
             // ایجاد invisible iframe برای deep link
@@ -132,7 +133,7 @@
                 window.location.href = deeplink;
             }, 1500);
         }
-        
+
         async function connectDirectly() {
             try {
                 log('🔌 Inside Phantom browser, connecting wallet...');
@@ -155,7 +156,7 @@
                 
                 log('📤 Sending wallet address to server...');
                 
-                const apiResponse = await fetch('/api/wallet/connect', {
+                const apiResponse = await fetch('/wallet/connect', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -183,7 +184,7 @@
                 alert('Failed to connect wallet: ' + error.message);
             }
         }
-        
+
         // چک کن اگر قبلاً در Phantom browser هستیم
         window.addEventListener('load', function() {
             log('🔍 Page loaded, checking Phantom browser...');
