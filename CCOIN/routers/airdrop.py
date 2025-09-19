@@ -363,3 +363,28 @@ async def check_commission_status(request: Request, db: Session = Depends(get_db
     return JSONResponse({
         "paid": user.commission_paid
     })
+
+
+@router.get("/tasks_status")
+@limiter.limit("10/minute")
+async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
+    """Check if user has completed tasks"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check completed tasks
+    tasks_completed = False
+    if user.tasks:
+        completed_tasks = [t for t in user.tasks if t.completed]
+        tasks_completed = len(completed_tasks) > 0
+
+    return {
+        "tasks_completed": tasks_completed,
+        "total_tasks": len(user.tasks) if user.tasks else 0,
+        "completed_count": len([t for t in user.tasks if t.completed]) if user.tasks else 0
+    }
