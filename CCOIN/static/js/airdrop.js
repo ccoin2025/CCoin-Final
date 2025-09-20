@@ -26,15 +26,17 @@ function log(msg) {
     console.log('[Airdrop] ' + msg);
 }
 
-// **جدید: تابع چک کردن وضعیت از سرور**
+// **بهبود یافته: تابع چک کردن وضعیت از سرور**
 async function checkAllStatusFromServer() {
     try {
         console.log('🔍 Checking all status from server...');
         
-        // چک کردن وضعیت wallet و commission
+        // چک کردن وضعیت wallet و commission در یک بار
         const walletResponse = await fetch('/airdrop/commission_status');
         if (walletResponse.ok) {
             const walletData = await walletResponse.json();
+            
+            // Update wallet status
             if (walletData.wallet_connected && walletData.wallet_address) {
                 connectedWallet = walletData.wallet_address;
                 tasksCompleted.wallet = true;
@@ -45,19 +47,25 @@ async function checkAllStatusFromServer() {
                 log('❌ Wallet not connected');
             }
             
-            // چک commission از همین response
+            // Update commission status
             tasksCompleted.pay = walletData.commission_paid;
             log('💰 Commission status: ' + (walletData.commission_paid ? 'Paid' : 'Not paid'));
+        } else {
+            log('⚠️ Failed to get wallet/commission status');
         }
 
         // چک کردن وضعیت referrals
-        const referralResponse = await fetch('/airdrop/referral_status');
-        if (referralResponse.ok) {
-            const referralData = await referralResponse.json();
-            tasksCompleted.invite = referralData.has_referrals;
-            log('👥 Referral status: ' + (referralData.has_referrals ? `${referralData.referral_count} friends invited` : 'No friends invited'));
-        } else {
-            log('❌ Failed to get referral status');
+        try {
+            const referralResponse = await fetch('/airdrop/referral_status');
+            if (referralResponse.ok) {
+                const referralData = await referralResponse.json();
+                tasksCompleted.invite = referralData.has_referrals;
+                log('👥 Referral status: ' + (referralData.has_referrals ? `${referralData.referral_count} friends invited` : 'No friends invited'));
+            } else {
+                log('❌ Failed to get referral status');
+            }
+        } catch (error) {
+            log('⚠️ Referral endpoint error: ' + error.message);
         }
 
         // چک کردن وضعیت tasks
@@ -67,10 +75,11 @@ async function checkAllStatusFromServer() {
                 const tasksData = await tasksResponse.json();
                 tasksCompleted.task = tasksData.tasks_completed;
                 log('📋 Tasks status: ' + (tasksData.tasks_completed ? `${tasksData.completed_count}/${tasksData.total_tasks} completed` : 'No tasks completed'));
+            } else {
+                log('⚠️ Tasks endpoint not available, using initial value: ' + tasksCompleted.task);
             }
         } catch (error) {
-            // fallback: اگر endpoint موجود نیست، از مقدار اولیه استفاده کن
-            log('⚠️ Tasks endpoint not available, using initial value');
+            log('⚠️ Tasks endpoint error: ' + error.message);
         }
 
         // بروزرسانی UI
@@ -303,41 +312,62 @@ async function connectWallet() {
     handleWalletConnection();
 }
 
-// **اصلاح شده: پرداخت کمیسیون**
+// **اصلاح شده: پرداخت کمیسیون با چک کردن wallet از سرور**
 async function payCommission() {
-    if (!connectedWallet) {
-        showToast("Please connect wallet first", "error");
-        return;
-    }
-
-    if (tasksCompleted.pay) {
-        showToast("Commission already paid!", "info");
-        return;
-    }
-
-    console.log("💰 Starting commission payment process...");
+    log('💰 Commission payment requested');
 
     try {
-        const commissionButton = document.getElementById('commission-button');
-        const commissionIcon = document.getElementById('commission-icon');
+        // چک کردن وضعیت wallet از سرور قبل از پرداخت
+        const response = await fetch('/airdrop/commission_status');
+        if (!response.ok) {
+            throw new Error('Failed to check wallet status');
+        }
+
+        const data = await response.json();
+        
+        if (!data.wallet_connected || !data.wallet_address) {
+            showToast("Please connect your wallet first", "error");
+            log('❌ Wallet not connected - cannot proceed with commission payment');
+            return;
+        }
+
+        // بروزرسانی متغیرهای محلی
+        connectedWallet = data.wallet_address;
+        tasksCompleted.wallet = true;
+        updateWalletUI();
+
+        if (data.commission_paid) {
+            tasksCompleted.pay = true;
+            updateTasksUI();
+            showToast("Commission already paid!", "info");
+            log('✅ Commission already paid');
+            return;
+        }
+
+        log('🚀 Proceeding with commission payment...');
+
+        const commissionButton = document.querySelector('#pay-commission .task-button');
+        const commissionIcon = document.querySelector('#pay-commission .right-icon');
 
         if (commissionButton && commissionIcon) {
             commissionButton.classList.add('loading');
             commissionIcon.className = 'fas fa-spinner right-icon';
         }
 
+        // هدایت به صفحه پرداخت
         const commissionUrl = `/commission/pay?telegram_id=${USER_ID}`;
 
         if (isTelegramEnvironment()) {
-            console.log("📱 Telegram environment - opening external payment page");
+            log('📱 Telegram environment - opening external payment page');
             window.Telegram.WebApp.openLink(commissionUrl, { try_instant_view: false });
         } else {
-            console.log("🌐 Browser environment - opening in new tab");
+            log('🌐 Browser environment - opening in new tab');
             window.open(commissionUrl, '_blank');
         }
 
         showToast("Opening payment page...", "info");
 
+        // Reset loading state after delay
         setTimeout(() => {
             if (commissionButton && commissionIcon) {
                 commissionButton.classList.remove('loading');
@@ -346,11 +376,12 @@ async function payCommission() {
         }, 3000);
 
     } catch (error) {
-        console.error("❌ Commission payment error:", error);
-        showToast("Failed to open payment page", "error");
+        log('❌ Commission payment error: ' + error.message);
+        showToast("Failed to process commission payment", "error");
 
-        const commissionButton = document.getElementById('commission-button');
-        const commissionIcon = document.getElementById('commission-icon');
+        // Reset loading state
+        const commissionButton = document.querySelector('#pay-commission .task-button');
+        const commissionIcon = document.querySelector('#pay-commission .right-icon');
         if (commissionButton && commissionIcon) {
             commissionButton.classList.remove('loading');
             commissionIcon.className = 'fas fa-chevron-right right-icon';
@@ -389,66 +420,84 @@ function updateWalletUI() {
     }
 }
 
-// **اصلاح شده: updateTasksUI**
+// **اصلاح شده: updateTasksUI برای نمایش درست تیک سبز همه دکمه‌ها**
 function updateTasksUI() {
-    // Update tasks completion
+    // Update tasks completion - استفاده از ID درست
     const taskButton = document.querySelector('#task-completion .task-button');
     const taskLeftText = taskButton.querySelector('.left-text');
     const taskRightIcon = taskButton.querySelector('.right-icon');
     const taskBox = document.querySelector('#task-completion .task-box');
 
-    if (tasksCompleted.task) {
-        taskLeftText.textContent = 'Tasks Completed';
-        taskRightIcon.className = 'fas fa-check right-icon';
-        taskButton.classList.add('tasks-completed');
-        taskButton.classList.add('completed');
-        taskBox.classList.add('completed');
+    if (taskButton && taskLeftText && taskRightIcon && taskBox) {
+        if (tasksCompleted.task) {
+            taskLeftText.textContent = 'Tasks Completed';
+            taskRightIcon.className = 'fas fa-check right-icon';
+            taskButton.classList.add('tasks-completed');
+            taskButton.classList.add('completed');
+            taskBox.classList.add('completed');
+            log('✅ Tasks UI updated to completed state');
+        } else {
+            taskLeftText.textContent = 'Tasks Completion';
+            taskRightIcon.className = 'fas fa-chevron-right right-icon';
+            taskButton.classList.remove('tasks-completed');
+            taskButton.classList.remove('completed');
+            taskBox.classList.remove('completed');
+            log('📋 Tasks UI updated to pending state');
+        }
     } else {
-        taskLeftText.textContent = 'Tasks Completion';
-        taskRightIcon.className = 'fas fa-chevron-right right-icon';
-        taskButton.classList.remove('tasks-completed');
-        taskButton.classList.remove('completed');
-        taskBox.classList.remove('completed');
+        log('⚠️ Task completion button elements not found');
     }
 
-    // Update referral completion
+    // Update referral completion - استفاده از ID درست
     const inviteButton = document.querySelector('#inviting-friends .task-button');
     const inviteLeftText = inviteButton.querySelector('.left-text');
     const inviteRightIcon = inviteButton.querySelector('.right-icon');
     const inviteBox = document.querySelector('#inviting-friends .task-box');
 
-    if (tasksCompleted.invite) {
-        inviteLeftText.textContent = 'Friends Invited';
-        inviteRightIcon.className = 'fas fa-check right-icon';
-        inviteButton.classList.add('friends-invited');
-        inviteButton.classList.add('completed');
-        inviteBox.classList.add('completed');
+    if (inviteButton && inviteLeftText && inviteRightIcon && inviteBox) {
+        if (tasksCompleted.invite) {
+            inviteLeftText.textContent = 'Friends Invited';
+            inviteRightIcon.className = 'fas fa-check right-icon';
+            inviteButton.classList.add('friends-invited');
+            inviteButton.classList.add('completed');
+            inviteBox.classList.add('completed');
+            log('✅ Friends UI updated to completed state');
+        } else {
+            inviteLeftText.textContent = 'Inviting Friends';
+            inviteRightIcon.className = 'fas fa-chevron-right right-icon';
+            inviteButton.classList.remove('friends-invited');
+            inviteButton.classList.remove('completed');
+            inviteBox.classList.remove('completed');
+            log('👥 Friends UI updated to pending state');
+        }
     } else {
-        inviteLeftText.textContent = 'Inviting Friends';
-        inviteRightIcon.className = 'fas fa-chevron-right right-icon';
-        inviteButton.classList.remove('friends-invited');
-        inviteButton.classList.remove('completed');
-        inviteBox.classList.remove('completed');
+        log('⚠️ Inviting friends button elements not found');
     }
 
-    // Update commission payment
+    // Update commission payment - استفاده از ID درست
     const payButton = document.querySelector('#pay-commission .task-button');
-    const payLeftText = payButton.querySelector('.left-text');
-    const payRightIcon = payButton.querySelector('.right-icon');
+    const payLeftText = payButton ? payButton.querySelector('.left-text') : null;
+    const payRightIcon = payButton ? payButton.querySelector('.right-icon') : null;
     const payBox = document.querySelector('#pay-commission .task-box');
 
-    if (tasksCompleted.pay) {
-        payLeftText.textContent = 'Commission Paid';
-        payRightIcon.className = 'fas fa-check right-icon';
-        payButton.classList.add('commission-paid');
-        payButton.classList.add('completed');
-        payBox.classList.add('completed');
+    if (payButton && payLeftText && payRightIcon && payBox) {
+        if (tasksCompleted.pay) {
+            payLeftText.textContent = 'Commission Paid';
+            payRightIcon.className = 'fas fa-check right-icon';
+            payButton.classList.add('commission-paid');
+            payButton.classList.add('completed');
+            payBox.classList.add('completed');
+            log('✅ Commission UI updated to completed state');
+        } else {
+            payLeftText.textContent = 'Pay Commission';
+            payRightIcon.className = 'fas fa-chevron-right right-icon';
+            payButton.classList.remove('commission-paid');
+            payButton.classList.remove('completed');
+            payBox.classList.remove('completed');
+            log('💰 Commission UI updated to pending state');
+        }
     } else {
-        payLeftText.textContent = 'Pay Commission';
-        payRightIcon.className = 'fas fa-chevron-right right-icon';
-        payButton.classList.remove('commission-paid');
-        payButton.classList.remove('completed');
-        payBox.classList.remove('completed');
+        log('⚠️ Commission button elements not found in DOM');
     }
 
     updateProgress();
@@ -540,41 +589,6 @@ async function handleInviteCheck() {
         return;
     }
     window.location.href = "/friends";
-}
-
-// **Check status periodically**
-async function checkAllStatus() {
-    try {
-        // Check wallet status
-        const walletResponse = await fetch(`/api/wallet/status?telegram_id=${USER_ID}`);
-        if (walletResponse.ok) {
-            const walletData = await walletResponse.json();
-            if (walletData.connected && walletData.address) {
-                connectedWallet = walletData.address;
-                tasksCompleted.wallet = true;
-            }
-        }
-
-        // Check tasks status
-        const tasksResponse = await fetch(`/api/tasks/status?telegram_id=${USER_ID}`);
-        if (tasksResponse.ok) {
-            const tasksData = await tasksResponse.json();
-            tasksCompleted.task = tasksData.tasks_completed;
-            tasksCompleted.invite = tasksData.friends_invited;
-        }
-
-        // Check commission status
-        const commissionResponse = await fetch(`/api/commission/status?telegram_id=${USER_ID}`);
-        if (commissionResponse.ok) {
-            const commissionData = await commissionResponse.json();
-            tasksCompleted.pay = commissionData.commission_paid;
-        }
-
-        updateAllTasksUI();
-
-    } catch (error) {
-        console.error('Error checking status:', error);
-    }
 }
 
 // **Event listeners**
