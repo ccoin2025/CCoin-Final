@@ -42,7 +42,7 @@
     </script>
 
     <style>
-        /* استایل منوی کشویی کیف پول */
+        /* استایل منوی کشویی کیف پول - فقط دکمه‌های Change و Disconnect */
         .wallet-dropdown {
             position: relative;
             display: inline-block;
@@ -76,69 +76,44 @@
             background: #1a1a1a;
             padding: 15px;
             border-radius: 8px;
-            text-align: left;
+            text-align: center;
             color: #fff;
-        }
-
-        .wallet-address-dropdown {
-            font-family: monospace;
-            font-size: 11px;
-            word-break: break-all;
-            background: #2d2d2d;
-            padding: 8px;
-            border-radius: 5px;
-            margin: 8px 0;
-            color: #fff;
-            border: 1px solid #444;
-            max-height: 60px;
-            overflow-y: auto;
         }
 
         .wallet-actions-dropdown {
             display: flex;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
         }
 
         .wallet-action-btn {
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            padding: 10px 15px;
+            background: #2d2d2d;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
             border-radius: 6px;
-            font-size: 12px;
             cursor: pointer;
-            flex: 1;
-            text-align: center;
+            font-size: 14px;
             transition: all 0.3s ease;
-            font-weight: 500;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
         }
 
         .wallet-action-btn:hover {
-            background: #444;
+            background: #3c3c3c;
             transform: translateY(-1px);
         }
 
         .disconnect-btn {
-            background: #2d2d2d;
-            color: #ff4757;
-            border-color: #ff4757;
+            background: #dc3545 !important;
         }
 
         .disconnect-btn:hover {
-            background: #ff4757;
-            color: #fff;
-        }
-
-        .change-btn {
-            background: #2d2d2d;
-            color: #ffa502;
-            border-color: #ffa502;
-        }
-
-        .change-btn:hover {
-            background: #ffa502;
-            color: #000;
+            background: #c82333 !important;
         }
 
         /* استایل دکمه کانکت ولت */
@@ -241,39 +216,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* استایل Toast notifications */
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 500;
-            z-index: 10000;
-            max-width: 300px;
-            word-wrap: break-word;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-        }
-
-        .toast.show {
-            transform: translateX(0);
-        }
-
-        .toast-success {
-            background: #28a745;
-        }
-
-        .toast-error {
-            background: #dc3545;
-        }
-
-        .toast-info {
-            background: #007bff;
-        }
-
         /* Modal styles برای Phantom Wallet */
         .phantom-modal {
             display: none;
@@ -303,114 +245,14 @@
             border: 2px solid #AB9FF2;
         }
 
-        .phantom-modal-content h3 {
-            color: #fff;
-            margin-bottom: 20px;
-            font-size: 22px;
-        }
-
-        .phantom-modal-content p {
-            color: #ccc;
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-
-        .phantom-modal-buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-        }
-
-        .phantom-modal-btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .phantom-modal-btn.primary {
-            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
-            color: white;
-        }
-
-        .phantom-modal-btn.primary:hover {
-            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
-            transform: translateY(-2px);
-        }
-
-        .phantom-modal-btn.secondary {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-        }
-
-        .phantom-modal-btn.secondary:hover {
-            background: #444;
-        }
-
-        /* Modal styles برای commission */
-        .commission-modal {
-            display: none;
-            position: fixed;
-            z-index: 10001;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            justify-content: center;
-            align-items: center;
-        }
-
-        .commission-modal.show {
-            display: flex;
-        }
-
-        .commission-modal-content {
-            background: #1a1a1a;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border: 2px solid #ffa500;
-        }
-
         /* بهبود responsive */
         @media (max-width: 480px) {
-            .wallet-address-dropdown {
-                font-size: 10px;
-                padding: 6px;
-            }
-
-            .wallet-action-btn {
-                padding: 8px 10px;
-                font-size: 11px;
+            .wallet-actions-dropdown {
+                flex-direction: column;
             }
 
             .task-box {
                 margin-bottom: 12px;
-            }
-
-            .toast {
-                top: 10px;
-                right: 10px;
-                left: 10px;
-                max-width: none;
-            }
-
-            .phantom-modal-content {
-                padding: 20px;
-                margin: 20px;
-            }
-
-            .phantom-modal-buttons {
-                flex-direction: column;
             }
         }
     </style>
@@ -446,7 +288,7 @@
                 </button>
             </div>
 
-            <!-- کیف پول با منوی کشویی -->
+            <!-- کیف پول با منوی کشویی فقط دکمه‌های Change و Disconnect -->
             <div id="connect-wallet" class="task-box">
                 <div class="wallet-dropdown">
                     <button onclick="handleWalletConnection()" class="task-button wallet-connect-button">
@@ -454,20 +296,19 @@
                         <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
                         <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
                     </button>
-                    
-                    <!-- منوی کشویی برای زمانی که ولت متصل است -->
+
+                    <!-- منوی کشویی فقط با دکمه‌های Change و Disconnect -->
                     <div class="wallet-dropdown-content" id="wallet-dropdown-content">
                         <div class="wallet-info-dropdown">
-                            <div>Connected Wallet:</div>
-                            <div class="wallet-address-dropdown" id="dropdown-wallet-address">
-                                <!-- آدرس کیف پول اینجا نمایش داده می‌شود -->
+                            <div style="margin-bottom: 15px; color: #fff; font-size: 14px;">
+                                <i class="fas fa-wallet"></i> Wallet Connected
                             </div>
                             <div class="wallet-actions-dropdown">
-                                <button class="wallet-action-btn change-btn" onclick="changeWallet()">
-                                    Change Wallet
+                                <button class="wallet-action-btn" onclick="changeWallet()">
+                                    <i class="fas fa-exchange-alt"></i> Change
                                 </button>
                                 <button class="wallet-action-btn disconnect-btn" onclick="disconnectWallet()">
-                                    Disconnect
+                                    <i class="fas fa-unlink"></i> Disconnect
                                 </button>
                             </div>
                         </div>
@@ -476,46 +317,53 @@
             </div>
 
             <div id="pay-commission" class="task-box">
-                <button onclick="payCommission()" class="task-button" id="commission-button">
+                <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
                     <span class="left-text" id="commission-button-text">Pay for Commission</span>
                     <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
                 </button>
             </div>
         </div>
 
-        <!-- فوتر -->
-        <div class="footer-icons">
-            <a href="/leaders" class="footer-btn">
-                <i class="fas fa-medal"></i>
-                <span>Leaders</span>
-            </a>
-            <a href="/friends" class="footer-btn">
-                <i class="fas fa-user-friends"></i>
-                <span>Friends</span>
-            </a>
-            <a href="/home" class="footer-btn">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
-            </a>
-            <a href="/earn" class="footer-btn">
-                <i class="fas fa-coins"></i>
-                <span>Earn</span>
-            </a>
-            <a href="/airdrop" class="footer-btn active">
-                <i class="fas fa-gift"></i>
-                <span>Airdrop</span>
-            </a>
+        <!-- Claim Button -->
+        <div class="claim-section">
+            <button class="claim-btn" id="claimBtn" disabled>
+                Complete All Tasks to Claim
+            </button>
         </div>
     </div>
 
+    <!-- Navigation -->
+    <div class="bottom-nav">
+        <a href="/home" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="nav-item">
+            <i class="fas fa-coins"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/friends" class="nav-item">
+            <i class="fas fa-user-friends"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/airdrop" class="nav-item active">
+            <i class="fas fa-gift"></i>
+            <span>Airdrop</span>
+        </a>
+        <a href="/leaderboard" class="nav-item">
+            <i class="fas fa-trophy"></i>
+            <span>Leaders</span>
+        </a>
+    </div>
+
     <!-- Phantom Modal -->
-    <div id="phantom-modal" class="phantom-modal">
+    <div id="phantomModal" class="phantom-modal">
         <div class="phantom-modal-content">
-            <h3>Connect Phantom Wallet</h3>
-            <p>To participate in the airdrop, you need to connect your Phantom wallet. This will open in your browser.</p>
+            <h3>Open Phantom Wallet</h3>
+            <p>You will be redirected to Phantom Wallet to connect your wallet.</p>
             <div class="phantom-modal-buttons">
-                <button class="phantom-modal-btn primary" onclick="connectPhantomWallet()">
-                    Connect Phantom
+                <button class="phantom-modal-btn primary" onclick="openPhantomWallet()">
+                    Open Phantom
                 </button>
                 <button class="phantom-modal-btn secondary" onclick="closePhantomModal()">
                     Cancel
@@ -524,303 +372,227 @@
         </div>
     </div>
 
-    <!-- Commission Modal -->
-    <div id="commission-modal" class="commission-modal">
-        <div class="commission-modal-content">
-            <h3>Pay Commission</h3>
-            <p id="commission-modal-text">You need to pay a commission to participate in the airdrop.</p>
-            <div class="phantom-modal-buttons">
-                <button class="phantom-modal-btn primary" onclick="proceedWithCommission()">
-                    Pay Commission
-                </button>
-                <button class="phantom-modal-btn secondary" onclick="closeCommissionModal()">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // متغیرهای global
-        let currentWalletAddress = '{{ user_wallet_address }}';
-        const isWalletConnected = '{{ wallet_connected }}' === 'True';
-        const isTasksCompleted = '{{ tasks_completed }}' === 'True';
-        const isFriendsInvited = '{{ invited }}' === 'True';
-        const isCommissionPaid = '{{ commission_paid }}' === 'True';
+        // Global configuration
+        const telegramId = '{{ request.session.get("telegram_id", "") }}';
+        const isWalletConnected = {{ wallet_connected | tojsonfilter }};
+        const currentWalletAddress = '{{ user_wallet_address }}';
+        const isCommissionPaid = {{ commission_paid | tojsonfilter }};
+        const areTasksCompleted = {{ tasks_completed | tojsonfilter }};
+        const areFriendsInvited = {{ invited | tojsonfilter }};
 
-        // تابع برای گرفتن telegram_id از Telegram WebApp یا template
+        // App Configuration for JS file
+        window.APP_CONFIG = {
+            USER_ID: telegramId,
+            SOLANA_RPC_URL: '{{ config.SOLANA_RPC }}',
+            COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT }},
+            ADMIN_WALLET: '{{ config.ADMIN_WALLET }}',
+            INITIAL_TASKS_COMPLETED: areTasksCompleted,
+            INITIAL_INVITED_FRIENDS: areFriendsInvited,
+            INITIAL_WALLET_CONNECTED: isWalletConnected,
+            INITIAL_COMMISSION_PAID: isCommissionPaid,
+            INITIAL_WALLET_ADDRESS: currentWalletAddress
+        };
+
         function getTelegramId() {
-            return window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '{{ request.session.telegram_id }}' || '';
+            return telegramId || null;
         }
 
-        // تابع اصلی برای کنترل اتصال کیف پول
-        function handleWalletConnection() {
-            if (isWalletConnected && currentWalletAddress) {
-                toggleWalletDropdown();
-            } else {
-                showPhantomModal();
-            }
-        }
-
-        // تابع برای toggle کردن منوی کشویی
-        function toggleWalletDropdown() {
-            const dropdown = document.getElementById('wallet-dropdown-content');
-            const dropdownAddress = document.getElementById('dropdown-wallet-address');
-            
-            if (currentWalletAddress && dropdownAddress) {
-                dropdownAddress.textContent = currentWalletAddress;
-            }
-            
-            dropdown.classList.toggle('show');
-            
-            if (dropdown.classList.contains('show')) {
-                document.addEventListener('click', closeDropdownOnOutsideClick);
-            } else {
-                document.removeEventListener('click', closeDropdownOnOutsideClick);
-            }
-        }
-
-        // بستن dropdown با کلیک خارج از آن
-        function closeDropdownOnOutsideClick(event) {
-            const dropdown = document.getElementById('wallet-dropdown-content');
-            const walletButton = document.querySelector('.wallet-connect-button');
-            
-            if (!dropdown.contains(event.target) && !walletButton.contains(event.target)) {
-                dropdown.classList.remove('show');
-                document.removeEventListener('click', closeDropdownOnOutsideClick);
-            }
-        }
-
-        // تابع برای تغییر کیف پول
-        function changeWallet() {
-            document.getElementById('wallet-dropdown-content').classList.remove('show');
-            document.removeEventListener('click', closeDropdownOnOutsideClick);
-            showPhantomModal();
-        }
-
-        // تابع برای قطع اتصال کیف پول
-        async function disconnectWallet() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
-                return;
-            }
-
-            try {
-                document.getElementById('wallet-dropdown-content').classList.remove('show');
-                document.removeEventListener('click', closeDropdownOnOutsideClick);
-                
-                const response = await fetch('/api/wallet/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: telegramId })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showToast('Wallet disconnected successfully!', 'success');
-                    updateWalletUI(false, '');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showToast('Failed to disconnect wallet: ' + data.error, 'error');
-                }
-            } catch (error) {
-                showToast('Disconnect error: ' + error.message, 'error');
-            }
-        }
-
-        // نمایش modal phantom
-        function showPhantomModal() {
-            document.getElementById('phantom-modal').classList.add('show');
-        }
-
-        // بستن modal phantom
-        function closePhantomModal() {
-            document.getElementById('phantom-modal').classList.remove('show');
-        }
-
-        // اتصال به کیف پول Phantom
-        async function connectPhantomWallet() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
-                return;
-            }
-
-            try {
-                // بررسی Telegram Web App
-                if (window.Telegram && window.Telegram.WebApp) {
-                    showToast('Opening Phantom in browser...', 'info');
-                    window.Telegram.WebApp.openLink(`/wallet/browser/connect?telegram_id=${telegramId}`, { try_instant_view: true });
-                    return;
-                }
-
-                // محیط مرورگر
-                if (!window.solana || !window.solana.isPhantom) {
-                    showToast('Please install Phantom wallet!', 'info');
-                    setTimeout(() => window.open('https://phantom.app/', '_blank'), 1000);
-                    return;
-                }
-
-                const response = await window.solana.connect();
-                const walletAddress = response.publicKey.toString();
-
-                const result = await fetch('/api/wallet/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: telegramId, wallet_address: walletAddress })
-                });
-
-                const data = await result.json();
-                if (data.success) {
-                    showToast('Wallet connected successfully!', 'success');
-                    currentWalletAddress = walletAddress;
-                    updateWalletUI(true, walletAddress);
-                    closePhantomModal();
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showToast(data.error || 'Failed to connect wallet!', 'error');
-                }
-            } catch (error) {
-                showToast('Connection error: ' + error.message, 'error');
-                // Fallback به external browser
-                if (window.Telegram && window.Telegram.WebApp) {
-                    showToast('Opening Phantom in browser...', 'info');
-                    window.Telegram.WebApp.openLink(`/wallet/browser/connect?telegram_id=${telegramId}`, { try_instant_view: true });
-                }
-            }
-        }
-
-        // آپدیت UI کیف پول
-        function updateWalletUI(connected, address) {
-            const buttonText = document.getElementById('wallet-button-text');
-            const walletIcon = document.getElementById('wallet-icon');
-            const statusIndicator = document.getElementById('wallet-status-indicator');
-            const walletButton = document.querySelector('.wallet-connect-button');
-            const walletBox = document.getElementById('connect-wallet');
-
-            if (connected && address) {
-                buttonText.textContent = `Connected: ${address.substring(0, 8)}...${address.substring(address.length - 4)}`;
-                walletIcon.className = 'fas fa-check right-icon';
-                statusIndicator.classList.add('connected');
-                walletButton.classList.add('wallet-connected');
-                walletBox.classList.add('completed');
-            } else {
-                buttonText.textContent = 'Connect Wallet';
-                walletIcon.className = 'fas fa-chevron-right right-icon';
-                statusIndicator.classList.remove('connected');
-                walletButton.classList.remove('wallet-connected');
-                walletBox.classList.remove('completed');
-            }
-        }
-
-        // نمایش Toast notification
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             toast.textContent = message;
-            document.body.appendChild(toast);
+            
+            const styles = {
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                padding: '12px 20px',
+                borderRadius: '8px',
+                color: 'white',
+                fontWeight: '500',
+                zIndex: '10000',
+                maxWidth: '300px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                transform: 'translateX(100%)',
+                transition: 'transform 0.3s ease'
+            };
 
-            setTimeout(() => toast.classList.add('show'), 100);
+            Object.assign(toast.style, styles);
+
+            switch(type) {
+                case 'success':
+                    toast.style.backgroundColor = '#28a745';
+                    break;
+                case 'error':
+                    toast.style.backgroundColor = '#dc3545';
+                    break;
+                case 'info':
+                default:
+                    toast.style.backgroundColor = '#007bff';
+                    break;
+            }
+
+            document.body.appendChild(toast);
+            
             setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
+                toast.style.transform = 'translateX(0)';
+            }, 100);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (document.body.contains(toast)) {
+                        document.body.removeChild(toast);
+                    }
+                }, 300);
             }, 3000);
         }
 
-        // تابع برای چک کردن tasks
-        async function handleTaskCompletion() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
-                return;
-            }
+        // Wallet Connection Functions
+        function updateWalletUI(isConnected, walletAddress) {
+            const walletButton = document.getElementById('wallet-button-text');
+            const walletIcon = document.getElementById('wallet-icon');
+            const walletIndicator = document.getElementById('wallet-status-indicator');
+            const taskButton = document.querySelector('#connect-wallet .task-button');
 
+            if (isConnected && walletAddress) {
+                walletButton.textContent = 'Wallet Connected';
+                walletIcon.className = 'fas fa-check right-icon';
+                walletIcon.style.color = '#28a745';
+                walletIndicator.classList.add('connected');
+                taskButton.classList.add('wallet-connected');
+            } else {
+                walletButton.textContent = 'Connect Wallet';
+                walletIcon.className = 'fas fa-chevron-right right-icon';
+                walletIcon.style.color = '#aaa';
+                walletIndicator.classList.remove('connected');
+                taskButton.classList.remove('wallet-connected');
+            }
+        }
+
+        function handleWalletConnection() {
+            if (isWalletConnected && currentWalletAddress) {
+                // Toggle dropdown
+                const dropdown = document.getElementById('wallet-dropdown-content');
+                dropdown.classList.toggle('show');
+            } else {
+                // Start connection process
+                connectWallet();
+            }
+        }
+
+        function connectWallet() {
+            const connectUrl = `/wallet/browser/connect?telegram_id=${telegramId}`;
+            showToast('Opening wallet connection...', 'info');
+            window.Telegram.WebApp.openLink(connectUrl, { try_instant_view: false });
+        }
+
+        function changeWallet() {
+            document.getElementById('wallet-dropdown-content').classList.remove('show');
+            connectWallet();
+        }
+
+        async function disconnectWallet() {
             try {
-                const response = await fetch(`/api/tasks/status?telegram_id=${telegramId}`);
-                const data = await response.json();
-                if (data.tasks_completed) {
-                    document.getElementById('tasks-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('task-completion').classList.add('completed');
-                    document.querySelector('#task-completion .task-button').classList.add('tasks-completed');
+                const response = await fetch('/airdrop/connect_wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ wallet: "" })
+                });
+
+                if (response.ok) {
+                    updateWalletUI(false, null);
+                    document.getElementById('wallet-dropdown-content').classList.remove('show');
+                    showToast('Wallet disconnected successfully', 'success');
+                    location.reload();
+                } else {
+                    throw new Error('Failed to disconnect wallet');
                 }
-                window.location.href = '/earn';
             } catch (error) {
-                showToast('Error checking tasks: ' + error.message, 'error');
+                showToast('Error disconnecting wallet: ' + error.message, 'error');
             }
         }
 
-        // تابع برای چک کردن دعوت دوستان
-        async function handleInviteCheck() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
+        // Commission Payment Functions
+        function handleCommissionPayment() {
+            if (!isWalletConnected || !currentWalletAddress) {
+                showToast('Please connect your wallet first', 'error');
                 return;
             }
 
-            try {
-                const response = await fetch(`/api/tasks/status?telegram_id=${telegramId}`);
-                const data = await response.json();
-                if (data.friends_invited) {
-                    document.getElementById('friends-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('inviting-friends').classList.add('completed');
-                    document.querySelector('#inviting-friends .task-button').classList.add('friends-invited');
-                }
-                window.location.href = '/friends';
-            } catch (error) {
-                showToast('Error checking invites: ' + error.message, 'error');
-            }
-        }
-
-        // تابع برای پرداخت کمیسیون
-        async function payCommission() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
+            if (isCommissionPaid) {
+                showToast('Commission already paid!', 'info');
                 return;
             }
 
-            try {
-                const walletRes = await fetch(`/api/wallet/status?telegram_id=${telegramId}`);
-                const walletData = await walletRes.json();
-                if (!walletData.connected) {
-                    showToast('Please connect your wallet first!', 'error');
-                    return;
-                }
-
-                const commRes = await fetch(`/api/commission/status?telegram_id=${telegramId}`);
-                const commData = await commRes.json();
-                if (commData.paid) {
-                    showToast('Commission already paid!', 'success');
-                    document.getElementById('commission-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('pay-commission').classList.add('completed');
-                    document.querySelector('#commission-button').classList.add('commission-paid');
-                    document.getElementById('commission-button-text').textContent = 'Commission Paid';
-                    return;
-                }
-
-                document.getElementById('commission-modal').classList.add('show');
-            } catch (error) {
-                showToast('Error checking status: ' + error.message, 'error');
-            }
+            payCommission();
         }
 
-        // بستن modal کمیسیون
-        function closeCommissionModal() {
-            document.getElementById('commission-modal').classList.remove('show');
-        }
-
-        // ادامه به پرداخت کمیسیون
-        function proceedWithCommission() {
-            const telegramId = getTelegramId();
-            if (!telegramId) {
-                showToast('Missing Telegram ID!', 'error');
-                return;
-            }
-
+        function payCommission() {
+            const paymentUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
             showToast('Opening commission payment...', 'info');
-            window.Telegram.WebApp.openLink(`/commission/browser/pay?telegram_id=${telegramId}`, { try_instant_view: true });
+            window.Telegram.WebApp.openLink(paymentUrl, { try_instant_view: false });
         }
+
+        // Task and Friends Functions
+        function handleTaskCompletion() {
+            window.location.href = '/earn';
+        }
+
+        function handleInviteCheck() {
+            window.location.href = '/friends';
+        }
+
+        // Update UI based on completion status
+        function updateTasksUI() {
+            // Update tasks completion
+            if (areTasksCompleted) {
+                document.getElementById('tasks-icon').className = 'fas fa-check right-icon';
+                document.getElementById('task-completion').classList.add('completed');
+                document.querySelector('#task-completion .task-button').classList.add('tasks-completed');
+            }
+
+            // Update friends invitation
+            if (areFriendsInvited) {
+                document.getElementById('friends-icon').className = 'fas fa-check right-icon';
+                document.getElementById('inviting-friends').classList.add('completed');
+                document.querySelector('#inviting-friends .task-button').classList.add('friends-invited');
+            }
+
+            // Update wallet connection
+            updateWalletUI(isWalletConnected, currentWalletAddress);
+
+            // Update commission payment
+            if (isCommissionPaid) {
+                document.getElementById('commission-icon').className = 'fas fa-check right-icon';
+                document.getElementById('pay-commission').classList.add('completed');
+                document.querySelector('#pay-commission .task-button').classList.add('commission-paid');
+                document.getElementById('commission-button-text').textContent = 'Commission Paid';
+            }
+
+            // Update claim button
+            const allCompleted = areTasksCompleted && areFriendsInvited && isWalletConnected && isCommissionPaid;
+            const claimBtn = document.getElementById('claimBtn');
+            if (allCompleted) {
+                claimBtn.disabled = false;
+                claimBtn.textContent = 'Claim Airdrop';
+                claimBtn.style.background = 'linear-gradient(45deg, #ffd700, #ffed4e)';
+                claimBtn.style.color = '#000';
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('wallet-dropdown-content');
+            const walletTask = document.getElementById('connect-wallet');
+            
+            if (dropdown && walletTask && !walletTask.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
 
         // تنظیم وضعیت اولیه صفحه
         document.addEventListener('DOMContentLoaded', async function() {
@@ -830,63 +602,35 @@
                 return;
             }
 
-            // آپدیت UI کیف پول
-            updateWalletUI(isWalletConnected, currentWalletAddress);
-
-            // چک کردن وضعیت tasks و دعوت‌ها
-            try {
-                const tasksRes = await fetch(`/api/tasks/status?telegram_id=${telegramId}`);
-                const tasksData = await tasksRes.json();
-                if (tasksData.tasks_completed) {
-                    document.getElementById('tasks-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('task-completion').classList.add('completed');
-                    document.querySelector('#task-completion .task-button').classList.add('tasks-completed');
-                }
-                if (tasksData.friends_invited) {
-                    document.getElementById('friends-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('inviting-friends').classList.add('completed');
-                    document.querySelector('#inviting-friends .task-button').classList.add('friends-invited');
-                }
-
-                // چک کردن وضعیت کمیسیون
-                const commRes = await fetch(`/api/commission/status?telegram_id=${telegramId}`);
-                const commData = await commRes.json();
-                if (commData.paid) {
-                    document.getElementById('commission-icon').className = 'fas fa-check right-icon';
-                    document.getElementById('pay-commission').classList.add('completed');
-                    document.querySelector('#commission-button').classList.add('commission-paid');
-                    document.getElementById('commission-button-text').textContent = 'Commission Paid';
-                }
-            } catch (error) {
-                showToast('Error loading statuses: ' + error.message, 'error');
-            }
+            // آپدیت UI tasks
+            updateTasksUI();
 
             // تنظیم countdown
             const countdownDate = new Date("2025-12-31T23:59:59").getTime();
-            
             function updateCountdown() {
                 const now = new Date().getTime();
                 const timeLeft = countdownDate - now;
-                
                 const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-                
+
                 document.getElementById("days").textContent = String(days).padStart(2, '0');
                 document.getElementById("hours").textContent = String(hours).padStart(2, '0');
                 document.getElementById("minutes").textContent = String(minutes).padStart(2, '0');
                 document.getElementById("seconds").textContent = String(seconds).padStart(2, '0');
-                
+
                 if (timeLeft < 0) {
                     clearInterval(countdownInterval);
                     document.querySelector('.countdown').innerHTML = "EXPIRED";
                 }
             }
-            
+
             const countdownInterval = setInterval(updateCountdown, 1000);
             updateCountdown();
         });
     </script>
+
+    <script src="{{ url_for('static', path='js/airdrop.js') }}"></script>
 </body>
 </html>
