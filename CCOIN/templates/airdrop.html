@@ -42,7 +42,7 @@
     </script>
 
     <style>
-        /* استایل منوی کشویی کیف پول */
+        /* استایل منوی کشویی کیف پول - فقط دکمه‌های Change و Disconnect */
         .wallet-dropdown {
             position: relative;
             display: inline-block;
@@ -76,72 +76,46 @@
             background: #1a1a1a;
             padding: 15px;
             border-radius: 8px;
-            text-align: left;
+            text-align: center;
             color: #fff;
-        }
-
-        .wallet-address-dropdown {
-            font-family: monospace;
-            font-size: 11px;
-            word-break: break-all;
-            background: #2d2d2d;
-            padding: 8px;
-            border-radius: 5px;
-            margin: 8px 0;
-            color: #fff;
-            border: 1px solid #444;
-            max-height: 60px;
-            overflow-y: auto;
         }
 
         .wallet-actions-dropdown {
             display: flex;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 10px;
+            justify-content: center;
         }
 
         .wallet-action-btn {
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            padding: 10px 15px;
+            background: #2d2d2d;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
             border-radius: 6px;
-            font-size: 12px;
             cursor: pointer;
-            flex: 1;
-            text-align: center;
+            font-size: 14px;
             transition: all 0.3s ease;
-            font-weight: 500;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
         }
 
         .wallet-action-btn:hover {
-            background: #444;
+            background: #3c3c3c;
             transform: translateY(-1px);
         }
 
         .disconnect-btn {
-            background: #2d2d2d;
-            color: #ff4757;
-            border-color: #ff4757;
+            background: #dc3545 !important;
         }
 
         .disconnect-btn:hover {
-            background: #ff4757;
-            color: #fff;
+            background: #c82333 !important;
         }
 
-        .change-btn {
-            background: #2d2d2d;
-            color: #ffa502;
-            border-color: #ffa502;
-        }
-
-        .change-btn:hover {
-            background: #ffa502;
-            color: #000;
-        }
-
-        /* استایل دکمه کانکت ولت */
+        /* استایل دکمه کانکت ولت - نمایش آدرس در خود دکمه */
         .wallet-connect-button {
             position: relative;
         }
@@ -176,11 +150,16 @@
             }
         }
 
-        /* تغییر آیکون برای حالت connected */
-        .task-button.wallet-connected .right-icon,
+        /* تغییر رنگ دکمه به سبز برای حالت connected */
+        .task-button.wallet-connected {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border-color: #28a745 !important;
+        }
+
         .task-button.commission-paid .right-icon,
         .task-button.tasks-completed .right-icon,
-        .task-button.friends-invited .right-icon {
+        .task-button.friends-invited .right-icon,
+        .task-button.wallet-connected .right-icon {
             color: #28a745 !important;
         }
 
@@ -381,16 +360,43 @@
             border: 2px solid #ffa500;
         }
 
+        /* استایل برای پیام تبریک */
+        .congratulations-message {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            animation: celebrateGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes celebrateGlow {
+            from {
+                box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            }
+            to {
+                box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+            }
+        }
+
+        .congratulations-message h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .congratulations-message p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
         /* بهبود responsive */
         @media (max-width: 480px) {
-            .wallet-address-dropdown {
-                font-size: 10px;
-                padding: 6px;
-            }
-
-            .wallet-action-btn {
-                padding: 8px 10px;
-                font-size: 11px;
+            .wallet-actions-dropdown {
+                flex-direction: column;
             }
 
             .task-box {
@@ -446,7 +452,7 @@
                 </button>
             </div>
 
-            <!-- کیف پول با منوی کشویی -->
+            <!-- کیف پول - آدرس در خود دکمه نمایش داده می‌شود -->
             <div id="connect-wallet" class="task-box">
                 <div class="wallet-dropdown">
                     <button onclick="handleWalletConnection()" class="task-button wallet-connect-button">
@@ -455,19 +461,15 @@
                         <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
                     </button>
 
-                    <!-- منوی کشویی برای زمانی که ولت متصل است -->
+                    <!-- منوی کشویی ساده فقط با دکمه‌های Change و Disconnect -->
                     <div class="wallet-dropdown-content" id="wallet-dropdown-content">
                         <div class="wallet-info-dropdown">
-                            <div>Connected Wallet:</div>
-                            <div class="wallet-address-dropdown" id="dropdown-wallet-address">
-                                <!-- آدرس کیف پول اینجا نمایش داده می‌شود -->
-                            </div>
                             <div class="wallet-actions-dropdown">
-                                <button class="wallet-action-btn change-btn" onclick="changeWallet()">
-                                    Change Wallet
+                                <button class="wallet-action-btn" onclick="changeWallet()">
+                                    <i class="fas fa-exchange-alt"></i> Change
                                 </button>
                                 <button class="wallet-action-btn disconnect-btn" onclick="disconnectWallet()">
-                                    Disconnect
+                                    <i class="fas fa-unlink"></i> Disconnect
                                 </button>
                             </div>
                         </div>
@@ -483,11 +485,17 @@
             </div>
         </div>
 
-        <!-- Claim Button -->
+        <!-- Claim Button یا پیام تبریک -->
         <div class="claim-section">
             <button class="claim-btn" id="claimBtn" disabled>
                 Complete All Tasks to Claim
             </button>
+            
+            <!-- پیام تبریک برای تکمیل همه تسک‌ها -->
+            <div id="congratulationsMessage" class="congratulations-message" style="display: none;">
+                <h3>🎉 Congratulations!</h3>
+                <p>You have completed all tasks successfully! Your airdrop is ready to claim.</p>
+            </div>
         </div>
     </div>
 
@@ -513,6 +521,7 @@
             <i class="fas fa-gift"></i>
             <span>Airdrop</span>
         </a>
+    </div>
     </div>
 
     <!-- Phantom Modal -->
@@ -631,35 +640,32 @@
             }, 3000);
         }
 
-        // Wallet Connection Functions - حفظ کد اصلی wallet connection
+        // تابع کوتاه کردن آدرس wallet
+        function shortenWalletAddress(address) {
+            if (!address) return '';
+            return address.substring(0, 6) + '...' + address.substring(address.length - 4);
+        }
+
+        // Wallet Connection Functions - نمایش آدرس در خود دکمه
         function updateWalletUI(isConnected, walletAddress) {
             const walletButton = document.getElementById('wallet-button-text');
             const walletIcon = document.getElementById('wallet-icon');
             const walletIndicator = document.getElementById('wallet-status-indicator');
             const taskButton = document.querySelector('#connect-wallet .task-button');
-            const dropdownAddress = document.getElementById('dropdown-wallet-address');
 
             if (isConnected && walletAddress) {
-                walletButton.textContent = 'Wallet Connected';
+                // نمایش آدرس کوتاه شده در خود دکمه
+                walletButton.textContent = shortenWalletAddress(walletAddress);
                 walletIcon.className = 'fas fa-check right-icon';
                 walletIcon.style.color = '#28a745';
                 walletIndicator.classList.add('connected');
                 taskButton.classList.add('wallet-connected');
-                
-                // نمایش آدرس در dropdown
-                if (dropdownAddress) {
-                    dropdownAddress.textContent = walletAddress;
-                }
             } else {
                 walletButton.textContent = 'Connect Wallet';
                 walletIcon.className = 'fas fa-chevron-right right-icon';
                 walletIcon.style.color = '#aaa';
                 walletIndicator.classList.remove('connected');
                 taskButton.classList.remove('wallet-connected');
-                
-                if (dropdownAddress) {
-                    dropdownAddress.textContent = '';
-                }
             }
         }
 
@@ -769,7 +775,7 @@
             document.getElementById('phantomModal').classList.remove('show');
         }
 
-        // Update UI based on completion status
+        // اصلاح شده: بروزرسانی UI با نمایش پیام تبریک
         function updateTasksUI() {
             console.log('Updating UI with status:', {
                 tasks: areTasksCompleted,
@@ -803,14 +809,28 @@
                 document.getElementById('commission-button-text').textContent = 'Commission Paid';
             }
 
-            // Update claim button
+            // بررسی تکمیل همه تسک‌ها و نمایش پیام تبریک
             const allCompleted = areTasksCompleted && areFriendsInvited && isWalletConnected && isCommissionPaid;
             const claimBtn = document.getElementById('claimBtn');
+            const congratsMessage = document.getElementById('congratulationsMessage');
+            
             if (allCompleted) {
-                claimBtn.disabled = false;
-                claimBtn.textContent = 'Claim Airdrop';
-                claimBtn.style.background = 'linear-gradient(45deg, #ffd700, #ffed4e)';
-                claimBtn.style.color = '#000';
+                // مخفی کردن دکمه Complete All Tasks
+                claimBtn.style.display = 'none';
+                // نمایش پیام تبریک
+                congratsMessage.style.display = 'block';
+                
+                console.log('🎉 All tasks completed! Showing congratulations message');
+            } else {
+                // نمایش دکمه Complete All Tasks
+                claimBtn.style.display = 'block';
+                claimBtn.disabled = true;
+                claimBtn.textContent = 'Complete All Tasks to Claim';
+                claimBtn.style.background = 'rgba(255,255,255,0.1)';
+                claimBtn.style.color = '#aaa';
+                
+                // مخفی کردن پیام تبریک
+                congratsMessage.style.display = 'none';
             }
         }
 
