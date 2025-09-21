@@ -40,7 +40,6 @@ body {
     font-size: 30px;
     line-height: 1.4;
     margin-top: -25px;
-
 }
 
 .airdrop-criteria {
@@ -51,7 +50,6 @@ body {
     background: #1e1e1e;
     font-size: 25px;
     max-height: 400px;
-
 }
 
 .airdrop-criteria .task {
@@ -62,7 +60,7 @@ body {
     padding: 10px 0;
 }
 
-.airdrop-criteria .task button {
+.airdrop-criteria .taskbutton {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -76,10 +74,16 @@ body {
     box-sizing: border-box;
     line-height: .4;
     font-size: 18px;
-
 }
-.airdrop-criteria .task button:hover {
+
+.airdrop-criteria .taskbutton:hover {
     color: #ffffff;
+}
+
+/* فواصل برابر بین دکمه‌ها - اصلاح شده */
+.task-box {
+    margin-bottom: 15px; /* فاصله یکسان بین همه دکمه‌ها */
+    position: relative;
 }
 
 .task-button {
@@ -94,86 +98,61 @@ body {
     background-color: #2a2a2a;
     border: none;
     border-radius: 12px;
-    margin-bottom: 15px;
+    margin-bottom: 0; /* حذف margin از اینجا چون در task-box تعریف شده */
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
 .task-button:hover {
-    background-color: #3c3c3c;
+    background-color: #3a3a3a;
 }
 
-.task-button .left-text {
-    text-align: left;
+/* استایل برای دکمه wallet connected */
+.task-button.wallet-connected {
+    background: rgba(40, 167, 69, 0.1) !important;
+    border: 1px solid #28a745;
+    color: #28a745;
 }
 
-.task-button .right-icon {
-    font-size: 16px;
-    color: #aaa;
+.task-button.wallet-connected .right-icon {
+    color: #28a745 !important;
 }
 
-.task-completed .task-icon {
-    color: #00c853;
+/* استایل برای status indicator */
+.wallet-status-indicator {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 14px;
+    height: 14px;
+    background: #28a745;
+    border-radius: 50%;
+    display: none;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #28a745;
 }
 
-.wallet-task {
-    flex-direction: column;
-    align-items: stretch;
+.wallet-status-indicator.connected {
+    display: block;
+    animation: pulse 2s infinite;
 }
-.wallet-task .task-item-content {
-    display: flex;
-    align-items: center;
-    width: 100%;
-}
-.wallet-dropdown {
-    width: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 10px;
-    margin-top: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    animation: slideDown 0.3s ease;
-}
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
+    70% {
+        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
     }
 }
-.wallet-info {
-    padding: 15px;
-}
-.wallet-address {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 10px;
-    border-radius: 8px;
-    font-family: monospace;
-    font-size: 12px;
-    word-break: break-all;
-    margin-bottom: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-.disconnect-btn {
-    background: #dc3545;
-    color: #fff;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 100%;
-}
-.disconnect-btn:hover {
-    background: #c82333;
-    transform: translateY(-1px);
-}
+
 .claim-section {
     text-align: center;
 }
+
 .claim-btn {
     background: linear-gradient(45deg, #ffd700, #ffed4e);
     color: #000;
@@ -186,27 +165,111 @@ body {
     width: 100%;
     transition: all 0.3s ease;
 }
+
 .claim-btn:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
 }
+
 .claim-btn:disabled {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.5);
     cursor: not-allowed;
 }
+
+/* استایل منوی کشویی کیف پول */
+.wallet-dropdown {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.wallet-dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #1a1a1a;
+    min-width: 100%;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.3);
+    z-index: 9999;
+    border-radius: 10px;
+    border: 2px solid #333;
+    top: calc(100% + 2px);
+    left: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    margin-top: 0;
+}
+
+.wallet-dropdown-content.show {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.wallet-info-dropdown {
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    color: #fff;
+}
+
+.wallet-actions-dropdown {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.wallet-action-btn {
+    background: #2d2d2d;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.wallet-action-btn:hover {
+    background: #3c3c3c;
+    transform: translateY(-1px);
+}
+
+.disconnect-btn {
+    background: #dc3545 !important;
+}
+
+.disconnect-btn:hover {
+    background: #c82333 !important;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
     .container {
         padding: 15px;
     }
-    
+
     .task-item {
         padding: 12px;
     }
-    
+
     .wallet-address {
         font-size: 11px;
+    }
+
+    .wallet-actions-dropdown {
+        flex-direction: column;
+    }
+
+    .task-box {
+        margin-bottom: 12px;
     }
 }
 
