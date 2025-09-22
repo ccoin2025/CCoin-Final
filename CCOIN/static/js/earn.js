@@ -6,7 +6,7 @@ function handleAction(button, platform) {
     
     const urls = {
         'telegram': "https://t.me/CCOIN_OFFICIAL",
-        'instagram': "https://instagram.com/ccoin_official", 
+        'instagram': "https://instagram.com/ccoin_official",
         'x': "https://x.com/CCOIN_OFFICIAL",
         'youtube': "https://youtube.com/@CCOIN_OFFICIAL"
     };
@@ -90,5 +90,5 @@ function handleAction(button, platform) {
             button.disabled = false;
             button.style.cursor = "pointer";
         }
-    }, 3000); // کمی بیشتر صبر می‌کنیم
+    }, 3000);
 }
