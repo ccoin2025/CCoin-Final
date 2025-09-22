@@ -370,3 +370,45 @@ def shutdown():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/debug/telegram/{user_id}")
+async def debug_telegram(user_id: int):
+    """Debug endpoint برای تست API تلگرام"""
+    try:
+        import requests
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
+        params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        result = {
+            "status_code": response.status_code,
+            "url": url,
+            "params": params,
+            "bot_token_exists": bool(BOT_TOKEN),
+            "bot_token_length": len(BOT_TOKEN) if BOT_TOKEN else 0
+        }
+        
+        if response.status_code == 200:
+            result["response"] = response.json()
+        else:
+            result["response"] = response.text
+            
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/debug/bot-info")
+async def debug_bot_info():
+    """بررسی اطلاعات بات"""
+    try:
+        import requests
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
+        response = requests.get(url, timeout=10)
+        
+        return {
+            "status_code": response.status_code,
+            "response": response.json() if response.status_code == 200 else response.text
+        }
+    except Exception as e:
+        return {"error": str(e)}
