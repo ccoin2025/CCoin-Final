@@ -361,17 +361,34 @@
         }
 
         /* استایل برای پیام تبریک */
-        .congratulations-message {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-            animation: celebrateGlow 2s ease-in-out infinite alternate;
-        }
+       /* نوار سبز دور پیام تبریک - تکمیلی برای HTML */
+       .congratulations-message {
+           background: linear-gradient(135deg, #28a745, #20c997);
+           color: white;
+           padding: 20px;
+           border-radius: 15px;
+           text-align: center;
+           margin: 20px 0;
+           box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+           animation: celebrateGlow 2s ease-in-out infinite alternate;
+           border: 2px solid #28a745; /* نوار سبز اضافی */
+      }
 
+      /* اطمینان از نمایش نوار سبز در تمام دکمه‌ها */
+      .task-button.tasks-completed,
+      .task-button.friends-invited,
+      .task-button.commission-paid,
+      .task-button.wallet-connected {
+          background: rgba(40, 167, 69, 0.1) !important;
+          border: 1px solid #28a745 !important;
+      }
+
+     .task-button.tasks-completed .right-icon,
+     .task-button.friends-invited .right-icon,
+     .task-button.commission-paid .right-icon,
+     .task-button.wallet-connected .right-icon {
+         color: #28a745 !important;
+     }
         @keyframes celebrateGlow {
             from {
                 box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
