@@ -312,7 +312,7 @@ function updateInviteFriendsUI() {
 
 // **تابع بروزرسانی دکمه claim**
 function updateClaimButton() {
-    const claimButton = document.getElementById('claim-button');
+    const claimButton = document.getElementById('claimBtn');
     if (!claimButton) return;
 
     const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
