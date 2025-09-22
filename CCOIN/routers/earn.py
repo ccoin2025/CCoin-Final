@@ -10,7 +10,7 @@ from CCOIN.tasks.social_check import PLATFORM_REWARD, check_social_follow
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import os
-import redis
+import time
 from CCOIN.config import REDIS_URL
 
 class TaskRequest(BaseModel):
@@ -19,7 +19,24 @@ class TaskRequest(BaseModel):
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
-redis_client = redis.Redis.from_url(REDIS_URL)
+
+# Memory cache برای جایگزین Redis
+memory_cache = {}
+CACHE_EXPIRY = 600  # 10 دقیقه
+
+def get_from_cache(key):
+    """دریافت از memory cache"""
+    if key in memory_cache:
+        value, expiry = memory_cache[key]
+        if time.time() < expiry:
+            return value
+        else:
+            del memory_cache[key]
+    return None
+
+def set_in_cache(key, value, ttl):
+    """ذخیره در memory cache"""
+    memory_cache[key] = (value, time.time() + ttl)
 
 @router.get("/", response_class=HTMLResponse)
 @limiter.limit("10/minute")
@@ -34,9 +51,9 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
     
     tasks = [
         {"label": "Join Telegram", "reward": PLATFORM_REWARD["telegram"], "platform": "telegram", "icon": "Telegram.png", "completed": any(t.platform == "telegram" and t.completed for t in user.tasks)},
-        {"label": "Follow Instagram", "reward": PLATFORM_REWARD.get("instagram", 300), "platform": "instagram", "icon": "Instagram.png", "completed": any(t.platform == "instagram" and t.completed for t in user.tasks)},
-        {"label": "Follow X", "reward": PLATFORM_REWARD.get("x", 300), "platform": "x", "icon": "X.png", "completed": any(t.platform == "x" and t.completed for t in user.tasks)},
-        {"label": "Subscribe YouTube", "reward": PLATFORM_REWARD.get("youtube", 300), "platform": "youtube", "icon": "YouTube.png", "completed": any(t.platform == "youtube" and t.completed for t in user.tasks)},
+        {"label": "Follow Instagram", "reward": PLATFORM_REWARD.get("instagram", 500), "platform": "instagram", "icon": "Instagram.png", "completed": any(t.platform == "instagram" and t.completed for t in user.tasks)},
+        {"label": "Follow X", "reward": PLATFORM_REWARD.get("x", 500), "platform": "x", "icon": "X.png", "completed": any(t.platform == "x" and t.completed for t in user.tasks)},
+        {"label": "Subscribe YouTube", "reward": PLATFORM_REWARD.get("youtube", 500), "platform": "youtube", "icon": "YouTube.png", "completed": any(t.platform == "youtube" and t.completed for t in user.tasks)},
     ]
     
     return templates.TemplateResponse("earn.html", {"request": request, "tasks": tasks, "user_id": telegram_id})
@@ -54,10 +71,11 @@ async def verify_task(task_data: TaskRequest, request: Request, db: Session = De
     
     platform = task_data.platform
     cache_key = f"task_verify:{telegram_id}:{platform}"
-    cached_result = redis_client.get(cache_key)
     
-    if cached_result:
-        return {"success": bool(int(cached_result.decode()))}
+    # بررسی cache
+    cached_result = get_from_cache(cache_key)
+    if cached_result is not None:
+        return {"success": bool(int(cached_result))}
     
     # بررسی اینکه آیا کاربر قبلاً این task را complete کرده
     existing_task = db.query(UserTask).filter(
@@ -69,12 +87,13 @@ async def verify_task(task_data: TaskRequest, request: Request, db: Session = De
         return {"success": True, "message": "Already completed"}
     
     # بررسی follow status
-    if check_social_follow(telegram_id, platform):
-        redis_client.setex(cache_key, 3600, "1")
-        return {"success": True}
-    else:
-        redis_client.setex(cache_key, 3600, "0") 
-        return {"success": False, "error": "Not followed"}
+    try:
+        result = check_social_follow(telegram_id, platform)
+        set_in_cache(cache_key, "1" if result else "0", CACHE_EXPIRY)
+        return {"success": result}
+    except Exception as e:
+        print(f"Error in verify_task: {e}")
+        return {"success": False, "error": "Verification failed"}
 
 @router.post("/claim-reward")
 @limiter.limit("5/minute")
@@ -97,13 +116,24 @@ async def claim_reward(task_data: TaskRequest, request: Request, db: Session = D
     
     if not task.completed:
         # بررسی مجدد follow status
-        if check_social_follow(telegram_id, platform):
-            task.completed = True
-            user.tokens += PLATFORM_REWARD.get(platform, 0)
-            db.commit()
-            redis_client.delete(f"task_verify:{telegram_id}:{platform}")
-            return {"success": True, "tokens_added": PLATFORM_REWARD.get(platform, 0)}
-        else:
-            return {"success": False, "error": "Follow verification failed"}
+        try:
+            result = check_social_follow(telegram_id, platform)
+            if result:
+                task.completed = True
+                reward = PLATFORM_REWARD.get(platform, 0)
+                user.tokens += reward
+                db.commit()
+                
+                # پاک کردن cache
+                cache_key = f"task_verify:{telegram_id}:{platform}"
+                if cache_key in memory_cache:
+                    del memory_cache[cache_key]
+                
+                return {"success": True, "tokens_added": reward}
+            else:
+                return {"success": False, "error": "Follow verification failed"}
+        except Exception as e:
+            print(f"Error in claim_reward: {e}")
+            return {"success": False, "error": "Reward claim failed"}
     
     return {"success": False, "error": "Task already claimed"}
