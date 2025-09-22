@@ -703,38 +703,32 @@ window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
 
-// **تابع برای تست شمارگر معکوس**
-function testCountdown() {
-    // تست با تاریخ 30 ثانیه آینده
-    const testDate = new Date(Date.now() + 30000);
-    console.log('🧪 Testing countdown with date:', testDate.toISOString());
+// **Fixed: Countdown Timer**
+function updateCountdown() {
+    // Set the target date (30 days from now for example)
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + 30);
     
-    // موقتاً تاریخ هدف را تغییر بده
-    const originalUpdate = updateCountdown;
-    window.updateCountdown = function() {
-        const targetDate = testDate.getTime();
-        const now = new Date().getTime();
-        const distance = targetDate - now;
-
-        if (distance > 0) {
-            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            document.getElementById('days').textContent = days.toString().padStart(2, '0');
-            document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
-            document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
-            document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
-            
-            console.log(`🧪 Test countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`);
-        } else {
-            console.log('🧪 Test countdown finished!');
-            // بازگشت به تابع اصلی
-            window.updateCountdown = originalUpdate;
-        }
-    };
+    const now = new Date().getTime();
+    const distance = targetDate.getTime() - now;
     
+    if (distance > 0) {
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        document.getElementById('days').textContent = days.toString().padStart(2, '0');
+        document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
+        document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
+        document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+    } else {
+        document.getElementById('days').textContent = '00';
+        document.getElementById('hours').textContent = '00';
+        document.getElementById('minutes').textContent = '00';
+        document.getElementById('seconds').textContent = '00';
+    }
+}    
     startCountdown();
     
     // بعد از 35 ثانیه بازگشت به حالت عادی
