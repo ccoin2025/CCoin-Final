@@ -10,7 +10,7 @@ from starlette.requests import Request
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
-from CCOIN.tasks.social_check import check_social_tasks
+#from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET, REDIS_URL
@@ -312,7 +312,7 @@ app.include_router(wallet.router, prefix="/wallet")
 app.include_router(commission.router, prefix="/commission")
 
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
-scheduler.add_job(check_social_tasks, "interval", hours=24)
+#scheduler.add_job(check_social_tasks, "interval", hours=24)
 scheduler.start()
 
 @app.on_event("startup")
