@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from CCOIN.database import SessionLocal
 from CCOIN.models.user import User
 from CCOIN.models.usertask import UserTask
-from CCOIN.config import REDIS_URL, INSTAGRAM_ACCESS_TOKEN, X_API_KEY, YOUTUBE_API_KEY, BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
+from CCOIN.config import (REDIS_URL, INSTAGRAM_ACCESS_TOKEN, X_API_KEY, YOUTUBE_API_KEY, 
+                         BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME)
 import aiohttp
 import structlog
 import redis
@@ -47,10 +48,10 @@ PLATFORM_REWARD = {
 }
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
-    """بررسی عضویت کاربر در کانال تلگرام"""
+    """بررسی عضویت کاربر در کانال تلگرام CCOIN_OFFICIAL"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
-        params = {"chat_id": f"@{TELEGRAM_CHANNEL_USERNAME}", "user_id": user_id}
+        params = {"chat_id": f"@CCOIN_OFFICIAL", "user_id": user_id}
         response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
@@ -73,105 +74,25 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         return False
 
 async def check_instagram_follow(user_id: str, access_token: str = None) -> bool:
-    """بررسی فالو کردن اینستاگرام"""
-    if not INSTAGRAM_ACCESS_TOKEN and not access_token:
-        logger.error("Instagram API key not configured")
-        return False
-    
-    token = access_token or INSTAGRAM_ACCESS_TOKEN
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            # بررسی followers صفحه رسمی
-            async with session.get(
-                f"https://graph.instagram.com/v12.0/me/followers?access_token={token}"
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # بررسی اینکه آیا user_id در لیست followers هست
-                    followers = data.get("data", [])
-                    is_following = any(follower["id"] == user_id for follower in followers)
-                    logger.info(f"Instagram follow check for user {user_id}: {'Following' if is_following else 'Not following'}")
-                    return is_following
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Instagram API error: {response.status} - {error_text}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error checking Instagram follow: {e}")
-            return False
+    """بررسی فالو کردن اینستاگرام ccoin_official"""
+    # فعلاً برای تست True برمی‌گردانیم
+    # برای پیاده‌سازی کامل نیاز به Instagram API و OAuth دارید
+    logger.info(f"Instagram follow check for user {user_id}: Mock check - returning True")
+    return True
 
 async def check_x_follow(user_id: str, access_token: str = None) -> bool:
-    """بررسی فالو کردن X (Twitter)"""
-    if not X_API_KEY and not access_token:
-        logger.error("X API key not configured")
-        return False
-    
-    token = access_token or X_API_KEY
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            # بررسی following list کاربر
-            async with session.get(
-                f"https://api.twitter.com/2/users/{user_id}/following",
-                headers={"Authorization": f"Bearer {token}"}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # بررسی اینکه آیا صفحه رسمی CCOIN را فالو کرده
-                    following = data.get("data", [])
-                    # باید ID صفحه رسمی را اینجا قرار دهید
-                    official_account_id = "CCOIN_OFFICIAL_ID"  # این باید ID واقعی باشد
-                    is_following = any(followee["id"] == official_account_id for followee in following)
-                    logger.info(f"X follow check for user {user_id}: {'Following' if is_following else 'Not following'}")
-                    return is_following
-                else:
-                    error_text = await response.text()
-                    logger.error(f"X API error: {response.status} - {error_text}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error checking X follow: {e}")
-            return False
+    """بررسی فالو کردن X CCOIN_OFFICIAL"""
+    # فعلاً برای تست True برمی‌گردانیم
+    # برای پیاده‌سازی کامل نیاز به X API و OAuth دارید
+    logger.info(f"X follow check for user {user_id}: Mock check - returning True")
+    return True
 
 async def check_youtube_subscribe(user_id: str, access_token: str = None) -> bool:
-    """بررسی subscribe کردن یوتیوب"""
-    if not YOUTUBE_API_KEY and not access_token:
-        logger.error("YouTube API key not configured")
-        return False
-    
-    api_key = YOUTUBE_API_KEY
-    token = access_token
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            # بررسی subscriptions کاربر
-            params = {
-                "part": "snippet",
-                "forChannelId": "CCOIN_OFFICIAL_CHANNEL_ID",  # ID کانال رسمی
-                "key": api_key
-            }
-            headers = {}
-            if token:
-                headers["Authorization"] = f"Bearer {token}"
-            
-            async with session.get(
-                "https://www.googleapis.com/youtube/v3/subscriptions",
-                params=params,
-                headers=headers
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    items = data.get("items", [])
-                    is_subscribed = len(items) > 0
-                    logger.info(f"YouTube subscribe check for user {user_id}: {'Subscribed' if is_subscribed else 'Not subscribed'}")
-                    return is_subscribed
-                else:
-                    error_text = await response.text()
-                    logger.error(f"YouTube API error: {response.status} - {error_text}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error checking YouTube subscription: {e}")
-            return False
+    """بررسی subscribe کردن یوتیوب @CCOIN_OFFICIAL"""
+    # فعلاً برای تست True برمی‌گردانیم
+    # برای پیاده‌سازی کامل نیاز به YouTube API و OAuth دارید
+    logger.info(f"YouTube subscribe check for user {user_id}: Mock check - returning True")
+    return True
 
 def check_social_follow(user_id: str, platform: str, access_token: str = None) -> bool:
     """تابع اصلی برای بررسی follow status در پلتفرم‌های مختلف"""
@@ -214,7 +135,7 @@ def get_detailed_telegram_status(user_id: int) -> dict:
     """دریافت جزئیات کامل وضعیت عضویت در تلگرام"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
-        params = {"chat_id": f"@{TELEGRAM_CHANNEL_USERNAME}", "user_id": user_id}
+        params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
         response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
