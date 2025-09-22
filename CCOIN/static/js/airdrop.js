@@ -1,3 +1,19 @@
+// تشخیص وجود APP_CONFIG و ایجاد fallback در صورت عدم وجود
+if (typeof window.APP_CONFIG === 'undefined') {
+    console.error('❌ APP_CONFIG not found! Using fallback values.');
+    window.APP_CONFIG = {
+        USER_ID: '123456789',
+        SOLANA_RPC_URL: 'https://api.devnet.solana.com',
+        COMMISSION_AMOUNT: 0.001,
+        ADMIN_WALLET: '',
+        INITIAL_TASKS_COMPLETED: false,
+        INITIAL_INVITED_FRIENDS: false,
+        INITIAL_WALLET_CONNECTED: false,
+        INITIAL_COMMISSION_PAID: false,
+        INITIAL_WALLET_ADDRESS: ''
+    };
+}
+
 // Use global variables from HTML
 const {
     USER_ID,
@@ -640,6 +656,8 @@ function initializeApp() {
     log('🚀 Initializing Airdrop app...');
     
     try {
+        console.log('🔍 APP_CONFIG:', window.APP_CONFIG);
+        
         // شروع شمارش معکوس
         startCountdown();
         
@@ -658,14 +676,12 @@ function initializeApp() {
 }
 
 // **Event Listeners**
-document.addEventListener('DOMContentLoaded', initializeApp);
-
-// اگر DOM قبلاً بارگذاری شده، بلافاصله اجرا کن
+// اجرا بلافاصله اگر DOM آماده است، وگرنه منتظر DOMContentLoaded
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
     // DOM قبلاً بارگذاری شده
-    initializeApp();
+    setTimeout(initializeApp, 100); // کمی صبر کنیم تا همه چیز بارگذاری شود
 }
 
 // **پاک‌سازی هنگام خروج از صفحه**
@@ -678,10 +694,12 @@ window.addEventListener('beforeunload', function() {
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
         log('📴 Page hidden, pausing countdown');
-        stopCountdown();
+        // نگه داشتن countdown حین مخفی بودن صفحه
     } else {
-        log('📱 Page visible, resuming countdown');
-        startCountdown();
+        log('📱 Page visible, ensuring countdown is running');
+        if (!countdownInterval) {
+            startCountdown();
+        }
     }
 });
 
