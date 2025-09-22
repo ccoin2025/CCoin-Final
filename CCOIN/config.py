@@ -12,10 +12,14 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     logger.warning("BOT_TOKEN is not set in environment variables")
+
 BOT_USERNAME = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
-TELEGRAM_CHANNEL_USERNAME = os.getenv("TELEGRAM_CHANNEL_USERNAME")
-if not TELEGRAM_CHANNEL_USERNAME:
-    logger.warning("TELEGRAM_CHANNEL_USERNAME is not set in environment variables")
+TELEGRAM_CHANNEL_USERNAME = os.getenv("TELEGRAM_CHANNEL_USERNAME", "CCOIN_OFFICIAL")
+
+# تنظیمات شبکه‌های اجتماعی
+INSTAGRAM_USERNAME = os.getenv("INSTAGRAM_USERNAME", "ccoin_official")
+X_USERNAME = os.getenv("X_USERNAME", "CCOIN_OFFICIAL")
+YOUTUBE_CHANNEL_HANDLE = os.getenv("YOUTUBE_CHANNEL_HANDLE", "@CCOIN_OFFICIAL")
 
 # تنظیمات Solana
 SOLANA_RPC = os.getenv("SOLANA_RPC", "https://api.devnet.solana.com")
@@ -29,9 +33,11 @@ if not CONTRACT_ADDRESS:
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     logger.warning("SECRET_KEY is not set in environment variables")
+
 DAPP_PRIVATE_KEY = os.getenv("DAPP_PRIVATE_KEY")
 if not DAPP_PRIVATE_KEY:
     logger.warning("DAPP_PRIVATE_KEY is not set in environment variables")
+
 ADMIN_PRIVATE_KEY = os.getenv("ADMIN_PRIVATE_KEY")
 if not ADMIN_PRIVATE_KEY:
     logger.warning("ADMIN_PRIVATE_KEY is not set in environment variables")
