@@ -40,11 +40,6 @@ body {
     transform: translateY(-50%);
 }
 
-.close-btn:hover {
-    background-color: transparent;
-    color: white;
-}
-
 /* دکمه لینک سمت راست */
 .link-btn {
     position: absolute;
@@ -53,18 +48,13 @@ body {
     transform: translateY(-50%);
 }
 
-.link-btn:hover {
-    background-color: #333;
-    color: #4CAF50;
-}
-
-/* حذف افکت active برای دکمه close */
+/* حذف active effect برای دکمه close */
 .close-btn:active {
     transform: translateY(-50%);
 }
 
 .link-btn:active {
-    transform: translateY(-50%) scale(0.95);
+    transform: translateY(-50%);
 }
 
 .about-container {
