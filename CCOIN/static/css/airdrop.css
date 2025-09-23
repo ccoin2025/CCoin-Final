@@ -60,7 +60,7 @@ body {
     padding: 10px 0;
 }
 
-.airdrop-criteria .taskbutton {
+.airdrop-criteria .task button {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -76,13 +76,9 @@ body {
     font-size: 18px;
 }
 
-.airdrop-criteria .taskbutton:hover {
-    color: #ffffff;
-}
-
 /* فواصل برابر بین دکمه‌ها - اصلاح شده */
 .task-box {
-    margin-bottom: 15px; /* فاصله یکسان بین همه دکمه‌ها */
+    margin-bottom: 15px;
     position: relative;
 }
 
@@ -98,13 +94,9 @@ body {
     background-color: #2a2a2a;
     border: none;
     border-radius: 12px;
-    margin-bottom: 0; /* حذف margin از اینجا چون در task-box تعریف شده */
+    margin-bottom: 0;
     cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.task-button:hover {
-    background-color: #3a3a3a;
+    transition: none;
 }
 
 /* نوار سبز دور همه دکمه‌های تکمیل شده */
@@ -187,12 +179,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     width: 100%;
-    transition: all 0.3s ease;
-}
-
-.claim-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
+    transition: none;
 }
 
 .claim-btn:disabled {
@@ -211,7 +198,7 @@ body {
     margin: 20px 0;
     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
     animation: celebrateGlow 2s ease-in-out infinite alternate;
-    border: 2px solid #28a745; /* نوار سبز */
+    border: 2px solid #28a745;
 }
 
 @keyframes celebrateGlow {
@@ -275,7 +262,7 @@ body {
     border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
-    transition: all 0.3s ease;
+    transition: none;
     flex: 1;
     display: flex;
     align-items: center;
@@ -283,17 +270,8 @@ body {
     gap: 5px;
 }
 
-.wallet-action-btn:hover {
-    background: #3c3c3c;
-    transform: translateY(-1px);
-}
-
 .disconnect-btn {
     background: #dc3545 !important;
-}
-
-.disconnect-btn:hover {
-    background: #c82333 !important;
 }
 
 /* Responsive */
@@ -301,19 +279,19 @@ body {
     .container {
         padding: 15px;
     }
-
+    
     .task-item {
         padding: 12px;
     }
-
+    
     .wallet-address {
         font-size: 11px;
     }
-
+    
     .wallet-actions-dropdown {
         flex-direction: column;
     }
-
+    
     .task-box {
         margin-bottom: 12px;
     }
@@ -341,7 +319,7 @@ body {
     color: #aaa;
     font-size: 12px;
     text-decoration: none;
-    transition: color 0.3s ease;
+    transition: none;
 }
 
 .footer-btn i {
@@ -349,7 +327,6 @@ body {
     margin-bottom: 4px;
 }
 
-.footer-btn:hover,
 .footer-btn.active {
     color: #fff;
 }
