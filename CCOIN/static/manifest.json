@@ -1,20 +1,10 @@
 {
   "name": "CCoin",
-  "short_name": "CCoin",
-  "description": "CCoin Airdrop Platform",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#FFD700",
+  "short_name": "CCoin", 
   "icons": [
     {
-      "src": "/static/images/icon-192.png",
+      "src": "/static/images/icon.png",
       "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon-512.png", 
-      "sizes": "512x512",
       "type": "image/png"
     }
   ]
