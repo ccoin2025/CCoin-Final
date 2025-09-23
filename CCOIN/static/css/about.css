@@ -8,40 +8,113 @@ body {
 }
 
 .about-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  background-color: #1a1a1a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background-color: #1a1a1a;
+    position: relative;
 }
 
 .close-btn, .link-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 22px;
-  cursor: pointer;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
 }
 
-.close-btn:hover, .link-btn:hover {
-  color: #ffffff;
+/* دکمه ضربدر سمت چپ */
+.close-btn {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.close-btn:hover {
+    background-color: #333;
+    color: #ff4444;
+}
+
+/* دکمه لینک سمت راست */
+.link-btn {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.link-btn:hover {
+    background-color: #333;
+    color: #4CAF50;
+}
+
+/* افکت‌های اضافی برای دکمه‌ها */
+.close-btn:active, .link-btn:active {
+    transform: translateY(-50%) scale(0.95);
 }
 
 .about-container {
-  padding: 20px;
+    padding: 20px;
 }
 
 .about-container h1 {
-  color: #FFD700;
-  font-size: 24px;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 20px;
+    color: #FFD700;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 20px;
 }
 
 .about-container p {
-  font-size: 15px;
-  line-height: 1.7;
-  margin-bottom: 15px;
-  text-align: justify;
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 15px;
+    text-align: justify;
+}
+
+/* اضافه کردن انیمیشن برای هدر */
+.about-header {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .about-header {
+        padding: 12px;
+    }
+    
+    .close-btn, .link-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+    
+    .close-btn {
+        left: 12px;
+    }
+    
+    .link-btn {
+        right: 12px;
+    }
 }
