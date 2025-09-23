@@ -46,12 +46,8 @@ body {
     padding: 12px 16px;
     width: 100%;
     cursor: pointer;
-    transition: all 0.3s;
-    overflow: hidden; /* جلوگیری از سرریز شدن محتوا */
-}
-
-.task-button:hover {
-    background-color: #333;
+    transition: none;
+    overflow: hidden;
 }
 
 .task-button.completed {
@@ -71,8 +67,8 @@ body {
 .task-button .left .task-icon {
     width: 32px;
     height: 32px;
-    object-fit: contain; /* اطمینان از نمایش کامل آیکون */
-    border-radius: 5px; /* گوشه‌های گرد برای آیکون */
+    object-fit: contain;
+    border-radius: 5px;
 }
 
 .task-button .right .status {
