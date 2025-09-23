@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 from CCOIN.database import SessionLocal
 from CCOIN.models.user import User
 from CCOIN.models.usertask import UserTask
-from CCOIN.config import (BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME)
+from CCOIN.config import (BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME, 
+                         INSTAGRAM_USERNAME, X_USERNAME, YOUTUBE_CHANNEL_HANDLE,
+                         INSTAGRAM_ACCESS_TOKEN, X_API_KEY, YOUTUBE_API_KEY)
 import structlog
 import requests
 import time
@@ -52,7 +54,6 @@ def clear_expired_cache():
     """پاک کردن cache های منقضی شده"""
     current_time = time.time()
     expired_keys = []
-    
     for key, (value, expiry) in memory_cache.items():
         if current_time >= expiry:
             expired_keys.append(key)
@@ -70,74 +71,47 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
         
         logger.info(f"Checking Telegram membership for user {user_id}")
-        logger.info(f"API URL: {url}")
-        logger.info(f"Parameters: {params}")
         
         response = requests.get(url, params=params, timeout=15)
         
-        logger.info(f"Telegram API response status: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Telegram API response data: {data}")
             
             if data.get("ok"):
                 result = data.get("result", {})
                 status = result.get("status")
-                user_info = result.get("user", {})
-                
                 is_member = status in ["member", "administrator", "creator"]
                 
-                logger.info(f"User {user_id} status in channel: {status}")
-                logger.info(f"User info: {user_info}")
-                logger.info(f"Is member: {is_member}")
-                
+                logger.info(f"User {user_id} status in channel: {status}, is_member: {is_member}")
                 return is_member
             else:
                 error_description = data.get("description", "Unknown error")
-                error_code = data.get("error_code", "Unknown")
-                
-                logger.error(f"Telegram API error: {error_code} - {error_description}")
-                
-                # تشخیص انواع خطاها
-                if error_code == 400:
-                    if "chat not found" in error_description.lower():
-                        logger.error("❌ Channel @CCOIN_OFFICIAL not found or bot has no access")
-                        logger.error("🔧 Solution: Add bot to channel as administrator")
-                    elif "user not found" in error_description.lower():
-                        logger.info(f"ℹ️ User {user_id} not found in Telegram")
-                    elif "bot was blocked" in error_description.lower():
-                        logger.error(f"❌ Bot was blocked by user {user_id}")
-                    else:
-                        logger.error(f"❌ Unknown 400 error: {error_description}")
-                elif error_code == 403:
-                    logger.error("❌ Bot forbidden to access channel")
-                    logger.error("🔧 Solution: Make bot administrator of the channel")
-                
+                logger.error(f"Telegram API error: {error_description}")
                 return False
         else:
-            response_text = response.text
             logger.error(f"Telegram API HTTP error: {response.status_code}")
-            logger.error(f"Response text: {response_text}")
             return False
             
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout while checking Telegram membership for user {user_id}")
-        return False
-    except requests.exceptions.ConnectionError:
-        logger.error(f"Connection error while checking Telegram membership for user {user_id}")
-        return False
     except Exception as e:
-        logger.error(f"Unexpected error checking Telegram channel membership: {e}")
+        logger.error(f"Error checking Telegram channel membership: {e}")
         return False
 
 def check_instagram_follow(user_id: str) -> bool:
     """بررسی فالو کردن اینستاگرام ccoin_official"""
     try:
-        # فعلاً برای تست True برمی‌گردانیم
-        # در آینده API اینستاگرام پیاده‌سازی خواهد شد
+        # TODO: اینجا باید API اینستاگرام پیاده‌سازی شود
+        # فعلاً برای تست، فرض می‌کنیم همیشه true است
+        # در production باید API واقعی استفاده شود
+        
+        # مثال برای API واقعی:
+        # if INSTAGRAM_ACCESS_TOKEN:
+        #     # استفاده از Instagram Basic Display API
+        #     # بررسی following status
+        #     pass
+        
         logger.info(f"Instagram follow check for user {user_id}: Mock verification - returning True")
         return True
+        
     except Exception as e:
         logger.error(f"Error checking Instagram follow for user {user_id}: {e}")
         return False
@@ -145,10 +119,19 @@ def check_instagram_follow(user_id: str) -> bool:
 def check_x_follow(user_id: str) -> bool:
     """بررسی فالو کردن X CCOIN_OFFICIAL"""
     try:
-        # فعلاً برای تست True برمی‌گردانیم
-        # در آینده API X پیاده‌سازی خواهد شد
+        # TODO: اینجا باید API X (Twitter) پیاده‌سازی شود
+        # فعلاً برای تست، فرض می‌کنیم همیشه true است
+        # در production باید API واقعی استفاده شود
+        
+        # مثال برای API واقعی:
+        # if X_API_KEY:
+        #     # استفاده از Twitter API v2
+        #     # بررسی following status
+        #     pass
+        
         logger.info(f"X follow check for user {user_id}: Mock verification - returning True")
         return True
+        
     except Exception as e:
         logger.error(f"Error checking X follow for user {user_id}: {e}")
         return False
@@ -156,31 +139,39 @@ def check_x_follow(user_id: str) -> bool:
 def check_youtube_subscribe(user_id: str) -> bool:
     """بررسی subscribe کردن یوتیوب @CCOIN_OFFICIAL"""
     try:
-        # فعلاً برای تست True برمی‌گردانیم
-        # در آینده API YouTube پیاده‌سازی خواهد شد
+        # TODO: اینجا باید API YouTube پیاده‌سازی شود
+        # فعلاً برای تست، فرض می‌کنیم همیشه true است
+        # در production باید API واقعی استفاده شود
+        
+        # مثال برای API واقعی:
+        # if YOUTUBE_API_KEY:
+        #     # استفاده از YouTube Data API v3
+        #     # بررسی subscription status
+        #     pass
+        
         logger.info(f"YouTube subscribe check for user {user_id}: Mock verification - returning True")
         return True
+        
     except Exception as e:
         logger.error(f"Error checking YouTube subscription for user {user_id}: {e}")
         return False
 
-def check_social_follow(user_id: str, platform: str) -> bool:
+def check_social_follow(user_id: str, platform: str, force_refresh: bool = False) -> bool:
     """تابع اصلی برای بررسی follow status در پلتفرم‌های مختلف"""
-    
     # پاک کردن cache های منقضی شده
     clear_expired_cache()
     
     cache_key = f"social_check:{user_id}:{platform}"
     
-    # بررسی cache
-    cached_result = get_from_cache(cache_key)
-    if cached_result is not None:
-        result = cached_result == "1"
-        logger.info(f"📋 Cache hit for user {user_id} platform {platform}: {result}")
-        return result
+    # اگر force_refresh فعال نباشد، از cache استفاده کن
+    if not force_refresh:
+        cached_result = get_from_cache(cache_key)
+        if cached_result is not None:
+            result = cached_result == "1"
+            logger.info(f"📋 Cache hit for user {user_id} platform {platform}: {result}")
+            return result
     
     result = False
-    
     try:
         logger.info(f"🔍 Checking {platform} follow status for user {user_id}")
         
@@ -203,21 +194,87 @@ def check_social_follow(user_id: str, platform: str) -> bool:
         logger.error(f"❌ Error checking {platform} follow for user {user_id}: {e}")
         result = False
     
-    # Cache result for 10 minutes
-    set_in_cache(cache_key, "1" if result else "0", 600)
-    logger.info(f"✅ Follow check result for user {user_id} platform {platform}: {result}")
+    # Cache result for 5 minutes (کاهش مدت cache برای بررسی سریع‌تر انفالو)
+    set_in_cache(cache_key, "1" if result else "0", 300)
     
+    logger.info(f"✅ Follow check result for user {user_id} platform {platform}: {result}")
     return result
+
+def check_and_update_all_user_tasks(user_id: str, db_session: Session = None) -> dict:
+    """بررسی همه تسک‌های کاربر و به‌روزرسانی وضعیت آن‌ها"""
+    if not db_session:
+        db_session = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+    
+    try:
+        user = db_session.query(User).filter(User.telegram_id == user_id).first()
+        if not user:
+            return {"error": "User not found"}
+        
+        results = {}
+        platforms = ["telegram", "instagram", "x", "youtube"]
+        
+        for platform in platforms:
+            # بررسی وضعیت فعلی follow
+            current_follow_status = check_social_follow(user_id, platform, force_refresh=True)
+            
+            # یافتن یا ایجاد task
+            task = db_session.query(UserTask).filter(
+                UserTask.user_id == user.id,
+                UserTask.platform == platform
+            ).first()
+            
+            if not task:
+                task = UserTask(user_id=user.id, platform=platform, completed=False)
+                db_session.add(task)
+            
+            # اگر کاربر فعلاً فالو نکرده ولی قبلاً تسک رو کامل کرده بود
+            if not current_follow_status and task.completed:
+                # جریمه: کسر کردن پاداش و غیرفعال کردن تسک
+                reward = PLATFORM_REWARD.get(platform, 0)
+                user.tokens = max(0, user.tokens - reward)  # جلوگیری از منفی شدن توکن‌ها
+                task.completed = False
+                task.completed_at = None
+                
+                logger.info(f"🚫 User {user_id} unfollowed {platform}. Penalty applied: -{reward} tokens")
+                results[platform] = {"status": "unfollowed", "penalty": reward, "follow_status": False}
+                
+            # اگر کاربر فالو کرده ولی تسک کامل نشده
+            elif current_follow_status and not task.completed:
+                results[platform] = {"status": "ready_to_claim", "follow_status": True}
+                
+            # اگر کاربر فالو کرده و تسک هم کامل شده
+            elif current_follow_status and task.completed:
+                results[platform] = {"status": "completed", "follow_status": True}
+                
+            # اگر کاربر فالو نکرده و تسک هم کامل نشده
+            else:
+                results[platform] = {"status": "not_completed", "follow_status": False}
+        
+        db_session.commit()
+        return {"success": True, "platforms": results, "user_tokens": user.tokens}
+        
+    except Exception as e:
+        db_session.rollback()
+        logger.error(f"Error checking all user tasks: {e}")
+        return {"error": str(e)}
+    finally:
+        if should_close:
+            db_session.close()
 
 def get_detailed_telegram_status(user_id: int) -> dict:
     """دریافت جزئیات کامل وضعیت عضویت در تلگرام"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
+        
         response = requests.get(url, params=params, timeout=15)
         
         if response.status_code == 200:
             data = response.json()
+            
             if data.get("ok"):
                 result = data.get("result", {})
                 user_info = result.get("user", {})
@@ -271,10 +328,11 @@ def clear_user_cache(user_id: str, platform: str = None):
         # پاک کردن همه cache های کاربر
         patterns = [
             f"social_check:{user_id}:telegram",
-            f"social_check:{user_id}:instagram", 
+            f"social_check:{user_id}:instagram",
             f"social_check:{user_id}:x",
             f"social_check:{user_id}:youtube"
         ]
+        
         cleared_count = 0
         for pattern in patterns:
             if pattern in memory_cache:
@@ -356,38 +414,11 @@ def manual_verify_user_task(user_id: str, platform: str, force: bool = False):
     """تایید دستی task کاربر"""
     try:
         # پاک کردن cache
-        if force:
-            clear_user_cache(user_id, platform)
+        clear_user_cache(user_id, platform)
         
         # بررسی مجدد
-        result = check_social_follow(user_id, platform)
-        
-        return {
-            "user_id": user_id,
-            "platform": platform,
-            "result": result,
-            "forced": force,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return check_social_follow(user_id, platform, force_refresh=True)
         
     except Exception as e:
-        return {
-            "user_id": user_id,
-            "platform": platform,
-            "result": False,
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-# تابع cleanup برای memory management
-def cleanup_cache():
-    """پاک کردن کامل cache"""
-    global memory_cache
-    cache_size = len(memory_cache)
-    memory_cache.clear()
-    logger.info(f"🧹 Cleared all cache ({cache_size} entries)")
-    
-    return {
-        "cleared_entries": cache_size,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+        logger.error(f"Error in manual verification: {e}")
+        return False
