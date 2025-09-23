@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="csrf-token" content="{{ request.session.csrf_token }}">
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#FFD700">
-    <link rel="icon" href="/static/images/icon.png" type="image/png">
+    <meta name="application-name" content="C-COIN" />
+    <meta name="description" content="C-COIN Telegram Mini App for Airdrop" />
+    <link rel="icon" href="https://ccoin-final.onrender.com/static/images/icon.png" />
+    <meta property="og:image" content="https://ccoin-final.onrender.com/static/images/icon.png" />
+    <meta property="og:title" content="C-COIN" />
+    <meta property="og:description" content="Join our airdrop and earn rewards." />
     <title>Airdrop</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
