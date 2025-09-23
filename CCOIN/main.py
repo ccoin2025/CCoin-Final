@@ -30,6 +30,8 @@ import hmac
 import hashlib
 from dotenv import load_dotenv
 from CCOIN.routers import wallet
+from fastapi.responses import FileResponse
+
 
 load_dotenv()
 
@@ -412,3 +414,8 @@ async def debug_bot_info():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse("CCOIN/static/images/icon.png")
