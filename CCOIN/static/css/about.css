@@ -20,7 +20,7 @@ body {
     pointer-events: none; /* تا دکمه‌ها قابل کلیک باشند */
 }
 
-/* دکمه‌ها */
+/* دکمه‌ها - حذف hover effects */
 .close-btn, .link-btn {
     background: none;
     border: none;
@@ -34,7 +34,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: none;
+    transition: none; /* حذف transition */
     position: fixed;
     top: 20px;
     z-index: 1000;
@@ -50,13 +50,15 @@ body {
     right: 15px;
 }
 
-/* حذف active effect برای دکمه‌ها */
-.close-btn:active {
+/* حذف تمام hover و active effects */
+.close-btn:hover, .link-btn:hover,
+.close-btn:active, .link-btn:active,
+.close-btn:focus, .link-btn:focus {
+    background: none;
+    color: white;
     transform: none;
-}
-
-.link-btn:active {
-    transform: none;
+    outline: none;
+    box-shadow: none;
 }
 
 .about-container {
