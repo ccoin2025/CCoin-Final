@@ -1,6 +1,6 @@
 {
   "name": "CCoin",
-  "short_name": "CCoin", 
+  "short_name": "CCoin",
   "description": "CCoin Telegram Mini App - Earn tokens and participate in airdrops",
   "start_url": "/",
   "display": "standalone",
@@ -11,42 +11,7 @@
   "lang": "en",
   "icons": [
     {
-      "src": "/static/images/icon.png",
-      "sizes": "72x72",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png", 
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png",
-      "sizes": "128x128", 
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png",
-      "sizes": "144x144",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png",
-      "sizes": "152x152",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png", 
-      "sizes": "384x384",
-      "type": "image/png"
-    },
-    {
-      "src": "/static/images/icon.png",
+      "src": "/static/images/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
