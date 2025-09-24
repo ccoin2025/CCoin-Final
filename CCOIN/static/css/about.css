@@ -14,6 +14,11 @@ body {
     padding: 8px 15px;
     background-color: #1a1a1a;
     position: relative;
+    /* اضافه کردن margin-top برای آوردن هدر پایین‌تر */
+    margin-top: 20px;
+    border-radius: 10px;
+    margin-left: 15px;
+    margin-right: 15px;
 }
 
 .close-btn, .link-btn {
@@ -59,6 +64,8 @@ body {
 
 .about-container {
     padding: 20px;
+    /* اضافه کردن padding-top کمتر چون هدر پایین‌تر آمده */
+    padding-top: 10px;
 }
 
 .about-container h1 {
@@ -96,18 +103,21 @@ body {
 @media (max-width: 480px) {
     .about-header {
         padding: 6px 12px;
+        margin-top: 15px;
+        margin-left: 10px;
+        margin-right: 10px;
     }
-    
+
     .close-btn, .link-btn {
         width: 40px;
         height: 40px;
         font-size: 20px;
     }
-    
+
     .close-btn {
         left: 12px;
     }
-    
+
     .link-btn {
         right: 12px;
     }
