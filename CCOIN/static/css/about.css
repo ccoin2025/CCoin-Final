@@ -5,22 +5,10 @@ body {
     font-family: 'Urbanist', sans-serif;
     margin: 0;
     padding-bottom: 100px;
-}
-
-.about-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 15px;
-    background-color: #1a1a1a;
     position: relative;
-    /* اضافه کردن margin-top برای آوردن هدر پایین‌تر */
-    margin-top: 20px;
-    border-radius: 10px;
-    margin-left: 15px;
-    margin-right: 15px;
 }
 
+/* حذف استایل about-header و فقط نگه داشتن دکمه‌ها */
 .close-btn, .link-btn {
     background: none;
     border: none;
@@ -35,37 +23,33 @@ body {
     align-items: center;
     justify-content: center;
     transition: none;
+    position: fixed;
+    top: 35px; /* موقعیت همان جای قبلی */
+    z-index: 1000;
 }
 
 /* دکمه بک اسپیس سمت چپ */
 .close-btn {
-    position: absolute;
     left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
 }
 
 /* دکمه لینک سمت راست */
 .link-btn {
-    position: absolute;
     right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
 }
 
-/* حذف active effect برای دکمه close */
+/* حذف active effect برای دکمه‌ها */
 .close-btn:active {
-    transform: translateY(-50%);
+    transform: none;
 }
 
 .link-btn:active {
-    transform: translateY(-50%);
+    transform: none;
 }
 
 .about-container {
     padding: 20px;
-    /* اضافه کردن padding-top کمتر چون هدر پایین‌تر آمده */
-    padding-top: 10px;
+    padding-top: 80px; /* فاصله از بالا برای جای دکمه‌ها */
 }
 
 .about-container h1 {
@@ -83,35 +67,13 @@ body {
     text-align: justify;
 }
 
-/* اضافه کردن انیمیشن برای هدر */
-.about-header {
-    animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-    from {
-        transform: translateY(-100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
 /* Responsive Design */
 @media (max-width: 480px) {
-    .about-header {
-        padding: 6px 12px;
-        margin-top: 15px;
-        margin-left: 10px;
-        margin-right: 10px;
-    }
-
     .close-btn, .link-btn {
         width: 40px;
         height: 40px;
         font-size: 20px;
+        top: 25px;
     }
 
     .close-btn {
@@ -120,5 +82,9 @@ body {
 
     .link-btn {
         right: 12px;
+    }
+
+    .about-container {
+        padding-top: 70px;
     }
 }
