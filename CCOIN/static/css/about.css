@@ -8,7 +8,19 @@ body {
     position: relative;
 }
 
-/* حذف استایل about-header و فقط نگه داشتن دکمه‌ها */
+/* ایجاد یک overlay برای مخفی کردن متن زیر دکمه‌ها */
+.header-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background-color: #000;
+    z-index: 999;
+    pointer-events: none; /* تا دکمه‌ها قابل کلیک باشند */
+}
+
+/* دکمه‌ها */
 .close-btn, .link-btn {
     background: none;
     border: none;
@@ -24,7 +36,7 @@ body {
     justify-content: center;
     transition: none;
     position: fixed;
-    top: 35px; /* موقعیت همان جای قبلی */
+    top: 20px;
     z-index: 1000;
 }
 
@@ -50,6 +62,8 @@ body {
 .about-container {
     padding: 20px;
     padding-top: 80px; /* فاصله از بالا برای جای دکمه‌ها */
+    position: relative;
+    z-index: 1; /* زیر overlay قرار گیرد */
 }
 
 .about-container h1 {
@@ -69,11 +83,15 @@ body {
 
 /* Responsive Design */
 @media (max-width: 480px) {
+    .header-overlay {
+        height: 70px;
+    }
+
     .close-btn, .link-btn {
         width: 40px;
         height: 40px;
         font-size: 20px;
-        top: 25px;
+        top: 15px;
     }
 
     .close-btn {
