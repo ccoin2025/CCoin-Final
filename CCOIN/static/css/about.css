@@ -1,3 +1,56 @@
+/* حذف کامل hover effects برای تمام عناصر */
+*, *::before, *::after {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* حذف hover برای همه دکمه‌ها و لینک‌ها */
+button, a, input, textarea, select,
+.close-btn, .link-btn, .footer-btn, .nav-item,
+.about-btn, .join-community-btn, .task-button,
+.wallet-action-btn, .claim-btn {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-focus-ring-color: transparent !important;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    transition: none !important;
+}
+
+/* حذف تمام states برای همه عناصر */
+button:hover, button:active, button:focus,
+a:hover, a:active, a:focus,
+input:hover, input:active, input:focus,
+textarea:hover, textarea:active, textarea:focus,
+select:hover, select:active, select:focus,
+.close-btn:hover, .close-btn:active, .close-btn:focus,
+.link-btn:hover, .link-btn:active, .link-btn:focus,
+.footer-btn:hover, .footer-btn:active, .footer-btn:focus,
+.nav-item:hover, .nav-item:active, .nav-item:focus,
+.about-btn:hover, .about-btn:active, .about-btn:focus,
+.join-community-btn:hover, .join-community-btn:active, .join-community-btn:focus,
+.task-button:hover, .task-button:active, .task-button:focus,
+.wallet-action-btn:hover, .wallet-action-btn:active, .wallet-action-btn:focus,
+.claim-btn:hover, .claim-btn:active, .claim-btn:focus {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: inherit !important;
+    color: inherit !important;
+    transform: none !important;
+    opacity: inherit !important;
+    text-decoration: none !important;
+}
+
+
+
+
 /* Global Styles */
 body {
     background-color: #000;
