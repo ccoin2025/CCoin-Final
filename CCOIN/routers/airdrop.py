@@ -17,7 +17,7 @@ from solders.system_program import TransferParams, transfer
 from datetime import datetime
 import base58
 import base64
-import time  # برای retry
+import time # برای retry
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -42,7 +42,7 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    end_date = datetime(2025, 12, 31)  # Fixed year to 2025
+    end_date = datetime(2025, 12, 31) # Fixed year to 2025
     countdown = end_date - datetime.now()
 
     # بررسی دقیق‌تر وضعیت tasks
@@ -109,19 +109,19 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     try:
         # تبدیل آدرس به base58 و اعتبارسنجی
         pubkey = Pubkey.from_string(wallet)
-        
+
         # بررسی اینکه آدرس قبلاً استفاده نشده باشد (اختیاری)
         existing_user = db.query(User).filter(User.wallet_address == wallet, User.id != user.id).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="This wallet address is already connected to another account")
-        
+
         user.wallet_address = wallet
         db.commit()
-        
+
         print(f"Wallet connected successfully for user {telegram_id}: {wallet}")
-        
+
         return {
-            "success": True, 
+            "success": True,
             "message": "Wallet connected successfully",
             "wallet_address": wallet
         }
@@ -199,23 +199,56 @@ async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
         "completed_count": completed_count
     }
 
+# اضافه کردن endpoint debug جدید
+@router.get("/debug/wallet_status")
+async def debug_wallet_status(request: Request, db: Session = Depends(get_db)):
+    """Debug endpoint to check wallet status"""
+    telegram_id = request.session.get("telegram_id")
+    if not telegram_id:
+        return {"error": "No telegram_id in session", "session_keys": list(request.session.keys())}
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return {"error": "User not found", "telegram_id": telegram_id}
+
+    return {
+        "success": True,
+        "telegram_id": telegram_id,
+        "user_id": user.id,
+        "wallet_address": user.wallet_address,
+        "wallet_connected": bool(user.wallet_address),
+        "commission_paid": user.commission_paid,
+        "commission_payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
+        "session_data": dict(request.session)
+    }
+
 @router.post("/pay/commission")
 @limiter.limit("3/minute")
 async def pay_commission(request: Request, db: Session = Depends(get_db)):
     """Handle commission payment"""
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
+        print("❌ No telegram_id in session for commission payment")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
+        print(f"❌ User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
+    # اضافه کردن debug log
+    print(f"🔍 Commission payment debug for user {telegram_id}:")
+    print(f"  - User ID: {user.id}")
+    print(f"  - Wallet address: {user.wallet_address}")
+    print(f"  - Commission paid: {user.commission_paid}")
+
     if not user.wallet_address:
-        raise HTTPException(status_code=400, detail="No wallet connected")
+        print(f"❌ No wallet connected for user {telegram_id}")
+        raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
 
     # Check if commission already paid
     if user.commission_paid:
+        print(f"ℹ️ Commission already paid for user {telegram_id}")
         return {"success": True, "message": "Commission already paid"}
 
     try:
@@ -231,7 +264,7 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
         #     if not tx_info or not tx_info.get('result'):
         #         raise HTTPException(status_code=400, detail="Invalid transaction hash")
         # except:
-        #     pass  # Skip verification for now
+        #     pass # Skip verification for now
 
         # Mark commission as paid
         user.commission_paid = True
@@ -239,7 +272,7 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
         user.commission_transaction_hash = transaction_hash
         db.commit()
 
-        print(f"Commission paid by user {telegram_id}: {transaction_hash}")
+        print(f"✅ Commission paid by user {telegram_id}: {transaction_hash}")
 
         return {
             "success": True,
@@ -247,9 +280,11 @@ async def pay_commission(request: Request, db: Session = Depends(get_db)):
             "transaction_hash": transaction_hash
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        print(f"Commission payment error for user {telegram_id}: {str(e)}")
+        print(f"❌ Commission payment error for user {telegram_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Payment processing failed: {str(e)}")
 
 # Deprecated endpoint - kept for backward compatibility
@@ -351,7 +386,7 @@ async def verify_transaction(request: Request, db: Session = Depends(get_db)):
     try:
         body = await request.json()
         tx_hash = body.get("transaction_hash")
-        
+
         if not tx_hash:
             raise HTTPException(status_code=400, detail="Transaction hash is required")
 
@@ -379,56 +414,3 @@ async def verify_transaction(request: Request, db: Session = Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
-
-@router.get("/airdrop_stats")
-@limiter.limit("20/minute")
-async def get_airdrop_stats(request: Request, db: Session = Depends(get_db)):
-    """Get general airdrop statistics"""
-    try:
-        # Count users by completion status
-        total_users = db.query(User).count()
-        users_with_wallet = db.query(User).filter(User.wallet_address.isnot(None)).count()
-        users_paid_commission = db.query(User).filter(User.commission_paid == True).count()
-        
-        # Count referrals
-        users_with_referrals = db.query(User).filter(User.referred_by.isnot(None)).count()
-        
-        return {
-            "total_users": total_users,
-            "users_with_wallet": users_with_wallet,
-            "users_paid_commission": users_paid_commission,
-            "users_with_referrals": users_with_referrals,
-            "wallet_connection_rate": round((users_with_wallet / total_users) * 100, 2) if total_users > 0 else 0,
-            "commission_payment_rate": round((users_paid_commission / total_users) * 100, 2) if total_users > 0 else 0
-        }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not get stats: {str(e)}")
-
-@router.post("/disconnect_wallet")
-@limiter.limit("5/minute")
-async def disconnect_wallet(request: Request, db: Session = Depends(get_db)):
-    """Disconnect wallet from user account"""
-    telegram_id = request.session.get("telegram_id")
-    if not telegram_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if not user.wallet_address:
-        return {"success": True, "message": "No wallet connected"}
-
-    # Disconnect wallet
-    old_wallet = user.wallet_address
-    user.wallet_address = None
-    db.commit()
-
-    print(f"Wallet disconnected for user {telegram_id}: {old_wallet}")
-
-    return {
-        "success": True,
-        "message": "Wallet disconnected successfully",
-        "previous_wallet": old_wallet
-    }
