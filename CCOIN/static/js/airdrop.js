@@ -589,3 +589,167 @@ window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
 window.showPhantomModal = showPhantomModal;
 window.hidePhantomModal = hidePhantomModal;
+
+// **تابع handle کردن کلیک دکمه commission**
+async function handleCommissionPayment() {
+    try {
+        log('💰 Commission payment clicked');
+
+        // بررسی اتصال کیف پول
+        if (!tasksCompleted.wallet || !connectedWallet) {
+            showToast('Please connect your wallet first', 'error');
+            log('❌ Wallet not connected for commission payment');
+            return;
+        }
+
+        // بررسی اینکه قبلاً پرداخت شده باشد
+        if (tasksCompleted.pay) {
+            showToast('Commission already paid!', 'info');
+            log('ℹ️ Commission already paid');
+            return;
+        }
+
+        // نمایش loading state
+        const commissionButton = document.querySelector('#pay-commission .task-button');
+        const commissionIcon = document.getElementById('commission-icon');
+        
+        if (commissionButton) {
+            commissionButton.classList.add('loading');
+        }
+        if (commissionIcon) {
+            commissionIcon.className = 'fas fa-spinner fa-spin right-icon';
+        }
+
+        log('🔄 Starting commission payment process...');
+
+        // هدایت به صفحه پرداخت
+        const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
+        window.location.href = commissionUrl;
+
+    } catch (error) {
+        log('❌ Commission payment error: ' + error.message);
+        showToast('Commission payment failed: ' + error.message, 'error');
+
+        // برگرداندن UI به حالت عادی
+        const commissionButton = document.querySelector('#pay-commission .task-button');
+        const commissionIcon = document.getElementById('commission-icon');
+        
+        if (commissionButton) {
+            commissionButton.classList.remove('loading');
+        }
+        if (commissionIcon) {
+            commissionIcon.className = 'fas fa-chevron-right right-icon';
+        }
+    }
+}
+
+// **تابع handle کردن کلیک دکمه task completion**
+async function handleTaskCompletion() {
+    try {
+        log('📋 Task completion clicked');
+        
+        if (tasksCompleted.task) {
+            showToast('Tasks already completed!', 'info');
+            return;
+        }
+
+        // هدایت به صفحه earn
+        window.location.href = '/earn';
+        
+    } catch (error) {
+        log('❌ Task completion error: ' + error.message);
+        showToast('Failed to navigate to tasks: ' + error.message, 'error');
+    }
+}
+
+// **تابع handle کردن کلیک دکمه invite friends**
+async function handleInviteCheck() {
+    try {
+        log('👥 Invite friends clicked');
+        
+        if (tasksCompleted.invite) {
+            showToast('Friends already invited!', 'info');
+            return;
+        }
+
+        // هدایت به صفحه friends
+        window.location.href = '/friends';
+        
+    } catch (error) {
+        log('❌ Invite friends error: ' + error.message);
+        showToast('Failed to navigate to friends: ' + error.message, 'error');
+    }
+}
+
+// **تابع بررسی وضعیت پرداخت کمیسیون از سرور**
+async function checkCommissionStatus() {
+    try {
+        log('🔍 Checking commission status...');
+        
+        const response = await fetch(`/commission/status?telegram_id=${USER_ID}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.commission_paid) {
+                tasksCompleted.pay = true;
+                updateCommissionUI();
+                log('✅ Commission payment confirmed by server');
+            }
+        } else {
+            log('⚠️ Failed to check commission status: ' + data.detail);
+        }
+
+    } catch (error) {
+        log('❌ Commission status check error: ' + error.message);
+    }
+}
+
+// **تابع بررسی وضعیت اتصال کیف پول از سرور**
+async function checkWalletStatus() {
+    try {
+        log('🔍 Checking wallet status...');
+        
+        const response = await fetch(`/airdrop/wallet_status?telegram_id=${USER_ID}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.wallet_connected && data.wallet_address) {
+                connectedWallet = data.wallet_address;
+                tasksCompleted.wallet = true;
+                updateWalletUI();
+                log('✅ Wallet connection confirmed by server: ' + data.wallet_address);
+            } else {
+                connectedWallet = '';
+                tasksCompleted.wallet = false;
+                updateWalletUI();
+                log('ℹ️ No wallet connected on server');
+            }
+        } else {
+            log('⚠️ Failed to check wallet status: ' + data.detail);
+        }
+
+    } catch (error) {
+        log('❌ Wallet status check error: ' + error.message);
+    }
+}
+
+// **بررسی وضعیت‌ها هنگام load شدن صفحه**
+async function initializePageStatus() {
+    log('🚀 Initializing page status...');
+    
+    try {
+        // بررسی وضعیت کیف پول
+        await checkWalletStatus();
+        
+        // بررسی وضعیت کمیسیون
+        await checkCommissionStatus();
+        
+        // بروزرسانی همه UI ها
+        updateAllTasksUI();
+        
+        log('✅ Page status initialized successfully');
+        
+    } catch (error) {
+        log('❌ Failed to initialize page status: ' + error.message);
+    }
+}
