@@ -23,22 +23,22 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), ".
 @router.get("/browser/pay", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_browser_pay(
-        request: Request,
-        telegram_id: str = Query(..., description="Telegram user ID"),
-        db: Session = Depends(get_db)
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
 ):
     """صفحه پرداخت کمیسیون در مرورگر"""
-    print(f"Commission browser payment for telegram_id: {telegram_id}")
+    print(f"💰 Commission browser payment for telegram_id: {telegram_id}")
 
     # بررسی کاربر
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        print(f"User not found: {telegram_id}")
+        print(f"❌ User not found: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
     # بررسی اینکه آیا قبلاً پرداخت شده
     if user.commission_paid:
-        print(f"Commission already paid for user: {telegram_id}")
+        print(f"✅ Commission already paid for user: {telegram_id}")
         return templates.TemplateResponse("commission_success.html", {
             "request": request,
             "telegram_id": telegram_id,
@@ -46,16 +46,23 @@ async def commission_browser_pay(
             "already_paid": True
         })
 
-    # بررسی اتصال کیف پول
-    if not user.wallet_address:
-        print(f"No wallet connected for user: {telegram_id}")
-        raise HTTPException(status_code=400, detail="Wallet not connected")
+    # لاگ وضعیت کیف پول برای دیباگ
+    print(f"🔍 Wallet status for user {telegram_id}:")
+    print(f"   - wallet_address: {user.wallet_address}")
+    print(f"   - wallet_connected: {bool(user.wallet_address)}")
+
+    # **حذف بررسی اجباری کیف پول** - اجازه دهید کاربر در صفحه پرداخت کیف پول وصل کند
+    # if not user.wallet_address:
+    #     print(f"❌ No wallet connected for user: {telegram_id}")
+    #     raise HTTPException(status_code=400, detail="Wallet not connected")
 
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET
+        "admin_wallet": ADMIN_WALLET,
+        "wallet_connected": bool(user.wallet_address),
+        "wallet_address": user.wallet_address or ""
     })
 
 
@@ -178,3 +185,5 @@ async def get_commission_status(
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
     }
+
+# سایر توابع بدون تغییر...
