@@ -157,7 +157,7 @@
 
         async function checkPaymentStatus() {
             try {
-                const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
+                const response = await fetch(`/commission/status?telegram_id=${telegramId}`);
                 const data = await response.json();
                 
                 if (data.commission_paid) {
