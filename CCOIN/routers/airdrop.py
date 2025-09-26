@@ -88,21 +88,45 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
 @router.post("/connect_wallet")
 @limiter.limit("5/minute")
 async def connect_wallet(request: Request, db: Session = Depends(get_db)):
+    # Try to get telegram_id from multiple sources
     telegram_id = request.session.get("telegram_id")
+    
+    # If not in session, try to get from request body
     if not telegram_id:
-        raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
+        try:
+            body = await request.json()
+            telegram_id = body.get("telegram_id")
+        except:
+            pass
+    
+    # If still not found, try from header
+    if not telegram_id:
+        telegram_id = request.headers.get("X-Telegram-User-ID")
+    
+    if not telegram_id:
+        print("❌ No telegram_id found in session, body, or headers")
+        raise HTTPException(status_code=401, detail="Unauthorized: No telegram_id found")
 
-    body = await request.json()
-    wallet = body.get("wallet")
+    # Get wallet from request body
+    try:
+        body = await request.json()
+        wallet = body.get("wallet")
+    except Exception as e:
+        print(f"❌ Failed to parse request body: {e}")
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    print(f"🔍 Connect wallet request - telegram_id: {telegram_id}, wallet: {wallet}")
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
+        print(f"❌ User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
     # اگر wallet خالی است، یعنی disconnect
     if not wallet or wallet == "null" or wallet is None:
         user.wallet_address = None
         db.commit()
+        print(f"✅ Wallet disconnected for user {telegram_id}")
         return {"success": True, "message": "Wallet disconnected successfully"}
 
     # بررسی معتبر بودن آدرس Solana
@@ -113,12 +137,13 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
         # بررسی اینکه آدرس قبلاً استفاده نشده باشد (اختیاری)
         existing_user = db.query(User).filter(User.wallet_address == wallet, User.id != user.id).first()
         if existing_user:
+            print(f"❌ Wallet address already in use: {wallet}")
             raise HTTPException(status_code=400, detail="This wallet address is already connected to another account")
 
         user.wallet_address = wallet
         db.commit()
 
-        print(f"Wallet connected successfully for user {telegram_id}: {wallet}")
+        print(f"✅ Wallet connected successfully for user {telegram_id}: {wallet}")
 
         return {
             "success": True,
@@ -126,9 +151,8 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
             "wallet_address": wallet
         }
     except Exception as e:
-        print(f"Invalid wallet address for user {telegram_id}: {wallet}, error: {str(e)}")
+        print(f"❌ Invalid wallet address for user {telegram_id}: {wallet}, error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Invalid wallet address: {str(e)}")
-
 @router.get("/referral_status")
 @limiter.limit("10/minute")
 async def get_referral_status(request: Request, db: Session = Depends(get_db)):
