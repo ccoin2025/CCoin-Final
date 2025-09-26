@@ -10,7 +10,7 @@ from starlette.requests import Request
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
-#from CCOIN.tasks.social_check import check_social_tasks
+# from CCOIN.tasks.social_check import check_social_tasks
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, ADMIN_WALLET, REDIS_URL
@@ -32,7 +32,6 @@ from dotenv import load_dotenv
 from CCOIN.routers import wallet
 from fastapi.responses import FileResponse
 
-
 load_dotenv()
 
 ENV = os.getenv("ENV", "production")
@@ -46,7 +45,7 @@ try:
         from slowapi import Limiter, _rate_limit_exceeded_handler
         from slowapi.util import get_remote_address
         from slowapi.errors import RateLimitExceeded
-        
+
         limiter = Limiter(
             key_func=get_remote_address,
             storage_uri=REDIS_URL
@@ -84,7 +83,8 @@ app = FastAPI(debug=ENV == "development")
 # فقط اگر Rate Limiting فعال باشد
 if RATE_LIMITING_ENABLED and limiter:
     app.state.limiter = limiter
-    
+
+
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
         return JSONResponse(
@@ -102,6 +102,7 @@ app.add_middleware(
     secret_key=SECRET_KEY,
     https_only=True if ENV == "production" else False
 )
+
 
 # Redirect root based on first_login
 @app.get("/")
@@ -129,6 +130,7 @@ async def root(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User {telegram_id} returning user, redirecting to home")
         return RedirectResponse(url=f"/home?telegram_id={telegram_id}")
 
+
 # Anti-bot verification middleware
 async def verify_telegram_init_data(request: Request):
     init_data = request.headers.get("X-Telegram-Init-Data") or request.query_params.get("initData")
@@ -146,6 +148,7 @@ async def verify_telegram_init_data(request: Request):
 
     return init_data
 
+
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
@@ -158,6 +161,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     return user
+
 
 @app.api_route("/telegram_webhook/{webhook_token}", methods=["GET", "POST"])
 async def telegram_webhook(webhook_token: str, request: Request, db: Session = Depends(get_db)):
@@ -195,11 +199,13 @@ async def telegram_webhook(webhook_token: str, request: Request, db: Session = D
         logger.error(f"Error processing Telegram update: {e}")
         return {"ok": False, "error": str(e)}
 
+
 @app.get("/connect-wallet")
 async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     await verify_telegram_init_data(request)
     user = await get_current_user(request, db)
     return JSONResponse({"message": "Connect Phantom Wallet", "telegram_id": user.telegram_id})
+
 
 @app.post("/submit-wallet")
 async def submit_wallet(request: Request, wallet_address: str, db: Session = Depends(get_db)):
@@ -208,6 +214,7 @@ async def submit_wallet(request: Request, wallet_address: str, db: Session = Dep
     user.wallet_address = wallet_address
     db.commit()
     return JSONResponse({"message": "Wallet connected successfully"})
+
 
 @app.post("/airdrop-tokens")
 async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
@@ -241,6 +248,7 @@ async def airdrop_tokens(request: Request, db: Session = Depends(get_db)):
 
         return JSONResponse({"message": "Tokens airdropped successfully"})
 
+
 # Route جدید برای تست webhook
 @app.get("/webhook-info")
 async def webhook_info():
@@ -262,6 +270,7 @@ async def webhook_info():
         }
     except Exception as e:
         return {"error": str(e)}
+
 
 # اضافه کردن endpoint برای fix کردن کاربرهای موجود
 @app.get("/fix-referral-codes")
@@ -290,6 +299,7 @@ async def fix_referral_codes(db: Session = Depends(get_db)):
         "fixed_users": fixed_count
     }
 
+
 # Status endpoint برای بررسی سلامت برنامه
 @app.get("/health")
 async def health_check():
@@ -300,6 +310,7 @@ async def health_check():
         "redis_available": REDIS_URL is not None,
         "environment": ENV
     }
+
 
 app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
@@ -314,8 +325,9 @@ app.include_router(wallet.router, prefix="/wallet")
 app.include_router(commission.router, prefix="/commission")
 
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
-#scheduler.add_job(check_social_tasks, "interval", hours=24)
+# scheduler.add_job(check_social_tasks, "interval", hours=24)
 scheduler.start()
+
 
 @app.on_event("startup")
 async def startup():
@@ -329,7 +341,7 @@ async def startup():
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()
 
-    web_app=WebAppInfo(url="https://ccoin-final-tsv6.onrender.com")
+    web_app = WebAppInfo(url="https://ccoin-final-tsv6.onrender.com")
 
     try:
         # تنظیم webhook
@@ -350,28 +362,32 @@ async def startup():
         except Exception as e:
             logger.error(f"Error setting menu button: {e}")
 
-        webhook_info = await bot.get_webhook_info()
-        logger.info(f"Webhook info: {webhook_info}")
+webhook_info = await bot.get_webhook_info()
+logger.info(f"Webhook info: {webhook_info}")
 
-    except Exception as e:
-        logger.error(f"Error setting webhook: {e}")
+except Exception as e:
+logger.error(f"Error setting webhook: {e}")
 
-    try:
-        await telegram_app.initialize()
-        logger.info("Telegram app initialized")
-    except Exception as e:
-        logger.error(f"Error initializing telegram app: {e}")
+try:
+    await telegram_app.initialize()
+    logger.info("Telegram app initialized")
+except Exception as e:
+    logger.error(f"Error initializing telegram app: {e}")
 
-    await bot.shutdown()
+await bot.shutdown()
+
 
 @app.on_event("shutdown")
 def shutdown():
     scheduler.shutdown()
     logger.info("App shutdown")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 @app.get("/debug/telegram/{user_id}")
 async def debug_telegram(user_id: int):
@@ -380,9 +396,9 @@ async def debug_telegram(user_id: int):
         import requests
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
-        
+
         response = requests.get(url, params=params, timeout=10)
-        
+
         result = {
             "status_code": response.status_code,
             "url": url,
@@ -390,15 +406,16 @@ async def debug_telegram(user_id: int):
             "bot_token_exists": bool(BOT_TOKEN),
             "bot_token_length": len(BOT_TOKEN) if BOT_TOKEN else 0
         }
-        
+
         if response.status_code == 200:
             result["response"] = response.json()
         else:
             result["response"] = response.text
-            
+
         return result
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.get("/debug/bot-info")
 async def debug_bot_info():
@@ -407,7 +424,7 @@ async def debug_bot_info():
         import requests
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
         response = requests.get(url, timeout=10)
-        
+
         return {
             "status_code": response.status_code,
             "response": response.json() if response.status_code == 200 else response.text
