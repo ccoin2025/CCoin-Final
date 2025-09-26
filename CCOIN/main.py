@@ -329,7 +329,7 @@ async def startup():
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()
 
-    webhook_url = f"{APP_DOMAIN}/telegram_webhook/{webhook_token}"
+    web_app=WebAppInfo(url="https://ccoin-final-tsv6.onrender.com")
 
     try:
         # تنظیم webhook
@@ -341,7 +341,7 @@ async def startup():
             from telegram import MenuButtonWebApp, WebAppInfo
             menu_button = MenuButtonWebApp(
                 text="🚀 Open CCoin",
-                web_app=WebAppInfo(url=APP_DOMAIN)
+                web_app=WebAppInfo(url="https://ccoin-final-tsv6.onrender.com")
             )
             await bot.set_chat_menu_button(menu_button=menu_button)
             logger.info("Menu button set successfully")
