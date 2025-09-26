@@ -122,7 +122,12 @@
 
     <script>
         const telegramId = '{{ telegram_id }}';
-        const commissionAmount = {{ commission_amount }};
+        const commissionAmount = {
+        {
+            commission_amount
+        }
+        }
+        ;
         const adminWallet = '{{ admin_wallet }}';
 
         function showStatus(message, type) {
@@ -133,25 +138,85 @@
 
         async function openPhantom() {
             try {
-                showStatus('Opening Phantom Wallet...', 'info');
-                
+                showStatus('Checking wallet connection...', 'info');
+
+                // ابتدا وضعیت کیف پول را بررسی کن
+                const statusResponse = await fetch(`/commission/status?telegram_id=${telegramId}`);
+                const statusData = await statusResponse.json();
+
+                console.log('Wallet status:', statusData);
+
+                if (!statusData.wallet_connected) {
+                    showStatus('Please connect your Phantom wallet first!', 'error');
+
+                    // تلاش برای اتصال خودکار کیف پول
+                    if (window.solana && window.solana.isPhantom) {
+                        try {
+                            showStatus('Connecting to Phantom...', 'info');
+                            const response = await window.solana.connect();
+
+                            if (response.publicKey) {
+                                const walletAddress = response.publicKey.toString();
+
+                                // ارسال آدرس کیف پول به سرور
+                                const updateResponse = await fetch('/airdrop/connect_wallet', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({wallet: walletAddress})
+                                });
+
+                                if (updateResponse.ok) {
+                                    showStatus('Wallet connected! Proceeding with payment...', 'success');
+                                    // ادامه با پرداخت
+                                    setTimeout(() => proceedWithPayment(), 1000);
+                                } else {
+                                    throw new Error('Failed to update wallet on server');
+                                }
+                            }
+                        } catch (connectError) {
+                            showStatus('Failed to connect wallet: ' + connectError.message, 'error');
+                            return;
+                        }
+                    } else {
+                        showStatus('Phantom wallet not found! Please install Phantom wallet.', 'error');
+                        return;
+                    }
+                } else {
+                    // کیف پول متصل است، ادامه با پرداخت
+                    proceedWithPayment();
+                }
+
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                console.error('OpenPhantom error:', error);
+            }
+        }
+
+        function proceedWithPayment() {
+            try {
+                showStatus('Opening Phantom for payment...', 'info');
+
                 // Create Solana Pay URL
                 const amount = commissionAmount;
                 const recipient = adminWallet;
                 const label = 'CCoin Commission';
                 const message = 'Airdrop participation fee';
                 const memo = `User: ${telegramId}`;
-                
+
                 const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}&memo=${encodeURIComponent(memo)}`;
-                
+
+                console.log('Solana Pay URL:', solanaPayUrl);
+
                 // Open Phantom
                 window.location.href = solanaPayUrl;
-                
+
                 // Start checking for payment
                 setTimeout(checkPaymentStatus, 3000);
-                
+
             } catch (error) {
-                showStatus('Failed to open Phantom: ' + error.message, 'error');
+                showStatus('Failed to create payment: ' + error.message, 'error');
             }
         }
 
@@ -159,7 +224,7 @@
             try {
                 const response = await fetch(`/commission/status?telegram_id=${telegramId}`);
                 const data = await response.json();
-                
+
                 if (data.commission_paid) {
                     showStatus('Payment successful! Redirecting...', 'success');
                     setTimeout(returnToApp, 2000);
@@ -179,7 +244,7 @@
         }
 
         // Check payment status on page load
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             setTimeout(checkPaymentStatus, 1000);
         });
     </script>
