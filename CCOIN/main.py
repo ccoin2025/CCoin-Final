@@ -341,7 +341,7 @@ async def startup():
     bot = Bot(token=BOT_TOKEN)
     await bot.initialize()
 
-    web_app = WebAppInfo(url="https://ccoin-final-tsv6.onrender.com")
+    webhook_url = f"https://ccoin-final-tsv6.onrender.com/telegram_webhook/{webhook_token}"
 
     try:
         # تنظیم webhook
@@ -362,19 +362,19 @@ async def startup():
         except Exception as e:
             logger.error(f"Error setting menu button: {e}")
 
-webhook_info = await bot.get_webhook_info()
-logger.info(f"Webhook info: {webhook_info}")
+        webhook_info = await bot.get_webhook_info()
+        logger.info(f"Webhook info: {webhook_info}")
 
-except Exception as e:
-logger.error(f"Error setting webhook: {e}")
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
 
-try:
-    await telegram_app.initialize()
-    logger.info("Telegram app initialized")
-except Exception as e:
-    logger.error(f"Error initializing telegram app: {e}")
+    try:
+        await telegram_app.initialize()
+        logger.info("Telegram app initialized")
+    except Exception as e:
+        logger.error(f"Error initializing telegram app: {e}")
 
-await bot.shutdown()
+    await bot.shutdown()
 
 
 @app.on_event("shutdown")
