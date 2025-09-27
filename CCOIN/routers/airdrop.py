@@ -90,7 +90,7 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
 async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     # Try to get telegram_id from multiple sources
     telegram_id = request.session.get("telegram_id")
-    
+
     # If not in session, try to get from request body
     if not telegram_id:
         try:
@@ -98,18 +98,30 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
             telegram_id = body.get("telegram_id")
         except:
             pass
-    
+
     # If still not found, try from header
     if not telegram_id:
         telegram_id = request.headers.get("X-Telegram-User-ID")
-    
+
+    # اگر هنوز telegram_id نبود، از body دوباره تلاش کن
+    if not telegram_id:
+        try:
+            if not hasattr(request, '_json_body'):
+                request._json_body = await request.json()
+            body = request._json_body
+            telegram_id = body.get("telegram_id")
+        except:
+            pass
+
     if not telegram_id:
         print("❌ No telegram_id found in session, body, or headers")
         raise HTTPException(status_code=401, detail="Unauthorized: No telegram_id found")
 
     # Get wallet from request body
     try:
-        body = await request.json()
+        if not hasattr(request, '_json_body'):
+            request._json_body = await request.json()
+        body = request._json_body
         wallet = body.get("wallet")
     except Exception as e:
         print(f"❌ Failed to parse request body: {e}")
@@ -153,6 +165,8 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"❌ Invalid wallet address for user {telegram_id}: {wallet}, error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Invalid wallet address: {str(e)}")
+
+
 @router.get("/referral_status")
 @limiter.limit("10/minute")
 async def get_referral_status(request: Request, db: Session = Depends(get_db)):
