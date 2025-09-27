@@ -584,6 +584,114 @@ window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
 
+// تابع اصلی handle کردن کلیک روی دکمه wallet
+function handleWalletConnection() {
+    // اگر wallet متصل است، dropdown menu را toggle کن
+    if (tasksCompleted.wallet && connectedWallet) {
+        toggleWalletDropdown();
+    } else {
+        // اگر متصل نیست، فرآیند اتصال را شروع کن
+        connectPhantomWallet();
+    }
+}
+
+// تابع toggle کردن dropdown menu
+function toggleWalletDropdown() {
+    const dropdown = document.getElementById('wallet-dropdown-content');
+    
+    if (dropdown) {
+        if (dropdown.classList.contains('show')) {
+            dropdown.classList.remove('show');
+            log('🔽 Wallet dropdown closed');
+        } else {
+            // ابتدا همه dropdown های دیگر را ببند
+            closeAllDropdowns();
+            
+            dropdown.classList.add('show');
+            log('🔼 Wallet dropdown opened');
+        }
+    }
+}
+
+// تابع بستن همه dropdown ها
+function closeAllDropdowns() {
+    const dropdowns = document.querySelectorAll('.wallet-dropdown-content');
+    dropdowns.forEach(dropdown => {
+        dropdown.classList.remove('show');
+    });
+}
+
+// تابع change wallet
+function changeWallet() {
+    closeAllDropdowns();
+    log('🔄 Changing wallet...');
+    
+    // disconnect کردن wallet فعلی و اتصال مجدد
+    disconnectWallet();
+    
+    // کمی صبر کن و سپس دوباره connect کن
+    setTimeout(() => {
+        connectPhantomWallet();
+    }, 500);
+}
+
+// تابع disconnect wallet
+function disconnectWallet() {
+    closeAllDropdowns();
+    log('🔌 Disconnecting wallet...');
+    
+    // پاک کردن state
+    connectedWallet = '';
+    tasksCompleted.wallet = false;
+    
+    // بروزرسانی UI
+    updateWalletUI();
+    updateClaimButton();
+    
+    // ارسال درخواست disconnect به سرور
+    fetch('/airdrop/connect_wallet', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            wallet: '' // آدرس خالی برای disconnect
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Wallet disconnected successfully', 'success');
+            log('✅ Wallet disconnected from server');
+        } else {
+            showToast('Failed to disconnect wallet', 'error');
+            log('❌ Failed to disconnect wallet from server');
+        }
+    })
+    .catch(error => {
+        console.error('Disconnect error:', error);
+        showToast('Error disconnecting wallet', 'error');
+    });
+}
+
+// Event listener برای بستن dropdown هنگام کلیک outside
+document.addEventListener('click', function(event) {
+    const walletDropdown = document.querySelector('.wallet-dropdown');
+    const dropdown = document.getElementById('wallet-dropdown-content');
+    
+    // اگر کلیک خارج از wallet dropdown بود، آن را ببند
+    if (dropdown && !walletDropdown.contains(event.target)) {
+        dropdown.classList.remove('show');
+    }
+});
+
+// Event listener برای ESC key برای بستن dropdown
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeAllDropdowns();
+    }
+});
+
 // **Export functions برای استفاده در HTML**
 window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
