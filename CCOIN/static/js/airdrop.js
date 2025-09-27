@@ -374,78 +374,147 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// **تابع detect کردن Phantom Wallet**
+// تابع تشخیص Phantom اصلاح شده
 async function detectPhantom() {
     try {
+        // چک کردن چندین حالت مختلف Phantom
         if (window.solana && window.solana.isPhantom) {
             phantomProvider = window.solana;
             phantomDetected = true;
             log('✅ Phantom Wallet detected');
             return true;
-        } else {
-            log('❌ Phantom Wallet not detected');
-            return false;
         }
+        
+        // چک کردن window.phantom (حالت جدیدتر)
+        if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) {
+            phantomProvider = window.phantom.solana;
+            phantomDetected = true;
+            log('✅ Phantom Wallet detected (phantom.solana)');
+            return true;
+        }
+        
+        log('❌ Phantom Wallet not detected');
+        return false;
     } catch (error) {
         log('❌ Error detecting Phantom: ' + error.message);
         return false;
     }
 }
 
-// **تابع connect کردن کیف پول**
+// تابع اتصال کیف پول اصلاح شده
 async function connectWallet() {
     try {
-        if (!await detectPhantom()) {
-            showPhantomModal();
+        log('🔗 Attempting to connect wallet...');
+        
+        // تلاش برای تشخیص Phantom با تأخیر
+        let detected = await detectPhantom();
+        
+        // اگر در بار اول تشخیص نشد، کمی صبر کن و دوباره تلاش کن
+        if (!detected) {
+            log('⏳ Waiting for Phantom to load...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            detected = await detectPhantom();
+        }
+        
+        if (!detected) {
+            // به جای نمایش modal، پیام خطا نمایش بده
+            showToast('Phantom Wallet not found. Please install Phantom Wallet extension first.', 'error');
+            log('❌ Phantom not available, showing install message');
+            
+            // اختیاری: نمایش modal فقط در صورتی که کاربر بخواهد
+            const userWantsInstall = confirm('Phantom Wallet is not installed. Do you want to install it?');
+            if (userWantsInstall) {
+                showPhantomModal();
+            }
             return;
         }
 
+        // تلاش برای اتصال
         log('🔗 Connecting to Phantom Wallet...');
-        const resp = await phantomProvider.connect();
         
-        if (resp.publicKey) {
+        // چک کردن اینکه آیا قبلاً متصل است
+        if (phantomProvider.isConnected) {
+            log('✅ Already connected to Phantom');
+            const publicKey = phantomProvider.publicKey;
+            if (publicKey) {
+                connectedWallet = publicKey.toString();
+                tasksCompleted.wallet = true;
+                await sendWalletToServer(connectedWallet);
+                updateAllTasksUI();
+                showToast('Wallet already connected!', 'success');
+                return;
+            }
+        }
+        
+        // درخواست اتصال جدید
+        const resp = await phantomProvider.connect();
+
+        if (resp && resp.publicKey) {
             connectedWallet = resp.publicKey.toString();
             tasksCompleted.wallet = true;
-            
-            // ارسال به سرور
-            await sendWalletToServer(connectedWallet);
-            
-            updateWalletUI();
-            showToast('Wallet connected successfully!', 'success');
-            
-            log('✅ Wallet connected: ' + connectedWallet);
-        }
 
+            await sendWalletToServer(connectedWallet);
+            updateAllTasksUI();
+            showToast('Wallet connected successfully!', 'success');
+            log('✅ Wallet connected: ' + connectedWallet);
+        } else {
+            throw new Error('No public key received from wallet');
+        }
+        
     } catch (error) {
         log('❌ Wallet connection failed: ' + error.message);
-        showToast('Failed to connect wallet: ' + error.message, 'error');
-    }
-}
-
-// **تابع disconnect کردن کیف پول**
-async function disconnectWallet() {
-    try {
-        if (phantomProvider && phantomProvider.disconnect) {
-            await phantomProvider.disconnect();
+        
+        if (error.message.includes('User rejected')) {
+            showToast('Connection cancelled by user', 'info');
+        } else {
+            showToast('Failed to connect wallet: ' + error.message, 'error');
         }
-
-        // ارسال درخواست disconnect به سرور
-        await sendWalletToServer('');
-
-        connectedWallet = '';
-        tasksCompleted.wallet = false;
-
-        updateWalletUI();
-        showToast('Wallet disconnected successfully!', 'info');
-
-        log('🔌 Wallet disconnected');
-
-    } catch (error) {
-        log('❌ Wallet disconnect failed: ' + error.message);
-        showToast('Failed to disconnect wallet: ' + error.message, 'error');
     }
 }
 
+// چک کردن وضعیت Phantom هنگام بارگذاری صفحه
+document.addEventListener('DOMContentLoaded', async function() {
+    log('🚀 Airdrop page loaded');
+    
+    // صبر کردن برای بارگذاری کامل Phantom
+    setTimeout(async () => {
+        await detectPhantom();
+        
+        // اگر Phantom موجود است و قبلاً متصل بوده، reconnect کن
+        if (phantomDetected && phantomProvider && phantomProvider.isConnected) {
+            try {
+                const publicKey = phantomProvider.publicKey;
+                if (publicKey && !connectedWallet) {
+                    connectedWallet = publicKey.toString();
+                    tasksCompleted.wallet = true;
+                    log('🔄 Auto-reconnected to existing Phantom session');
+                }
+            } catch (error) {
+                log('❌ Auto-reconnect failed: ' + error.message);
+            }
+        }
+        
+        await refreshAllStatuses();
+    }, 500);
+    
+    startCountdown();
+    setInterval(refreshAllStatuses, 30000);
+    
+    log('✅ Airdrop page initialization completed');
+});
+
+// تابع handleWalletConnection اصلاح شده
+function handleWalletConnection() {
+    log('🔗 Handle wallet connection clicked');
+    
+    // اگر کیف پول قبلاً متصل است، منو را نمایش بده
+    if (tasksCompleted.wallet && connectedWallet) {
+        toggleWalletDropdown();
+    } else {
+        // تلاش مستقیم برای اتصال
+        connectWallet();
+    }
+}
 // **تابع ارسال آدرس کیف پول به سرور**
 async function sendWalletToServer(walletAddress) {
     try {
