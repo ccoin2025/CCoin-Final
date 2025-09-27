@@ -1,163 +1,131 @@
-/* حذف کامل hover effects برای تمام عناصر */
-*, *::before, *::after {
-    -webkit-tap-highlight-color: transparent !important;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-/* حذف hover برای همه دکمه‌ها و لینک‌ها */
-button, a, input, textarea, select,
-.close-btn, .link-btn, .footer-btn, .nav-item,
-.about-btn, .join-community-btn, .task-button,
-.wallet-action-btn, .claim-btn {
-    outline: none !important;
-    -webkit-tap-highlight-color: transparent !important;
-    -webkit-focus-ring-color: transparent !important;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    transition: none !important;
-}
-
-/* حذف تمام states برای همه عناصر */
-button:hover, button:active, button:focus,
-a:hover, a:active, a:focus,
-input:hover, input:active, input:focus,
-textarea:hover, textarea:active, textarea:focus,
-select:hover, select:active, select:focus,
-.close-btn:hover, .close-btn:active, .close-btn:focus,
-.link-btn:hover, .link-btn:active, .link-btn:focus,
-.footer-btn:hover, .footer-btn:active, .footer-btn:focus,
-.nav-item:hover, .nav-item:active, .nav-item:focus,
-.about-btn:hover, .about-btn:active, .about-btn:focus,
-.join-community-btn:hover, .join-community-btn:active, .join-community-btn:focus,
-.task-button:hover, .task-button:active, .task-button:focus,
-.wallet-action-btn:hover, .wallet-action-btn:active, .wallet-action-btn:focus,
-.claim-btn:hover, .claim-btn:active, .claim-btn:focus {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
-    background: inherit !important;
-    color: inherit !important;
-    transform: none !important;
-    opacity: inherit !important;
-    text-decoration: none !important;
-}
-
-
-
-
 /* Global Styles */
 body {
-    background-color: #000;
-    color: #fff;
-    font-family: 'Urbanist', sans-serif;
-    margin: 0;
-    padding-bottom: 100px;
-    position: relative;
+background-color: #000;
+color: #fff;
+font-family: 'Urbanist', sans-serif;
+margin: 0;
+padding-bottom: 100px;
+position: relative;
 }
 
 /* ایجاد یک overlay برای مخفی کردن متن زیر دکمه‌ها */
 .header-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 80px;
-    background-color: #000;
-    z-index: 999;
-    pointer-events: none; /* تا دکمه‌ها قابل کلیک باشند */
+position: fixed;
+top: 0;
+left: 0;
+right: 0;
+height: 80px;
+background-color: #000;
+z-index: 999;
+pointer-events: none; /* تا دکمه‌ها قابل کلیک باشند */
 }
 
 /* دکمه‌ها - حذف hover effects */
 .close-btn, .link-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 22px;
-    cursor: pointer;
-    padding: 10px;
-    border-radius: 50%;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: none; /* حذف transition */
-    position: fixed;
-    top: 20px;
-    z-index: 1000;
+background: none;
+border: none;
+color: white;
+font-size: 22px;
+cursor: pointer;
+padding: 10px;
+border-radius: 50%;
+width: 44px;
+height: 44px;
+display: flex;
+align-items: center;
+justify-content: center;
+transition: none; /* حذف transition */
+position: fixed;
+top: 20px;
+z-index: 1000;
 }
 
 /* دکمه بک اسپیس سمت چپ */
 .close-btn {
-    left: 15px;
+left: 15px;
 }
 
 /* دکمه لینک سمت راست */
 .link-btn {
-    right: 15px;
-}
-
-/* حذف تمام hover و active effects */
-.close-btn:hover, .link-btn:hover,
-.close-btn:active, .link-btn:active,
-.close-btn:focus, .link-btn:focus {
-    background: none;
-    color: white;
-    transform: none;
-    outline: none;
-    box-shadow: none;
+right: 15px;
 }
 
 .about-container {
-    padding: 20px;
-    padding-top: 80px; /* فاصله از بالا برای جای دکمه‌ها */
-    position: relative;
-    z-index: 1; /* زیر overlay قرار گیرد */
+padding: 20px;
+padding-top: 80px; /* فاصله از بالا برای جای دکمه‌ها */
+position: relative;
+z-index: 1; /* زیر overlay قرار گیرد */
 }
 
 .about-container h1 {
-    color: #FFD700;
-    font-size: 24px;
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 20px;
+color: #FFD700;
+font-size: 24px;
+font-weight: bold;
+text-align: center;
+margin-bottom: 20px;
 }
 
 .about-container p {
-    font-size: 15px;
-    line-height: 1.7;
-    margin-bottom: 15px;
-    text-align: justify;
+font-size: 15px;
+line-height: 1.7;
+margin-bottom: 15px;
+text-align: justify;
 }
 
 /* Responsive Design */
 @media (max-width: 480px) {
-    .header-overlay {
-        height: 70px;
-    }
+.header-overlay {
+height: 70px;
+}
 
-    .close-btn, .link-btn {
-        width: 40px;
-        height: 40px;
-        font-size: 20px;
-        top: 15px;
-    }
+.close-btn, .link-btn {
+width: 40px;
+height: 40px;
+font-size: 20px;
+top: 15px;
+}
 
-    .close-btn {
-        left: 12px;
-    }
+.close-btn {
+left: 12px;
+}
 
-    .link-btn {
-        right: 12px;
-    }
+.link-btn {
+right: 12px;
+}
 
-    .about-container {
-        padding-top: 70px;
-    }
+.about-container {
+padding-top: 70px;
+}
+}
+
+/* حذف کامل همه افکت‌های hover و focus */
+*, *:before, *:after {
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+}
+
+button, .close-btn, .link-btn, a, input, textarea, select {
+transition: none !important;
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+-webkit-appearance: none;
+-moz-appearance: none;
+appearance: none;
+}
+
+button:hover, button:focus, button:active,
+.close-btn:hover, .close-btn:focus, .close-btn:active,
+.link-btn:hover, .link-btn:focus, .link-btn:active,
+a:hover, a:focus, a:active,
+input:hover, input:focus, input:active,
+textarea:hover, textarea:focus, textarea:active,
+select:hover, select:focus, select:active {
+background-color: inherit !important;
+box-shadow: none !important;
+outline: none !important;
+border: inherit !important;
+color: inherit !important;
+transform: none !important;
+opacity: inherit !important;
+text-decoration: none !important;
 }
