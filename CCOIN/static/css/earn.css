@@ -1,113 +1,119 @@
 body {
-    background-color: #000;
-    color: #fff;
-    font-family: 'Urbanist', sans-serif;
-    margin: 0;
-    padding-bottom: 100px;
+background-color: #000;
+color: #fff;
+font-family: 'Urbanist', sans-serif;
+margin: 0;
+padding-bottom: 100px;
 }
-
 .task-title {
-    font-size: 100px;
-    text-align: center;
-    margin: 30px 0 10px;
-    font-weight: 800;
+font-size: 100px;
+text-align: center;
+margin: 30px 0 10px;
+font-weight: 800;
 }
-
 .subtitle {
-    text-align: center;
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 10px;
+text-align: center;
+font-size: 16px;
+font-weight: 600;
+color: #fff;
+margin-bottom: 10px;
 }
-
 .note {
-    text-align: center;
-    color: #ffc800;
-    font-size: 13px;
-    margin: 10px 20px 20px;
-    line-height: 1.6;
+text-align: center;
+color: #ffc800;
+font-size: 13px;
+margin: 10px 20px 20px;
+line-height: 1.6;
 }
-
 .task-list {
-    padding: 0 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+padding: 0 15px;
+display: flex;
+flex-direction: column;
+gap: 12px;
 }
-
 .task-button {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #222;
-    border: none;
-    border-radius: 10px;
-    padding: 12px 16px;
-    width: 100%;
-    cursor: pointer;
-    transition: none;
-    overflow: hidden;
+display: flex;
+justify-content: space-between;
+align-items: center;
+background-color: #222;
+border: none;
+border-radius: 10px;
+padding: 12px 16px;
+width: 100%;
+cursor: pointer;
+transition: none; /* حذف transition */
+overflow: hidden;
 }
-
 .task-button.completed {
-    cursor: default;
-    opacity: 0.8;
+cursor: default;
+opacity: 0.8;
 }
-
 .task-button .left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
+display: flex;
+align-items: center;
+gap: 10px;
+font-size: 14px;
+font-weight: 600;
+color: #fff;
 }
-
 .task-button .left .task-icon {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-    border-radius: 5px;
+width: 32px;
+height: 32px;
+object-fit: contain;
+border-radius: 5px;
 }
-
 .task-button .right .status {
-    font-size: 14px;
-    font-weight: bold;
-    color: #fff;
+font-size: 14px;
+font-weight: bold;
+color: #fff;
 }
-
 .task-button .right .done {
-    color: #49ff00;
+color: #49ff00;
 }
-
 .footer-icons {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    background-color: #111;
-    display: flex;
-    justify-content: space-around;
-    padding: 10px 0 5px;
-    border-top: 1px solid #333;
+position: fixed;
+bottom: 0;
+width: 100%;
+background-color: #111;
+display: flex;
+justify-content: space-around;
+padding: 10px 0 5px;
+border-top: 1px solid #333;
 }
-
 .footer-btn {
-    color: #aaa;
-    text-align: center;
-    text-decoration: none;
-    font-size: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+color: #aaa;
+text-align: center;
+text-decoration: none;
+font-size: 14px;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 4px;
+transition: none; /* حذف transition */
 }
-
 .footer-btn.active {
-    color: #ffffff;
+color: #ffffff;
 }
-
 .footer-btn i {
-    font-size: 20px;
-    margin-bottom: 2px;
+font-size: 20px;
+margin-bottom: 2px;
+}
+/* حذف کامل همه افکت‌های hover و focus */
+*, *:before, *:after {
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+}
+button, .footer-btn, .task-button {
+transition: none !important;
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+}
+button:hover, button:focus, button:active,
+.footer-btn:hover, .footer-btn:focus, .footer-btn:active,
+.task-button:hover, .task-button:focus, .task-button:active {
+background-color: inherit !important;
+box-shadow: none !important;
+outline: none !important;
+border: inherit !important;
+color: inherit !important;
 }
