@@ -19,7 +19,6 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-
 @router.get("/browser/pay", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_browser_pay(
@@ -48,8 +47,8 @@ async def commission_browser_pay(
 
     # لاگ وضعیت کیف پول برای دیباگ
     print(f"🔍 Wallet status for user {telegram_id}:")
-    print(f"   - wallet_address: {user.wallet_address}")
-    print(f"   - wallet_connected: {bool(user.wallet_address)}")
+    print(f"  - wallet_address: {user.wallet_address}")
+    print(f"  - wallet_connected: {bool(user.wallet_address)}")
 
     # **حذف بررسی اجباری کیف پول** - اجازه دهید کاربر در صفحه پرداخت کیف پول وصل کند
     # if not user.wallet_address:
@@ -65,13 +64,12 @@ async def commission_browser_pay(
         "wallet_address": user.wallet_address or ""
     })
 
-
 @router.get("/pay", response_class=JSONResponse)
 @limiter.limit("10/minute")
 async def commission_payment_page(
-        request: Request,
-        telegram_id: str = Query(..., description="Telegram user ID"),
-        db: Session = Depends(get_db)
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
 ):
     """ایجاد URL برای پرداخت کمیسیون با فرمت Solana Pay"""
     print(f"Commission payment request for telegram_id: {telegram_id}")
@@ -94,8 +92,8 @@ async def commission_payment_page(
 
     # ایجاد URL پرداخت به سبک Solana Pay
     recipient = ADMIN_WALLET
-    amount = COMMISSION_AMOUNT  # e.g., 0.01 SOL
-    reference = str(Keypair().public_key)  # Reference یکتا برای تراکنش
+    amount = COMMISSION_AMOUNT # e.g., 0.01 SOL
+    reference = str(Keypair().public_key) # Reference یکتا برای تراکنش
     label = 'CCoin Commission'
     message = 'Payment for airdrop'
     memo = f'User: {telegram_id}'
@@ -112,16 +110,15 @@ async def commission_payment_page(
         "recipient": recipient
     }
 
-
 @router.get("/success", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_success(
-        request: Request,
-        telegram_id: str = Query(..., description="Telegram user ID"),
-        reference: str = Query(None, description="Payment reference"),
-        signature: str = Query(None, description="Transaction signature"),
-        already_paid: bool = Query(False, description="Commission already paid flag"),
-        db: Session = Depends(get_db)
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    reference: str = Query(None, description="Payment reference"),
+    signature: str = Query(None, description="Transaction signature"),
+    already_paid: bool = Query(False, description="Commission already paid flag"),
+    db: Session = Depends(get_db)
 ):
     """صفحه موفقیت پرداخت"""
     print(f"🎉 Commission success page for telegram_id: {telegram_id}")
@@ -164,26 +161,30 @@ async def commission_success(
         "commission_paid": user.commission_paid
     })
 
-
 @router.get("/status", response_class=JSONResponse)
 @limiter.limit("20/minute")
 async def get_commission_status(
-        request: Request,
-        telegram_id: str = Query(..., description="Telegram user ID"),
-        db: Session = Depends(get_db)
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
 ):
     """دریافت وضعیت پرداخت commission"""
+    print(f"🔍 Commission status check for telegram_id: {telegram_id}")
+    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        print(f"User not found for commission status: {telegram_id}")
+        print(f"❌ User not found for commission status: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {
+    result = {
         "commission_paid": user.commission_paid,
         "wallet_connected": bool(user.wallet_address),
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
     }
+    
+    print(f"📊 Commission status result: {result}")
+    return result
 
 # سایر توابع بدون تغییر...
