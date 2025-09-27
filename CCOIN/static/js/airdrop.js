@@ -428,16 +428,16 @@ async function disconnectWallet() {
         if (phantomProvider && phantomProvider.disconnect) {
             await phantomProvider.disconnect();
         }
-        
+
         // ارسال درخواست disconnect به سرور
         await sendWalletToServer('');
-        
+
         connectedWallet = '';
         tasksCompleted.wallet = false;
-        
+
         updateWalletUI();
         showToast('Wallet disconnected successfully!', 'info');
-        
+
         log('🔌 Wallet disconnected');
 
     } catch (error) {
