@@ -739,11 +739,11 @@
             closePhantomModal();
             
             if (!telegramId) {
-                showToast('خطا: اطلاعات کاربر یافت نشد', 'error');
+                showToast('Error: User information not found', 'error');
                 return;
             }
 
-            showToast('در حال هدایت به کیف پول...', 'info');
+            showToast('Redirecting to wallet...', 'info');
             
             // Redirect to external browser wallet connection page
             const walletUrl = `/wallet/browser/connect?telegram_id=${telegramId}`;
@@ -803,26 +803,26 @@
                     statusIndicator.classList.remove('connected');
                     buttonText.textContent = 'Connect Wallet';
                     
-                    showToast('کیف پول قطع شد', 'success');
+                    showToast('Wallet disconnected', 'success');
                     checkAllTasksCompletion();
                 } else {
                     throw new Error('Failed to disconnect wallet');
                 }
             } catch (error) {
                 console.error('Error disconnecting wallet:', error);
-                showToast('خطا در قطع کیف پول', 'error');
+                showToast('Error disconnecting wallet', 'error');
             }
         }
 
         // Handle Commission Payment
         function handleCommissionPayment() {
             if (!userStatuses.wallet_connected) {
-                showToast('ابتدا کیف پول خود را متصل کنید', 'error');
+                showToast('Please connect your wallet first', 'error');
                 return;
             }
             
             if (userStatuses.commission_paid) {
-                showToast('کمیسیون قبلاً پرداخت شده است', 'info');
+                showToast('Commission has already been paid', 'info');
                 return;
             }
             
@@ -846,11 +846,11 @@
             closeCommissionModal();
             
             if (!telegramId) {
-                showToast('خطا: اطلاعات کاربر یافت نشد', 'error');
+                showToast('Error: User information not found', 'error');
                 return;
             }
 
-            showToast('در حال هدایت به صفحه پرداخت...', 'info');
+            showToast('Redirecting to payment page...', 'info');
             
             // Redirect to commission payment page
             const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
@@ -891,7 +891,7 @@
 
         // Claim Airdrop
         function claimAirdrop() {
-            showToast('تبریک! ایردراپ شما آماده دریافت است', 'success');
+            showToast('Congratulations! Your airdrop is ready to claim', 'success');
             // Add airdrop claim logic here
         }
 
@@ -930,7 +930,7 @@
                         userStatuses.wallet_connected = true;
                         markWalletAsConnected();
                         checkAllTasksCompletion();
-                        showToast('کیف پول با موفقیت متصل شد!', 'success');
+                        showToast('Wallet connected successfully!', 'success');
                     }
                 }
             } catch (error) {
