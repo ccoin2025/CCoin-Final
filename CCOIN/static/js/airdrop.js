@@ -370,217 +370,222 @@ function showToast(message, type = 'info') {
     // حذف toast
     setTimeout(() => {
         toast.classList.remove('show');
-        setTimeout(() => {
-            if (document.body.contains(toast)) {
-                document.body.removeChild(toast);
-            }
-        }, 300);
+        setTimeout(() => document.body.removeChild(toast), 300);
     }, 3000);
 }
 
-// =============================================================================
-// 🔧 WALLET DROPDOWN FUNCTIONALITY - اضافه شده برای حل مشکل منوی کشویی
-// =============================================================================
-
-// تابع اصلی handle کردن کلیک روی دکمه wallet
-function handleWalletConnection() {
-    log('🖱️ Wallet button clicked');
-    
-    // اگر wallet متصل است، dropdown menu را toggle کن
-    if (tasksCompleted.wallet && connectedWallet) {
-        log('💳 Wallet connected - toggling dropdown');
-        toggleWalletDropdown();
-    } else {
-        log('🔗 Wallet not connected - starting connection process');
-        // اگر متصل نیست، فرآیند اتصال را شروع کن
-        connectPhantomWallet();
-    }
-}
-
-// تابع toggle کردن dropdown menu
-function toggleWalletDropdown() {
-    const dropdown = document.getElementById('wallet-dropdown-content');
-    
-    if (!dropdown) {
-        log('❌ Dropdown element not found');
-        return;
-    }
-    
-    if (dropdown.classList.contains('show')) {
-        dropdown.classList.remove('show');
-        log('🔽 Wallet dropdown closed');
-    } else {
-        // ابتدا همه dropdown های دیگر را ببند
-        closeAllDropdowns();
-        
-        dropdown.classList.add('show');
-        log('🔼 Wallet dropdown opened');
-        
-        // Auto close after 10 seconds
-        setTimeout(() => {
-            if (dropdown.classList.contains('show')) {
-                dropdown.classList.remove('show');
-                log('⏰ Dropdown auto-closed after 10 seconds');
-            }
-        }, 10000);
-    }
-}
-
-// تابع بستن همه dropdown ها
-function closeAllDropdowns() {
-    const dropdowns = document.querySelectorAll('.wallet-dropdown-content');
-    dropdowns.forEach(dropdown => {
-        dropdown.classList.remove('show');
-    });
-    log('🔒 All dropdowns closed');
-}
-
-// تابع change wallet
-function changeWallet() {
-    log('🔄 Changing wallet...');
-    closeAllDropdowns();
-    
-    // نمایش toast
-    showToast('Disconnecting current wallet...', 'info');
-    
-    // disconnect کردن wallet فعلی و اتصال مجدد
-    disconnectWallet();
-    
-    // کمی صبر کن و سپس دوباره connect کن
-    setTimeout(() => {
-        log('🔄 Reconnecting to new wallet...');
-        connectPhantomWallet();
-    }, 1000);
-}
-
-// تابع disconnect wallet
-function disconnectWallet() {
-    log('🔌 Disconnecting wallet...');
-    closeAllDropdowns();
-    
-    // نمایش loading state
-    const walletButton = document.querySelector('#connect-wallet .task-button');
-    if (walletButton) {
-        walletButton.classList.add('loading');
-    }
-    
-    // پاک کردن state
-    const previousWallet = connectedWallet;
-    connectedWallet = '';
-    tasksCompleted.wallet = false;
-    
-    // بروزرسانی UI
-    updateWalletUI();
-    updateClaimButton();
-    
-    // ارسال درخواست disconnect به سرور
-    fetch('/airdrop/connect_wallet', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            wallet: '' // آدرس خالی برای disconnect
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        // حذف loading state
-        if (walletButton) {
-            walletButton.classList.remove('loading');
-        }
-        
-        if (data.success) {
-            showToast('Wallet disconnected successfully', 'success');
-            log(`✅ Wallet ${previousWallet.substring(0,8)}... disconnected from server`);
+// **تابع detect کردن Phantom Wallet**
+async function detectPhantom() {
+    try {
+        if (window.solana && window.solana.isPhantom) {
+            phantomProvider = window.solana;
+            phantomDetected = true;
+            log('✅ Phantom Wallet detected');
+            return true;
         } else {
-            showToast('Failed to disconnect wallet', 'error');
-            log('❌ Failed to disconnect wallet from server');
-            
-            // در صورت خطا، state را برگردان
-            connectedWallet = previousWallet;
+            log('❌ Phantom Wallet not detected');
+            return false;
+        }
+    } catch (error) {
+        log('❌ Error detecting Phantom: ' + error.message);
+        return false;
+    }
+}
+
+// **تابع connect کردن کیف پول**
+async function connectWallet() {
+    try {
+        if (!await detectPhantom()) {
+            showPhantomModal();
+            return;
+        }
+
+        log('🔗 Connecting to Phantom Wallet...');
+        const resp = await phantomProvider.connect();
+        
+        if (resp.publicKey) {
+            connectedWallet = resp.publicKey.toString();
             tasksCompleted.wallet = true;
+            
+            // ارسال به سرور
+            await sendWalletToServer(connectedWallet);
+            
             updateWalletUI();
-            updateClaimButton();
+            showToast('Wallet connected successfully!', 'success');
+            
+            log('✅ Wallet connected: ' + connectedWallet);
         }
-    })
-    .catch(error => {
-        // حذف loading state
-        if (walletButton) {
-            walletButton.classList.remove('loading');
+
+    } catch (error) {
+        log('❌ Wallet connection failed: ' + error.message);
+        showToast('Failed to connect wallet: ' + error.message, 'error');
+    }
+}
+
+// **تابع disconnect کردن کیف پول**
+async function disconnectWallet() {
+    try {
+        if (phantomProvider && phantomProvider.disconnect) {
+            await phantomProvider.disconnect();
         }
         
-        console.error('Disconnect error:', error);
-        showToast('Error disconnecting wallet', 'error');
-        log('❌ Network error during disconnect');
+        // ارسال درخواست disconnect به سرور
+        await sendWalletToServer('');
         
-        // در صورت خطا، state را برگردان
-        connectedWallet = previousWallet;
-        tasksCompleted.wallet = true;
+        connectedWallet = '';
+        tasksCompleted.wallet = false;
+        
         updateWalletUI();
-        updateClaimButton();
-    });
+        showToast('Wallet disconnected successfully!', 'info');
+        
+        log('🔌 Wallet disconnected');
+
+    } catch (error) {
+        log('❌ Wallet disconnect failed: ' + error.message);
+        showToast('Failed to disconnect wallet: ' + error.message, 'error');
+    }
 }
 
-// Event listener برای بستن dropdown هنگام کلیک outside
-document.addEventListener('click', function(event) {
-    const walletDropdown = document.querySelector('.wallet-dropdown');
-    const dropdown = document.getElementById('wallet-dropdown-content');
-    
-    // اگر کلیک خارج از wallet dropdown بود، آن را ببند
-    if (dropdown && dropdown.classList.contains('show') && !walletDropdown.contains(event.target)) {
-        dropdown.classList.remove('show');
-        log('🖱️ Dropdown closed by outside click');
-    }
-});
+// **تابع ارسال آدرس کیف پول به سرور**
+async function sendWalletToServer(walletAddress) {
+    try {
+        const response = await fetch('/airdrop/connect_wallet', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ wallet: walletAddress })
+        });
 
-// Event listener برای ESC key برای بستن dropdown
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        const dropdown = document.getElementById('wallet-dropdown-content');
-        if (dropdown && dropdown.classList.contains('show')) {
-            closeAllDropdowns();
-            log('⌨️ Dropdown closed by ESC key');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update wallet');
         }
-    }
-});
 
-// تابع مقداردهی اولیه dropdown functionality
-function initializeWalletDropdown() {
-    log('🔧 Initializing wallet dropdown functionality...');
-    
-    // بررسی وجود المان‌های ضروری
-    const walletButton = document.querySelector('#connect-wallet .task-button');
-    const dropdown = document.getElementById('wallet-dropdown-content');
-    
-    if (!walletButton) {
-        log('❌ Wallet button not found');
-        return false;
+        log('✅ Wallet updated on server: ' + (walletAddress || 'disconnected'));
+        return true;
+
+    } catch (error) {
+        log('❌ Server update failed: ' + error.message);
+        throw error;
     }
-    
-    if (!dropdown) {
-        log('❌ Dropdown element not found');
-        return false;
-    }
-    
-    // تنظیم onclick event
-    walletButton.onclick = handleWalletConnection;
-    
-    log('✅ Wallet dropdown initialized successfully');
-    return true;
 }
 
-// اضافه کردن به event listener اصلی
+// **تابع نمایش modal برای Phantom**
+function showPhantomModal() {
+    const modal = document.getElementById('phantom-modal');
+    if (modal) {
+        modal.classList.add('show');
+    }
+}
+
+// **تابع بستن modal Phantom**
+function hidePhantomModal() {
+    const modal = document.getElementById('phantom-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// **تابع بارگذاری وضعیت از سرور**
+async function loadStatusFromServer() {
+    try {
+        log('📊 Loading status from server...');
+        
+        // بارگذاری وضعیت tasks
+        const tasksResponse = await fetch('/airdrop/tasks_status');
+        const tasksData = await tasksResponse.json();
+        
+        // بارگذاری وضعیت referrals
+        const referralResponse = await fetch('/airdrop/referral_status');
+        const referralData = await referralResponse.json();
+        
+        // بارگذاری وضعیت commission
+        const commissionResponse = await fetch('/airdrop/commission_status');
+        const commissionData = await commissionResponse.json();
+
+        // بروزرسانی state
+        tasksCompleted.task = tasksData.tasks_completed || false;
+        tasksCompleted.invite = referralData.has_referrals || false;
+        tasksCompleted.wallet = commissionData.wallet_connected || false;
+        tasksCompleted.pay = commissionData.commission_paid || false;
+        
+        if (commissionData.wallet_address) {
+            connectedWallet = commissionData.wallet_address;
+        }
+
+        // بروزرسانی UI
+        updateAllTasksUI();
+        
+        log('✅ Status loaded from server');
+
+    } catch (error) {
+        log('❌ Failed to load status: ' + error.message);
+        showToast('Failed to load current status', 'error');
+    }
+}
+
+// **Event Listeners**
 document.addEventListener('DOMContentLoaded', function() {
-    log('📱 DOM Content Loaded - Initializing wallet dropdown...');
+    log('🚀 DOM loaded, initializing airdrop page...');
     
-    // تاخیر کوتاه برای اطمینان از load شدن همه المان‌ها
-    setTimeout(() => {
-        const success = initializeWalletDropdown();
-        if (success) {
-            log('🎉 Wallet dropdown functionality ready!');
-        } else {
-            log('⚠️ Failed to initialize wallet dropdown');
-        }
-    }, 100);
+    // شروع شمارشگر معکوس
+    startCountdown();
+    
+    // بارگذاری وضعیت از سرور
+    loadStatusFromServer();
+    
+    // تنظیم event listeners
+    const connectWalletBtn = document.getElementById('connect-wallet');
+    if (connectWalletBtn) {
+        connectWalletBtn.addEventListener('click', connectWallet);
+    }
+
+    // تنظیم dropdown برای کیف پول
+    const walletDropdown = document.querySelector('.wallet-dropdown');
+    if (walletDropdown) {
+        walletDropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (tasksCompleted.wallet && connectedWallet) {
+                const dropdown = this.querySelector('.wallet-dropdown-content');
+                if (dropdown) {
+                    dropdown.classList.toggle('show');
+                }
+            }
+        });
+    }
+
+    // بستن dropdown با کلیک خارج
+    document.addEventListener('click', function() {
+        const dropdowns = document.querySelectorAll('.wallet-dropdown-content');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.remove('show');
+        });
+    });
+
+    // دکمه disconnect در dropdown
+    const disconnectBtn = document.getElementById('disconnect-wallet');
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', disconnectWallet);
+    }
+
+    // بستن modal phantom
+    const closePhantomBtn = document.getElementById('close-phantom-modal');
+    if (closePhantomBtn) {
+        closePhantomBtn.addEventListener('click', hidePhantomModal);
+    }
+
+    log('✅ Airdrop page initialized successfully');
 });
+
+// **تمیز کردن interval ها هنگام خروج**
+window.addEventListener('beforeunload', function() {
+    stopCountdown();
+});
+
+// **Export functions برای استفاده در HTML**
+window.connectWallet = connectWallet;
+window.disconnectWallet = disconnectWallet;
+window.showPhantomModal = showPhantomModal;
+window.hidePhantomModal = hidePhantomModal;
