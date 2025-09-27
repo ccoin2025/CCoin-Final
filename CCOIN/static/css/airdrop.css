@@ -1,332 +1,315 @@
 body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Urbanist', sans-serif;
-    background-color: #000;
-    color: #fff;
-    overflow-x: hidden;
+margin: 0;
+padding: 0;
+font-family: 'Urbanist', sans-serif;
+background-color: #000;
+color: #fff;
+overflow-x: hidden;
 }
-
 /* Container */
 .airdrop-container {
-    padding: 20px;
-    padding-bottom: 100px;
+padding: 20px;
+padding-bottom: 100px;
 }
-
 /* Title */
 .box {
-    width: 100%;
-    margin: 20px auto;
-    padding: 20px;
-    border: 1px solid #444;
-    border-radius: 10px;
-    background: #222;
-    text-align: center;
-    box-sizing: border-box;
-    max-height: 130px;
+width: 100%;
+margin: 20px auto;
+padding: 20px;
+border: 1px solid #444;
+border-radius: 10px;
+background: #222;
+text-align: center;
+box-sizing: border-box;
+max-height: 130px;
 }
-
 .countdown {
-    font-size: 37px;
-    color: #ffc800;
-    line-height: 1.5;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+font-size: 37px;
+color: #ffc800;
+line-height: 1.5;
+margin-bottom: 6px;
+display: flex;
+justify-content: center;
+align-items: center;
 }
-
 .token-value {
-    font-size: 30px;
-    line-height: 1.4;
-    margin-top: -25px;
+font-size: 30px;
+line-height: 1.4;
+margin-top: -25px;
 }
-
 .airdrop-criteria {
-    margin: 20px auto;
-    padding: 20px;
-    border: 1px solid #555;
-    border-radius: 12px;
-    background: #1e1e1e;
-    font-size: 25px;
-    max-height: 400px;
+margin: 20px auto;
+padding: 20px;
+border: 1px solid #555;
+border-radius: 12px;
+background: #1e1e1e;
+font-size: 25px;
+max-height: 400px;
 }
-
 .airdrop-criteria .task {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin: 15px 0;
-    padding: 10px 0;
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin: 15px 0;
+padding: 10px 0;
 }
-
 .airdrop-criteria .task button {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: #333333;
-    cursor: pointer;
-    width: 100%;
-    padding: 10px 8px;
-    box-sizing: border-box;
-    line-height: .4;
-    font-size: 18px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+background: none;
+border: none;
+font-size: 1.5rem;
+color: #333333;
+cursor: pointer;
+width: 100%;
+padding: 10px 8px;
+box-sizing: border-box;
+line-height: .4;
+font-size: 18px;
+transition: none; /* حذف transition */
 }
-
 /* فواصل برابر بین دکمه‌ها - اصلاح شده */
 .task-box {
-    margin-bottom: 15px;
-    position: relative;
+margin-bottom: 15px;
+position: relative;
 }
-
 .task-button {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    padding: 14px 18px;
-    font-size: 16px;
-    font-weight: 500;
-    color: #ffffff;
-    background-color: #2a2a2a;
-    border: none;
-    border-radius: 12px;
-    margin-bottom: 0;
-    cursor: pointer;
-    transition: none;
+display: flex;
+justify-content: space-between;
+align-items: center;
+width: 100%;
+padding: 14px 18px;
+font-size: 16px;
+font-weight: 500;
+color: #ffffff;
+background-color: #2a2a2a;
+border: none;
+border-radius: 12px;
+margin-bottom: 0;
+cursor: pointer;
+transition: none; /* حذف transition */
 }
-
 /* نوار سبز دور همه دکمه‌های تکمیل شده */
 .task-button.tasks-completed {
-    background: rgba(40, 167, 69, 0.1) !important;
-    border: 1px solid #28a745 !important;
+background: rgba(40, 167, 69, 0.1) !important;
+border: 1px solid #28a745 !important;
 }
-
 .task-button.friends-invited {
-    background: rgba(40, 167, 69, 0.1) !important;
-    border: 1px solid #28a745 !important;
+background: rgba(40, 167, 69, 0.1) !important;
+border: 1px solid #28a745 !important;
 }
-
 .task-button.commission-paid {
-    background: rgba(40, 167, 69, 0.1) !important;
-    border: 1px solid #28a745 !important;
+background: rgba(40, 167, 69, 0.1) !important;
+border: 1px solid #28a745 !important;
 }
-
 /* استایل برای دکمه wallet connected */
 .task-button.wallet-connected {
-    background: rgba(40, 167, 69, 0.1) !important;
-    border: 1px solid #28a745 !important;
-    color: #28a745;
+background: rgba(40, 167, 69, 0.1) !important;
+border: 1px solid #28a745 !important;
+color: #28a745;
 }
-
 .task-button.wallet-connected .right-icon {
-    color: #28a745 !important;
+color: #28a745 !important;
 }
-
 /* اطمینان از سبز شدن همه آیکون‌های completed */
 .task-button.tasks-completed .right-icon,
 .task-button.friends-invited .right-icon,
 .task-button.commission-paid .right-icon,
 .task-button.wallet-connected .right-icon {
-    color: #28a745 !important;
+color: #28a745 !important;
 }
-
 /* استایل برای status indicator */
 .wallet-status-indicator {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 14px;
-    height: 14px;
-    background: #28a745;
-    border-radius: 50%;
-    display: none;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px #28a745;
+position: absolute;
+top: -3px;
+right: -3px;
+width: 14px;
+height: 14px;
+background: #28a745;
+border-radius: 50%;
+display: none;
+border: 2px solid #fff;
+box-shadow: 0 0 0 1px #28a745;
 }
-
 .wallet-status-indicator.connected {
-    display: block;
-    animation: pulse 2s infinite;
+display: block;
+animation: pulse 2s infinite;
 }
-
 @keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
-    }
+0% {
+box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
 }
-
+70% {
+box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+}
+100% {
+box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+}
+}
 .claim-section {
-    text-align: center;
+text-align: center;
 }
-
 .claim-btn {
-    background: linear-gradient(45deg, #ffd700, #ffed4e);
-    color: #000;
-    border: none;
-    padding: 15px 30px;
-    border-radius: 25px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    width: 100%;
-    transition: none;
+background: linear-gradient(45deg, #ffd700, #ffed4e);
+color: #000;
+border: none;
+padding: 15px 30px;
+border-radius: 25px;
+font-size: 16px;
+font-weight: bold;
+cursor: pointer;
+width: 100%;
+transition: none; /* حذف transition */
 }
-
 .claim-btn:disabled {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
-    cursor: not-allowed;
+background: rgba(255, 255, 255, 0.1);
+color: rgba(255, 255, 255, 0.5);
+cursor: not-allowed;
 }
-
 /* نوار سبز دور پیام تبریک */
 .congratulations-message {
-    background: linear-gradient(135deg, #28a745, #20c997);
-    color: white;
-    padding: 20px;
-    border-radius: 15px;
-    text-align: center;
-    margin: 20px 0;
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-    animation: celebrateGlow 2s ease-in-out infinite alternate;
-    border: 2px solid #28a745;
+background: linear-gradient(135deg, #28a745, #20c997);
+color: white;
+padding: 20px;
+border-radius: 15px;
+text-align: center;
+margin: 20px 0;
+box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+animation: celebrateGlow 2s ease-in-out infinite alternate;
+border: 2px solid #28a745;
 }
-
 @keyframes celebrateGlow {
-    from {
-        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-    }
-    to {
-        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
-    }
+from {
+box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
 }
-
+to {
+box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+}
+}
 /* استایل منوی کشویی کیف پول */
 .wallet-dropdown {
-    position: relative;
-    display: inline-block;
-    width: 100%;
+position: relative;
+display: inline-block;
+width: 100%;
 }
-
 .wallet-dropdown-content {
-    display: none;
-    position: absolute;
-    background-color: #1a1a1a;
-    min-width: 100%;
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.3);
-    z-index: 9999;
-    border-radius: 10px;
-    border: 2px solid #333;
-    top: calc(100% + 2px);
-    left: 0;
-    opacity: 0;
-    transform: translateY(-10px);
-    transition: all 0.3s ease;
-    margin-top: 0;
+display: none;
+position: absolute;
+background-color: #1a1a1a;
+min-width: 100%;
+box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.3);
+z-index: 9999;
+border-radius: 10px;
+border: 2px solid #333;
+top: calc(100% + 2px);
+left: 0;
+opacity: 0;
+transform: translateY(-10px);
+transition: all 0.3s ease;
+margin-top: 0;
 }
-
 .wallet-dropdown-content.show {
-    display: block;
-    opacity: 1;
-    transform: translateY(0);
+display: block;
+opacity: 1;
+transform: translateY(0);
 }
-
 .wallet-info-dropdown {
-    background: #1a1a1a;
-    padding: 15px;
-    border-radius: 8px;
-    text-align: center;
-    color: #fff;
+background: #1a1a1a;
+padding: 15px;
+border-radius: 8px;
+text-align: center;
+color: #fff;
 }
-
 .wallet-actions-dropdown {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
+display: flex;
+gap: 10px;
+justify-content: center;
 }
-
 .wallet-action-btn {
-    background: #2d2d2d;
-    color: #fff;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: none;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
+background: #2d2d2d;
+color: #fff;
+border: none;
+padding: 10px 20px;
+border-radius: 6px;
+cursor: pointer;
+font-size: 14px;
+transition: none; /* حذف transition */
+flex: 1;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 5px;
 }
-
 .disconnect-btn {
-    background: #dc3545 !important;
+background: #dc3545 !important;
 }
-
 /* Responsive */
 @media (max-width: 480px) {
-    .container {
-        padding: 15px;
-    }
-    
-    .task-item {
-        padding: 12px;
-    }
-    
-    .wallet-address {
-        font-size: 11px;
-    }
-    
-    .wallet-actions-dropdown {
-        flex-direction: column;
-    }
-    
-    .task-box {
-        margin-bottom: 12px;
-    }
+.container {
+padding: 15px;
 }
-
+.task-item {
+padding: 12px;
+}
+.wallet-address {
+font-size: 11px;
+}
+.wallet-actions-dropdown {
+flex-direction: column;
+}
+.task-box {
+margin-bottom: 12px;
+}
+}
 /* Footer styles */
 .footer-icons {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: #111;
-    border-top: 1px solid #333;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    padding: 10px 0;
-    z-index: 1000;
+position: fixed;
+bottom: 0;
+left: 0;
+right: 0;
+background-color: #111;
+border-top: 1px solid #333;
+display: flex;
+justify-content: space-around;
+align-items: center;
+padding: 10px 0;
+z-index: 1000;
 }
-
 .footer-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: #aaa;
-    font-size: 12px;
-    text-decoration: none;
-    transition: none;
+display: flex;
+flex-direction: column;
+align-items: center;
+color: #aaa;
+font-size: 12px;
+text-decoration: none;
+transition: none; /* حذف transition */
 }
-
 .footer-btn i {
-    font-size: 18px;
-    margin-bottom: 4px;
+font-size: 18px;
+margin-bottom: 4px;
 }
-
 .footer-btn.active {
-    color: #fff;
+color: #fff;
+}
+/* حذف کامل همه افکت‌های hover و focus */
+*, *:before, *:after {
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+}
+button, .footer-btn, .task-button, .claim-btn, .wallet-action-btn {
+transition: none !important;
+-webkit-tap-highlight-color: transparent !important;
+outline: none !important;
+}
+button:hover, button:focus, button:active,
+.footer-btn:hover, .footer-btn:focus, .footer-btn:active,
+.task-button:hover, .task-button:focus, .task-button:active,
+.claim-btn:hover, .claim-btn:focus, .claim-btn:active,
+.wallet-action-btn:hover, .wallet-action-btn:focus, .wallet-action-btn:active {
+background-color: inherit !important;
+box-shadow: none !important;
+outline: none !important;
+border: inherit !important;
+color: inherit !important;
 }
