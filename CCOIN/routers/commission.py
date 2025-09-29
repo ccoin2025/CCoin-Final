@@ -17,6 +17,8 @@ from solders.pubkey import Pubkey
 from solders.keypair import Keypair
 from solders.system_program import TransferParams, transfer
 from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
+from solders.transaction import VersionedTransaction
+from solders.message import MessageV0
 import base58
 import base64
 
@@ -133,26 +135,26 @@ async def prepare_transaction(
             print(f"No wallet connected for user: {telegram_id}")
             raise HTTPException(status_code=400, detail="Wallet not connected")
 
-        # ساخت تراکنش با solana-py
+        # ساخت تراکنش با solders
         client = AsyncClient(SOLANA_RPC)
         
         # ساخت public keys
         from_pubkey = Pubkey.from_string(user.wallet_address)
         to_pubkey = Pubkey.from_string(recipient)
         
-        # ساخت تراکنش جدید
-        transaction = Transaction()
+        # ساخت instructions
+        instructions = []
         
         # ⭐ INSTRUCTION 1: تنظیم Compute Unit Limit به حداقل
-        compute_limit_ix = set_compute_unit_limit(200_000)  # حداقل برای transfer ساده
-        transaction.add(compute_limit_ix)
+        compute_limit_ix = set_compute_unit_limit(200_000)
+        instructions.append(compute_limit_ix)
         
-        # ⭐ INSTRUCTION 2: تنظیم Compute Unit Price به صفر (بدون اولویت)
-        compute_price_ix = set_compute_unit_price(0)  # 0 = بدون فی اولویت
-        transaction.add(compute_price_ix)
+        # ⭐ INSTRUCTION 2: تنظیم Compute Unit Price به صفر
+        compute_price_ix = set_compute_unit_price(0)
+        instructions.append(compute_price_ix)
         
         # ⭐ INSTRUCTION 3: Transfer اصلی
-        lamports = int(amount * 1_000_000_000)  # تبدیل SOL به lamports
+        lamports = int(amount * 1_000_000_000)
         transfer_ix = transfer(
             TransferParams(
                 from_pubkey=from_pubkey,
@@ -160,15 +162,27 @@ async def prepare_transaction(
                 lamports=lamports
             )
         )
-        transaction.add(transfer_ix)
+        instructions.append(transfer_ix)
         
         # دریافت recent blockhash
-        recent_blockhash = await client.get_latest_blockhash()
-        transaction.recent_blockhash = recent_blockhash.value.blockhash
-        transaction.fee_payer = from_pubkey
+        recent_blockhash_resp = await client.get_latest_blockhash()
+        recent_blockhash = recent_blockhash_resp.value.blockhash
         
-        # Serialize کردن تراکنش به base64
-        serialized = base64.b64encode(bytes(transaction)).decode('utf-8')
+        # ساخت Message
+        from solders.message import Message
+        message = Message.new_with_blockhash(
+            instructions,
+            from_pubkey,
+            recent_blockhash
+        )
+        
+        # ساخت Transaction
+        from solders.transaction import Transaction as SoldersTransaction
+        transaction = SoldersTransaction.new_unsigned(message)
+        
+        # ⭐ اصلاح: Serialize کردن تراکنش
+        serialized_bytes = bytes(transaction)
+        serialized = base64.b64encode(serialized_bytes).decode('utf-8')
         
         await client.close()
         
@@ -181,7 +195,9 @@ async def prepare_transaction(
         }
 
     except Exception as e:
+        import traceback
         print(f"❌ Error preparing transaction: {e}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to prepare transaction: {str(e)}")
 
 @router.get("/success", response_class=HTMLResponse)
