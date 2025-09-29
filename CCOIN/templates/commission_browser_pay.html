@@ -185,8 +185,8 @@
                     // روش 1: استفاده از Extension
                     await payWithExtension();
                 } else {
-                    // روش 2: استفاده از Deep Link با تراکنش serialize شده
-                    await payWithDeepLink();
+                    // روش 2: استفاده از Solana Pay (بدون کنترل فی)
+                    await payWithSolanaPay();
                 }
 
             } catch (error) {
@@ -255,60 +255,10 @@
             setTimeout(returnToApp, 2000);
         }
 
-        // ⭐ روش 2: پرداخت با Deep Link (بدون Extension)
-        async function payWithDeepLink() {
-            showStatus('Preparing transaction...', 'info');
-
-            // درخواست تراکنش از سرور
-            const txData = await getTransactionFromServer();
-
-            if (!txData || !txData.transaction) {
-                throw new Error('Failed to get transaction from server');
-            }
-
-            // ساخت Deep Link با تراکنش serialize شده
-            const deepLink = `https://phantom.app/ul/v1/signAndSendTransaction?dapp_encryption_public_key=placeholder&nonce=placeholder&redirect_link=${encodeURIComponent(window.location.href)}&payload=${encodeURIComponent(txData.transaction)}`;
-
+        // ⭐ روش 2: پرداخت با Solana Pay (fallback برای موبایل)
+        async function payWithSolanaPay() {
             showStatus('Opening Phantom app...', 'info');
 
-            // باز کردن Deep Link
-            window.location.href = deepLink;
-
-            // شروع بررسی وضعیت پرداخت
-            setTimeout(checkPaymentStatus, 3000);
-        }
-
-        // دریافت تراکنش از سرور (با فی بهینه شده)
-        async function getTransactionFromServer() {
-            try {
-                const response = await fetch('/commission/prepare_transaction', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        amount: commissionAmount,
-                        recipient: adminWallet
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to prepare transaction');
-                }
-
-                return await response.json();
-
-            } catch (error) {
-                console.error('Error getting transaction:', error);
-                // Fallback: استفاده از Solana Pay URL ساده
-                openSolanaPayFallback();
-                return null;
-            }
-        }
-
-        // ⭐ Fallback: Solana Pay URL (اگر همه چیز fail شد)
-        function openSolanaPayFallback() {
             const amount = commissionAmount;
             const recipient = adminWallet;
             const label = 'CCoin Commission';
@@ -317,7 +267,11 @@
 
             const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}&memo=${encodeURIComponent(memo)}`;
 
+            // باز کردن Solana Pay URL
             window.location.href = solanaPayUrl;
+
+            // شروع بررسی وضعیت پرداخت
+            setTimeout(checkPaymentStatus, 3000);
         }
 
         // ارسال تأییدیه به سرور
