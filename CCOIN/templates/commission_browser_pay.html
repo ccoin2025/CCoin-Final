@@ -55,6 +55,50 @@
             margin-bottom: 10px;
         }
 
+        .fee-warning {
+            background: rgba(255, 152, 0, 0.2);
+            border: 2px solid #ff9800;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .fee-warning-title {
+            font-weight: bold;
+            color: #ffa726;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .how-to-reduce {
+            background: rgba(76, 175, 80, 0.2);
+            border: 2px solid #4caf50;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        .how-to-reduce h3 {
+            color: #4caf50;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .how-to-reduce ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .how-to-reduce li {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
         .btn {
             background: linear-gradient(45deg, #ffd700, #ffed4e);
             color: #000;
@@ -110,6 +154,18 @@
             color: #2196f3;
             display: block;
         }
+
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            font-size: 11px;
+            text-align: left;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -122,15 +178,35 @@
             <div>Commission Amount</div>
         </div>
 
+        <div class="fee-warning">
+            <div class="fee-warning-title">⚠️ Network Fee Notice</div>
+            Phantom wallet adds a priority fee (~0.01-0.02 SOL) automatically. 
+            <strong>You can reduce this fee manually in Phantom popup!</strong>
+        </div>
+
+        <div class="how-to-reduce">
+            <h3>💡 Reduce Fee in Phantom:</h3>
+            <ol>
+                <li>When Phantom opens, look for <strong>"Network Fee"</strong></li>
+                <li>Click on the fee amount</li>
+                <li>Select <strong>"Custom"</strong></li>
+                <li>Enter <strong>0.001 SOL</strong> or lower</li>
+                <li>Confirm</li>
+            </ol>
+            <small style="color: #90ee90;">💚 Lower fee = slower (usually still under 1 min)</small>
+        </div>
+
         <div id="status" class="status"></div>
 
         <button class="btn" id="pay-btn" onclick="openPhantom()">
-            <i class="fas fa-wallet"></i> Continue to Phantom
+            Continue to Phantom
         </button>
 
         <button class="btn return-btn" onclick="returnToApp()">
-            <i class="fas fa-arrow-left"></i> Cancel & Return
+            Cancel & Return
         </button>
+
+        <div id="debug-info" class="debug-info"></div>
     </div>
 
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
@@ -139,12 +215,25 @@
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
+        
         const RPC_URL = 'https://api.mainnet-beta.solana.com';
+        let debugMode = true;
+
+        function addDebugLog(message) {
+            if (!debugMode) return;
+            const debugDiv = document.getElementById('debug-info');
+            debugDiv.style.display = 'block';
+            const time = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `[${time}] ${message}<br>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+            console.log(`[${time}] ${message}`);
+        }
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = `status ${type}`;
+            addDebugLog(`Status: ${message}`);
         }
 
         function disablePayButton(disabled) {
@@ -154,6 +243,8 @@
         async function openPhantom() {
             try {
                 disablePayButton(true);
+                addDebugLog('=== Payment Started ===');
+                addDebugLog(`Telegram ID: ${telegramId}`);
                 showStatus('Opening Phantom...', 'info');
 
                 if (window.solana && window.solana.isPhantom) {
@@ -164,6 +255,7 @@
 
             } catch (error) {
                 console.error('Payment error:', error);
+                addDebugLog(`❌ Error: ${error.message}`);
                 showStatus('Payment failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
@@ -172,25 +264,30 @@
         async function payWithPhantom() {
             try {
                 showStatus('Connecting wallet...', 'info');
+                addDebugLog('Requesting wallet connection...');
                 
                 const resp = await window.solana.connect();
                 const userPublicKey = resp.publicKey;
+                addDebugLog(`✅ Connected: ${userPublicKey.toString().substring(0, 8)}...`);
 
                 showStatus('Creating transaction...', 'info');
 
                 const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
                 const { blockhash } = await connection.getLatestBlockhash('finalized');
+                addDebugLog(`Blockhash: ${blockhash.substring(0, 8)}...`);
 
                 const transaction = new solanaWeb3.Transaction();
 
-                // ✅ Priority fee روی 1000 microLamports تنظیم شد
+                // افزودن compute budget
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
                 );
                 transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 })
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
                 );
+                addDebugLog('Added compute budget: 1000 CU @ 1 microLamport');
 
+                // Transfer instruction
                 const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
@@ -199,107 +296,137 @@
                         lamports: lamports
                     })
                 );
+                addDebugLog(`Transfer: ${lamports} lamports`);
 
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
-                showStatus('Please confirm in Phantom...', 'info');
+                showStatus('Please approve in Phantom...', 'info');
+                addDebugLog('Waiting for user approval...');
 
+                // امضا و ارسال
                 const { signature } = await window.solana.signAndSendTransaction(transaction);
+                addDebugLog(`✅ Transaction sent: ${signature}`);
 
                 showStatus('Transaction sent! Confirming...', 'info');
 
                 await connection.confirmTransaction(signature, 'confirmed');
+                addDebugLog('✅ Transaction confirmed on blockchain');
 
-                // ✅ گرفتن فی واقعی و نمایش
-                await fetchTransactionFee(connection, signature);
+                showStatus('Confirming on server...', 'info');
 
+                // تایید در سرور
                 await confirmOnServer(signature);
-                setTimeout(returnToApp, 4000);
+
+                showStatus('Payment successful! ✅', 'success');
+                setTimeout(returnToApp, 2000);
 
             } catch (error) {
                 console.error('Payment failed:', error);
+                addDebugLog(`❌ Payment failed: ${error.message}`);
+                
                 if (error.message.includes('User rejected')) {
-                    showStatus('Payment cancelled', 'error');
+                    showStatus('Payment cancelled by user', 'error');
                 } else {
                     showStatus('Payment failed: ' + error.message, 'error');
                 }
+                
                 disablePayButton(false);
-            }
-        }
-
-        // گرفتن فی واقعی تراکنش
-        async function fetchTransactionFee(connection, signature) {
-            try {
-                const tx = await connection.getTransaction(signature, {
-                    commitment: "confirmed"
-                });
-
-                if (tx && tx.meta) {
-                    const feeLamports = tx.meta.fee;
-                    const feeSOL = feeLamports / solanaWeb3.LAMPORTS_PER_SOL;
-                    showStatus(`✅ Payment successful! Network Fee: ${feeSOL} SOL`, 'success');
-                }
-            } catch (error) {
-                console.error('Error fetching fee:', error);
-                showStatus('Payment confirmed, but failed to fetch fee', 'info');
             }
         }
 
         async function openPhantomApp() {
             showStatus('Opening Phantom app...', 'info');
+            addDebugLog('Opening mobile Phantom app...');
 
             const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
             
+            addDebugLog(`Solana Pay URL created`);
             window.location.href = solanaPayUrl;
-            setTimeout(() => checkPaymentLoop(), 5000);
+
+            setTimeout(() => {
+                addDebugLog('Starting payment status check loop...');
+                checkPaymentLoop();
+            }, 5000);
         }
 
         function checkPaymentLoop() {
             let attempts = 0;
+            const maxAttempts = 30;
+
             const interval = setInterval(async () => {
                 attempts++;
+                addDebugLog(`Checking payment status... (${attempts}/${maxAttempts})`);
 
                 try {
-                    const response = await fetch('/airdrop/commission_status');
+                    // ✅ اضافه کردن telegram_id به query string
+                    const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
                     const data = await response.json();
+
+                    addDebugLog(`Server response: paid=${data.commission_paid}`);
 
                     if (data.commission_paid) {
                         clearInterval(interval);
+                        addDebugLog('✅ Payment confirmed by server!');
                         showStatus('Payment confirmed! ✅', 'success');
                         setTimeout(returnToApp, 2000);
-                    } else if (attempts >= 30) {
+                    } else if (attempts >= maxAttempts) {
                         clearInterval(interval);
-                        showStatus('Timeout. Please try again.', 'error');
+                        addDebugLog('⏱️ Timeout reached');
+                        showStatus('Timeout. Please check manually.', 'error');
                         disablePayButton(false);
                     } else {
-                        showStatus(`Waiting for confirmation... (${attempts}/30)`, 'info');
+                        showStatus(`Waiting for confirmation... (${attempts}/${maxAttempts})`, 'info');
                     }
                 } catch (error) {
+                    addDebugLog(`❌ Status check error: ${error.message}`);
                     console.error('Status check error:', error);
                 }
             }, 3000);
         }
 
+        // ✅ اصلاح شده: اضافه کردن telegram_id به request body
         async function confirmOnServer(signature) {
             try {
-                await fetch('/airdrop/confirm_commission', {
+                addDebugLog('Sending confirmation to server...');
+                
+                const response = await fetch('/airdrop/confirm_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        telegram_id: telegramId,  // ✅ اضافه شد
                         signature: signature,
                         amount: commissionAmount,
                         recipient: adminWallet
                     })
                 });
+
+                const data = await response.json();
+                addDebugLog(`Server response: ${JSON.stringify(data)}`);
+                
+                if (data.success) {
+                    addDebugLog('✅ Commission confirmed on server!');
+                } else {
+                    addDebugLog(`⚠️ Server response not successful: ${data.message}`);
+                }
             } catch (error) {
+                addDebugLog(`❌ Server confirmation error: ${error.message}`);
                 console.error('Server confirmation error:', error);
             }
         }
 
         function returnToApp() {
+            addDebugLog('Returning to Telegram app...');
             window.location.href = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
         }
+
+        window.addEventListener('load', () => {
+            addDebugLog('=== Page Loaded ===');
+            addDebugLog(`Telegram ID: ${telegramId}`);
+            addDebugLog(`Amount: ${commissionAmount} SOL`);
+            addDebugLog(`Admin Wallet: ${adminWallet.substring(0, 8)}...`);
+            addDebugLog(`Phantom Extension: ${window.solana && window.solana.isPhantom ? 'Detected' : 'Not detected'}`);
+        });
     </script>
 </body>
 </html>
