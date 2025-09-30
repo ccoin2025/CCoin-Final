@@ -356,6 +356,134 @@ async def check_wallet_status(request: Request, db: Session = Depends(get_db)):
         "wallet_address": user.wallet_address
     })
 
+@router.post("/verify_commission_manual")
+@limiter.limit("3/minute")
+async def verify_commission_manual(request: Request, db: Session = Depends(get_db)):
+    """
+    بررسی manual تراکنش‌های اخیر از wallet کاربر به admin wallet
+    """
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            return {"success": True, "message": "Commission already paid", "already_paid": True}
+
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="No wallet connected")
+
+        print(f"🔍 Manual verification for user {telegram_id}, wallet: {user.wallet_address}")
+
+        # بررسی تراکنش‌های اخیر
+        from solders.pubkey import Pubkey
+        
+        try:
+            user_pubkey = Pubkey.from_string(user.wallet_address)
+            admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
+            
+            # گرفتن signatures اخیر
+            signatures = solana_client.get_signatures_for_address(
+                user_pubkey,
+                limit=20  # 20 تراکنش اخیر
+            )
+            
+            if not signatures.value:
+                print(f"❌ No recent transactions found for {user.wallet_address}")
+                return {"success": False, "message": "No recent transactions found"}
+
+            print(f"📋 Found {len(signatures.value)} recent transactions")
+
+            # بررسی هر تراکنش
+            for sig_info in signatures.value:
+                sig = str(sig_info.signature)
+                
+                try:
+                    tx_info = solana_client.get_transaction(
+                        sig,
+                        encoding="json",
+                        commitment="confirmed"
+                    )
+                    
+                    if not tx_info.value or not tx_info.value.transaction:
+                        continue
+                    
+                    # بررسی اینکه آیا به admin wallet ارسال شده
+                    tx_data = tx_info.value.transaction
+                    
+                    # گرفتن account keys
+                    if hasattr(tx_data, 'message') and hasattr(tx_data.message, 'account_keys'):
+                        account_keys = tx_data.message.account_keys
+                        
+                        # بررسی اینکه آیا admin wallet در لیست accounts هست
+                        admin_in_tx = any(str(key) == ADMIN_WALLET for key in account_keys)
+                        
+                        if admin_in_tx:
+                            # بررسی مبلغ
+                            meta = tx_info.value.meta
+                            if meta and not meta.err:
+                                # محاسبه تغییرات balance
+                                pre_balances = meta.pre_balances
+                                post_balances = meta.post_balances
+                                
+                                # پیدا کردن index admin wallet
+                                admin_index = None
+                                for i, key in enumerate(account_keys):
+                                    if str(key) == ADMIN_WALLET:
+                                        admin_index = i
+                                        break
+                                
+                                if admin_index is not None:
+                                    balance_change = post_balances[admin_index] - pre_balances[admin_index]
+                                    amount_sol = balance_change / 1_000_000_000
+                                    
+                                    print(f"💰 Found TX: {sig[:16]}...Amount: {amount_sol} SOL")
+                                    
+                                    # بررسی اینکه مبلغ کافی هست (با tolerance برای fee)
+                                    if amount_sol >= (COMMISSION_AMOUNT * 0.95):  # 95% tolerance
+                                        # ✅ تراکنش معتبر پیدا شد!
+                                        user.commission_paid = True
+                                        user.commission_transaction_hash = sig
+                                        user.commission_payment_date = datetime.utcnow()
+                                        db.commit()
+                                        
+                                        print(f"✅ Commission verified and confirmed for user {telegram_id}")
+                                        print(f"   TX: {sig}")
+                                        print(f"   Amount: {amount_sol} SOL")
+                                        
+                                        return {
+                                            "success": True,
+                                            "message": "Commission verified successfully!",
+                                            "transaction": sig,
+                                            "amount": amount_sol
+                                        }
+                
+                except Exception as e:
+                    print(f"⚠️ Error checking TX {sig[:16]}...: {e}")
+                    continue
+            
+            print(f"❌ No valid commission payment found in recent transactions")
+            return {"success": False, "message": "No valid commission payment found"}
+            
+        except Exception as e:
+            print(f"❌ Error verifying transactions: {e}")
+            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Manual verification error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+
 @router.get("/check_commission_status")
 async def check_commission_status(request: Request, db: Session = Depends(get_db)):
     user = await get_current_user(request, db)
