@@ -61,9 +61,8 @@ async def commission_browser_pay(
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET
-        "bot_username": BOT_USERNAME  # ✅ اضافه شد
-
+        "admin_wallet": ADMIN_WALLET,  # ✅ کاما اضافه شد
+        "bot_username": BOT_USERNAME
     })
 
 @router.get("/pay", response_class=JSONResponse)
@@ -94,8 +93,8 @@ async def commission_payment_page(
 
     # ایجاد URL پرداخت به سبک Solana Pay
     recipient = ADMIN_WALLET
-    amount = COMMISSION_AMOUNT  # e.g., 0.01 SOL
-    reference = str(Keypair().public_key)  # Reference یکتا برای تراکنش
+    amount = COMMISSION_AMOUNT
+    reference = str(Keypair().public_key)
     label = 'CCoin Commission'
     message = 'Payment for airdrop'
     memo = f'User: {telegram_id}'
@@ -139,23 +138,23 @@ async def prepare_transaction(
 
         # ساخت تراکنش با solders
         client = AsyncClient(SOLANA_RPC)
-        
+
         # ساخت public keys
         from_pubkey = Pubkey.from_string(user.wallet_address)
         to_pubkey = Pubkey.from_string(recipient)
-        
+
         # ساخت instructions
         instructions = []
-        
-        # ⭐ INSTRUCTION 1: تنظیم Compute Unit Limit به حداقل
+
+        # INSTRUCTION 1: تنظیم Compute Unit Limit
         compute_limit_ix = set_compute_unit_limit(200_000)
         instructions.append(compute_limit_ix)
-        
-        # ⭐ INSTRUCTION 2: تنظیم Compute Unit Price به صفر
+
+        # INSTRUCTION 2: تنظیم Compute Unit Price
         compute_price_ix = set_compute_unit_price(0)
         instructions.append(compute_price_ix)
-        
-        # ⭐ INSTRUCTION 3: Transfer اصلی
+
+        # INSTRUCTION 3: Transfer اصلی
         lamports = int(amount * 1_000_000_000)
         transfer_ix = transfer(
             TransferParams(
@@ -165,11 +164,11 @@ async def prepare_transaction(
             )
         )
         instructions.append(transfer_ix)
-        
+
         # دریافت recent blockhash
         recent_blockhash_resp = await client.get_latest_blockhash()
         recent_blockhash = recent_blockhash_resp.value.blockhash
-        
+
         # ساخت Message
         from solders.message import Message
         message = Message.new_with_blockhash(
@@ -177,19 +176,19 @@ async def prepare_transaction(
             from_pubkey,
             recent_blockhash
         )
-        
+
         # ساخت Transaction
         from solders.transaction import Transaction as SoldersTransaction
         transaction = SoldersTransaction.new_unsigned(message)
-        
-        # ⭐ اصلاح: Serialize کردن تراکنش
+
+        # Serialize کردن تراکنش
         serialized_bytes = bytes(transaction)
         serialized = base64.b64encode(serialized_bytes).decode('utf-8')
-        
+
         await client.close()
-        
+
         print(f"✅ Transaction prepared with minimal fee for user: {telegram_id}")
-        
+
         return {
             "success": True,
             "transaction": serialized,
@@ -253,4 +252,3 @@ async def get_commission_status(
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
     }
-
