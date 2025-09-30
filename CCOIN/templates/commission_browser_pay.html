@@ -126,7 +126,7 @@
         <div class="commission-info">
             <div class="amount" id="commission-amount">{{ commission_amount }} SOL</div>
             <div>Network Fee Required</div>
-            <div class="fee-info">⚡ Optimized network fee</div>
+            <div class="fee-info">⚡ Optimized network fee (~0.000005 SOL)</div>
         </div>
 
         <div id="status" class="status"></div>
@@ -147,12 +147,12 @@
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
-        // RPCهای متعدد برای fallback
+        // RPCهای متعدد برای اطمینان
         const RPC_URLS = [
             'https://rpc.ankr.com/solana',
             'https://solana-api.projectserum.com',
             'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY', // کلید Helius رو جایگزین کن
-            // 'https://your-quicknode-endpoint.quicknode.pro/your-token/' // اگر QuickNode داری اضافه کن
+            // 'https://your-quicknode-endpoint.quicknode.pro/your-token/' // QuickNode اضافه کن
         ];
 
         function showStatus(message, type) {
@@ -166,8 +166,8 @@
             if (btn) btn.disabled = disabled;
         }
 
-        // تابع helper برای گرفتن blockhash با retry و چند RPC
-        async function getBlockhashWithRetry(maxRetries = 3) {
+        // تابع helper برای گرفتن blockhash با retry قوی‌تر
+        async function getBlockhashWithRetry(maxRetries = 5) {
             for (let rpc of RPC_URLS) {
                 for (let i = 0; i < maxRetries; i++) {
                     try {
@@ -177,11 +177,11 @@
                         return blockhash;
                     } catch (error) {
                         console.error(`RPC ${rpc} attempt ${i + 1} failed:`, error);
-                        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1))); // Delay تصاعدی
+                        await new Promise(resolve => setTimeout(resolve, 3000 * (i + 1))); // Delay تصاعدی
                     }
                 }
             }
-            return null; // اگر همه fail کردن، null برگردون
+            return null; // اگر همه fail کردن
         }
 
         // باز کردن Phantom
@@ -197,7 +197,7 @@
                     // روش 1: استفاده از Extension
                     await payWithExtension();
                 } else {
-                    // روش 2: باز کردن اپ موبایل با Solana Pay
+                    // روش 2: باز کردن اپ موبایل
                     await openPhantomApp();
                 }
 
@@ -241,7 +241,7 @@
                 // گرفتن blockhash
                 const blockhash = await getBlockhashWithRetry();
                 if (!blockhash) {
-                    throw new Error('Could not fetch blockhash. Please try again.');
+                    throw new Error('Could not fetch blockhash. Please try again or check your network.');
                 }
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
@@ -268,7 +268,7 @@
             }
         }
 
-        // باز کردن اپ Phantom (موبایل) با serialized transaction
+        // باز کردن اپ Phantom (موبایل)
         async function openPhantomApp() {
             try {
                 showStatus('Preparing transaction for Phantom app...', 'info');
@@ -294,16 +294,22 @@
                 );
 
                 // گرفتن blockhash
+                let serializedTx;
                 const blockhash = await getBlockhashWithRetry();
                 if (blockhash) {
                     transaction.recentBlockhash = blockhash;
+                    // سریالایز تراکنش بدون امضا
+                    serializedTx = transaction.serialize({ requireAllSignatures: false }).toString('base64');
                 } else {
-                    console.warn('No blockhash; Phantom will fetch it.');
-                    // اگر blockhash نباشه، Phantom خودش می‌گیره
+                    // اگر blockhash fail کرد، از Solana Pay ساده استفاده کن
+                    console.warn('No blockhash; falling back to simple Solana Pay.');
+                    const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
+                    showStatus('Opening Phantom app (simple mode)...', 'info');
+                    console.log('Opening Solana Pay URL:', solanaPayUrl);
+                    window.location.href = solanaPayUrl;
+                    setTimeout(() => checkPaymentLoop(), 5000);
+                    return;
                 }
-
-                // سریالایز تراکنش بدون امضا
-                const serializedTx = transaction.serialize({ requireAllSignatures: false }).toString('base64');
 
                 // ساخت Solana Pay URL با transaction
                 const solanaPayUrl = `solana:${encodeURIComponent(
