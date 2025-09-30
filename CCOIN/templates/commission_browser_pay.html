@@ -164,7 +164,7 @@
             text-align: left;
             max-height: 200px;
             overflow-y: auto;
-            display: block;  /* ✅ همیشه نمایش بده */
+            display: block;
         }
     </style>
 </head>
@@ -176,6 +176,11 @@
         <div class="commission-info">
             <div class="amount">{{ commission_amount }} SOL</div>
             <div>Commission Amount</div>
+        </div>
+
+        <div class="fee-warning">
+            <div class="fee-warning-title">⚠️ Important</div>
+            After approving in Phantom, please return to this page!
         </div>
 
         <div id="status" class="status"></div>
@@ -198,9 +203,10 @@
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         const botUsername = '{{ bot_username }}';
-        
+
         const RPC_URL = 'https://api.mainnet-beta.solana.com';
-        let debugMode = true;
+        const STORAGE_KEY = `commission_tx_${telegramId}`;
+        let checkInterval = null;
 
         function addDebugLog(message) {
             const debugDiv = document.getElementById('debug-info');
@@ -215,11 +221,44 @@
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = `status ${type}`;
-            addDebugLog(`📌 Status: ${message}`);
+            addDebugLog(`📌 ${message}`);
         }
 
         function disablePayButton(disabled) {
             document.getElementById('pay-btn').disabled = disabled;
+        }
+
+        // ✅ ذخیره signature در localStorage
+        function savePendingTransaction(signature) {
+            const data = {
+                signature: signature,
+                timestamp: Date.now(),
+                telegramId: telegramId
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            addDebugLog(`💾 Saved TX to localStorage: ${signature.substring(0, 16)}...`);
+        }
+
+        // ✅ بارگذاری signature از localStorage
+        function loadPendingTransaction() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    addDebugLog(`📂 Found pending TX: ${data.signature.substring(0, 16)}...`);
+                    return data;
+                } catch (e) {
+                    addDebugLog(`❌ Error parsing stored TX: ${e.message}`);
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        // ✅ پاک کردن transaction بعد از تایید
+        function clearPendingTransaction() {
+            localStorage.removeItem(STORAGE_KEY);
+            addDebugLog(`🗑️ Cleared pending TX from localStorage`);
         }
 
         async function openPhantom() {
@@ -241,7 +280,6 @@
             } catch (error) {
                 console.error('Payment error:', error);
                 addDebugLog(`❌ ERROR: ${error.message}`);
-                addDebugLog(`Stack: ${error.stack}`);
                 showStatus('Payment failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
@@ -249,14 +287,14 @@
 
         async function payWithPhantom() {
             let signature = null;
-            
+
             try {
                 showStatus('Connecting wallet...', 'info');
                 addDebugLog('🔌 Requesting wallet connection...');
-                
+
                 const resp = await window.solana.connect();
                 const userPublicKey = resp.publicKey;
-                addDebugLog(`✅ Wallet connected: ${userPublicKey.toString().substring(0, 12)}...`);
+                addDebugLog(`✅ Connected: ${userPublicKey.toString().substring(0, 12)}...`);
 
                 showStatus('Creating transaction...', 'info');
                 addDebugLog('📝 Building transaction...');
@@ -267,16 +305,14 @@
 
                 const transaction = new solanaWeb3.Transaction();
 
-                // Compute budget
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
                 );
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
                 );
-                addDebugLog('⚙️ Compute budget: 1000 CU @ 1 µL');
+                addDebugLog('⚙️ Compute budget added');
 
-                // Transfer
                 const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
@@ -291,96 +327,82 @@
                 transaction.feePayer = userPublicKey;
 
                 showStatus('Please approve in Phantom...', 'info');
-                addDebugLog('⏳ Waiting for user approval...');
+                addDebugLog('⏳ Waiting for approval...');
+                addDebugLog('⚠️ Return to this page after approving!');
 
+                // ✅ ارسال transaction
                 const signed = await window.solana.signAndSendTransaction(transaction);
                 signature = signed.signature;
-                
+
                 addDebugLog(`✅ TX SENT: ${signature}`);
-                addDebugLog(`📍 Explorer: https://solscan.io/tx/${signature}`);
+                addDebugLog(`📍 https://solscan.io/tx/${signature}`);
+
+                // ✅ ذخیره در localStorage
+                savePendingTransaction(signature);
+
+                // ✅ شروع check loop در background
+                startBackgroundCheck(signature);
 
                 showStatus('Transaction sent! Confirming...', 'info');
 
-                addDebugLog('⏳ Confirming on blockchain...');
-                await connection.confirmTransaction(signature, 'confirmed');
-                addDebugLog('✅ Blockchain confirmed!');
-
-                showStatus('Confirming on server...', 'info');
-                addDebugLog('📤 Sending to server...');
-
-                const serverConfirmed = await confirmOnServer(signature);
-
-                if (serverConfirmed) {
-                    showStatus('Payment successful! ✅', 'success');
-                    addDebugLog('🎉 SERVER CONFIRMED!');
-                    addDebugLog('🔄 Redirecting to app...');
-                    setTimeout(returnToApp, 3000);
-                } else {
-                    showStatus('Server confirmation failed', 'error');
-                    addDebugLog('❌ Server did not confirm');
-                    disablePayButton(false);
-                }
-
             } catch (error) {
                 console.error('Payment failed:', error);
-                addDebugLog(`❌ PAYMENT FAILED: ${error.message}`);
-                
-                if (signature) {
-                    addDebugLog(`🔍 But we have signature: ${signature}`);
-                    addDebugLog(`📍 Check: https://solscan.io/tx/${signature}`);
-                }
-                
+                addDebugLog(`❌ FAILED: ${error.message}`);
+
                 if (error.message.includes('User rejected')) {
-                    showStatus('Payment cancelled by user', 'error');
+                    showStatus('Payment cancelled', 'error');
                 } else {
                     showStatus('Payment failed: ' + error.message, 'error');
                 }
-                
+
                 disablePayButton(false);
             }
         }
 
         async function openPhantomApp() {
             showStatus('Opening Phantom app...', 'info');
-            addDebugLog('📱 Opening mobile Phantom app...');
+            addDebugLog('📱 Opening Phantom...');
 
             const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
-            
-            addDebugLog(`🔗 Solana Pay URL created`);
+
             window.location.href = solanaPayUrl;
 
             setTimeout(() => {
-                addDebugLog('🔄 Starting payment check loop...');
-                checkPaymentLoop();
+                addDebugLog('🔄 Starting check loop...');
+                startBackgroundCheck(null);
             }, 5000);
         }
 
-        function checkPaymentLoop() {
-            let attempts = 0;
-            const maxAttempts = 30;
+        // ✅ Check در background که همیشه کار می‌کنه
+        function startBackgroundCheck(signature) {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
 
-            const interval = setInterval(async () => {
+            let attempts = 0;
+            const maxAttempts = 60; // 3 دقیقه
+
+            checkInterval = setInterval(async () => {
                 attempts++;
-                addDebugLog(`🔍 Check ${attempts}/${maxAttempts}...`);
+                addDebugLog(`🔍 Background check ${attempts}/${maxAttempts}...`);
 
                 try {
                     const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
                     const data = await response.json();
 
-                    addDebugLog(`📊 Response: paid=${data.commission_paid}`);
-
                     if (data.commission_paid) {
-                        clearInterval(interval);
+                        clearInterval(checkInterval);
+                        clearPendingTransaction();
                         addDebugLog('🎉 PAYMENT CONFIRMED!');
                         showStatus('Payment confirmed! ✅', 'success');
                         setTimeout(returnToApp, 2000);
                     } else if (attempts >= maxAttempts) {
-                        clearInterval(interval);
+                        clearInterval(checkInterval);
                         addDebugLog('⏱️ TIMEOUT');
-                        showStatus('Timeout. Return to app and check manually.', 'error');
+                        showStatus('Timeout. Check manually in app.', 'error');
                         disablePayButton(false);
                     } else {
-                        showStatus(`Waiting... (${attempts}/${maxAttempts})`, 'info');
+                        showStatus(`Checking... (${attempts}/${maxAttempts})`, 'info');
                     }
                 } catch (error) {
                     addDebugLog(`❌ Check error: ${error.message}`);
@@ -388,53 +410,56 @@
             }, 3000);
         }
 
-        async function confirmOnServer(signature) {
-            try {
-                addDebugLog(`📤 POST /airdrop/confirm_commission`);
-                addDebugLog(`   telegram_id: ${telegramId}`);
-                addDebugLog(`   signature: ${signature.substring(0, 16)}...`);
-                
-                const response = await fetch('/airdrop/confirm_commission', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: telegramId,
-                        signature: signature,
-                        amount: commissionAmount,
-                        recipient: adminWallet
-                    })
-                });
+        // ✅ وقتی صفحه visible میشه، اگه transaction pending داشت، ادامه بده
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                addDebugLog('👁️ Page visible again');
 
-                addDebugLog(`📥 Server status: ${response.status}`);
-                
-                const data = await response.json();
-                addDebugLog(`📥 Server data: ${JSON.stringify(data)}`);
-                
-                if (data.success) {
-                    addDebugLog('✅ Server confirmed successfully!');
-                    return true;
-                } else {
-                    addDebugLog(`⚠️ Server said: ${data.message || 'unknown'}`);
-                    return false;
+                const pending = loadPendingTransaction();
+                if (pending) {
+                    addDebugLog(`🔄 Resuming TX: ${pending.signature.substring(0, 16)}...`);
+                    showStatus('Checking transaction...', 'info');
+
+                    // شروع دوباره check
+                    if (!checkInterval) {
+                        startBackgroundCheck(pending.signature);
+                    }
                 }
-            } catch (error) {
-                addDebugLog(`❌ Server error: ${error.message}`);
-                console.error('Server confirmation error:', error);
-                return false;
+            } else {
+                addDebugLog('🌙 Page hidden');
             }
-        }
+        });
+
+        // ✅ وقتی صفحه load میشه، چک کن ببین transaction pending داره یا نه
+        window.addEventListener('load', () => {
+            addDebugLog('═══ Page Loaded ═══');
+            addDebugLog(`👤 Telegram ID: ${telegramId}`);
+            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
+            addDebugLog(`🤖 Bot: ${botUsername}`);
+
+            const pending = loadPendingTransaction();
+            if (pending) {
+                addDebugLog(`🔄 Found pending TX: ${pending.signature.substring(0, 16)}...`);
+                showStatus('Resuming transaction check...', 'info');
+                disablePayButton(true);
+                startBackgroundCheck(pending.signature);
+            }
+        });
 
         function returnToApp() {
             addDebugLog('🔙 Returning to Telegram...');
-            
+
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
+
             const deepLink = `https://t.me/${botUsername}/app`;
             const webAppLink = `tg://resolve?domain=${botUsername}&appname=app`;
-            
+
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            
+
             addDebugLog(`📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
-            addDebugLog(`🔗 URL: ${isMobile ? webAppLink : deepLink}`);
-            
+
             if (isMobile) {
                 window.location.href = webAppLink;
                 setTimeout(() => {
@@ -442,40 +467,7 @@
                 }, 2000);
             } else {
                 window.open(deepLink, '_blank');
-                showStatus('Please return to Telegram app manually', 'info');
-            }
-        }
-
-        window.addEventListener('load', () => {
-            addDebugLog('═══ Page Loaded ═══');
-            addDebugLog(`👤 Telegram ID: ${telegramId}`);
-            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
-            addDebugLog(`🤖 Bot: ${botUsername}`);
-            addDebugLog(`💼 Admin: ${adminWallet.substring(0, 12)}...`);
-            addDebugLog(`🔗 RPC: ${RPC_URL}`);
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                addDebugLog('👁️ Page visible again');
-                checkPaymentStatusOnce();
-            }
-        });
-
-        async function checkPaymentStatusOnce() {
-            try {
-                const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
-                const data = await response.json();
-                
-                addDebugLog(`📊 Quick check: paid=${data.commission_paid}`);
-                
-                if (data.commission_paid) {
-                    addDebugLog('🎉 Payment found on return!');
-                    showStatus('Payment confirmed! Returning...', 'success');
-                    setTimeout(returnToApp, 1000);
-                }
-            } catch (error) {
-                addDebugLog(`❌ Quick check error: ${error.message}`);
+                showStatus('Please return to Telegram manually', 'info');
             }
         }
     </script>
