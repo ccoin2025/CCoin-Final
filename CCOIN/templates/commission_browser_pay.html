@@ -147,10 +147,13 @@
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
-        // RPC جایگزین: Ankr رایگان (برای تست؛ کلید Helius اضافه کن اگر لازم)
-        const RPC_URL = 'https://rpc.ankr.com/solana';
-        // Fallback RPC (Helius - کلید رایگان بگیر از helius.xyz)
-        const FALLBACK_RPC = 'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY'; // جایگزین کن
+        // RPCهای متعدد برای fallback
+        const RPC_URLS = [
+            'https://rpc.ankr.com/solana',
+            'https://solana-api.projectserum.com',
+            'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY', // کلید Helius رو جایگزین کن
+            // 'https://your-quicknode-endpoint.quicknode.pro/your-token/' // اگر QuickNode داری اضافه کن
+        ];
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -163,25 +166,22 @@
             if (btn) btn.disabled = disabled;
         }
 
-        // تابع helper برای گرفتن blockhash با retry و fallback
+        // تابع helper برای گرفتن blockhash با retry و چند RPC
         async function getBlockhashWithRetry(maxRetries = 3) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-                    const { blockhash } = await connection.getLatestBlockhash();
-                    return blockhash;
-                } catch (error) {
-                    console.error(`RPC attempt ${i + 1} failed:`, error);
-                    if (i === maxRetries - 1 && FALLBACK_RPC !== 'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY') {
-                        // Fallback به Helius
-                        const fallbackConn = new solanaWeb3.Connection(FALLBACK_RPC, 'confirmed');
-                        const { blockhash } = await fallbackConn.getLatestBlockhash();
+            for (let rpc of RPC_URLS) {
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const connection = new solanaWeb3.Connection(rpc, 'confirmed');
+                        const { blockhash } = await connection.getLatestBlockhash();
+                        console.log(`Blockhash fetched from ${rpc}`);
                         return blockhash;
+                    } catch (error) {
+                        console.error(`RPC ${rpc} attempt ${i + 1} failed:`, error);
+                        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1))); // Delay تصاعدی
                     }
-                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Delay
                 }
             }
-            throw new Error('Failed to get blockhash after retries');
+            return null; // اگر همه fail کردن، null برگردون
         }
 
         // باز کردن Phantom
@@ -197,7 +197,7 @@
                     // روش 1: استفاده از Extension
                     await payWithExtension();
                 } else {
-                    // روش 2: باز کردن اپ موبایل با Solana Pay و serialized transaction
+                    // روش 2: باز کردن اپ موبایل با Solana Pay
                     await openPhantomApp();
                 }
 
@@ -218,7 +218,7 @@
 
                 showStatus('Creating transaction...', 'info');
 
-                const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
+                const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
 
                 // تنظیم Compute Budget برای کاهش فی
@@ -238,8 +238,12 @@
                     })
                 );
 
-                // استفاده از helper برای blockhash
-                transaction.recentBlockhash = await getBlockhashWithRetry();
+                // گرفتن blockhash
+                const blockhash = await getBlockhashWithRetry();
+                if (!blockhash) {
+                    throw new Error('Could not fetch blockhash. Please try again.');
+                }
+                transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
                 showStatus('Please approve the transaction...', 'info');
@@ -259,7 +263,7 @@
 
             } catch (error) {
                 console.error('Extension payment failed:', error);
-                showStatus('Payment cancelled or failed', 'error');
+                showStatus('Payment cancelled or failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
@@ -269,7 +273,7 @@
             try {
                 showStatus('Preparing transaction for Phantom app...', 'info');
 
-                const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
+                const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
 
                 // تنظیم Compute Budget برای کاهش فی
@@ -289,16 +293,21 @@
                     })
                 );
 
-                // استفاده از helper برای blockhash
-                transaction.recentBlockhash = await getBlockhashWithRetry();
-                // feePayer بعداً توسط Phantom تنظیم می‌شه
+                // گرفتن blockhash
+                const blockhash = await getBlockhashWithRetry();
+                if (blockhash) {
+                    transaction.recentBlockhash = blockhash;
+                } else {
+                    console.warn('No blockhash; Phantom will fetch it.');
+                    // اگر blockhash نباشه، Phantom خودش می‌گیره
+                }
 
                 // سریالایز تراکنش بدون امضا
                 const serializedTx = transaction.serialize({ requireAllSignatures: false }).toString('base64');
 
                 // ساخت Solana Pay URL با transaction
                 const solanaPayUrl = `solana:${encodeURIComponent(
-                    `https://api.mainnet-beta.solana.com?transaction=${serializedTx}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`
+                    `${RPC_URLS[0]}?transaction=${serializedTx}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`
                 )}`;
 
                 showStatus('Opening Phantom app...', 'info');
@@ -319,7 +328,7 @@
             }
         }
 
-        // بررسی مداوم وضعیت پرداخت (از کد قبلی)
+        // بررسی مداوم وضعیت پرداخت
         function checkPaymentLoop() {
             let attempts = 0;
             const maxAttempts = 30; // 30 * 3 = 90 ثانیه
