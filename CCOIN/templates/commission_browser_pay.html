@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Pay Commission</title>
     <style>
+        /* همون style های قبلی... */
         body {
             font-family: 'Arial', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -197,6 +198,7 @@
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
+        const botUsername = '{{ bot_username }}';  // از backend می‌گیریم
         
         const RPC_URL = 'https://api.mainnet-beta.solana.com';
         let debugMode = true;
@@ -260,7 +262,6 @@
 
                 const transaction = new solanaWeb3.Transaction();
 
-                // افزودن compute budget
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
                 );
@@ -269,7 +270,6 @@
                 );
                 addDebugLog('Added compute budget: 1000 CU @ 1 microLamport');
 
-                // Transfer instruction
                 const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
@@ -286,7 +286,6 @@
                 showStatus('Please approve in Phantom...', 'info');
                 addDebugLog('Waiting for user approval...');
 
-                // امضا و ارسال
                 const { signature } = await window.solana.signAndSendTransaction(transaction);
                 addDebugLog(`✅ Transaction sent: ${signature}`);
 
@@ -297,10 +296,11 @@
 
                 showStatus('Confirming on server...', 'info');
 
-                // تایید در سرور
                 await confirmOnServer(signature);
 
                 showStatus('Payment successful! ✅', 'success');
+                addDebugLog('Redirecting to app...');
+                
                 setTimeout(returnToApp, 2000);
 
             } catch (error) {
@@ -341,7 +341,6 @@
                 addDebugLog(`Checking payment status... (${attempts}/${maxAttempts})`);
 
                 try {
-                    // ✅ اضافه کردن telegram_id به query string
                     const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
                     const data = await response.json();
 
@@ -367,7 +366,6 @@
             }, 3000);
         }
 
-        // ✅ اصلاح شده: اضافه کردن telegram_id به request body
         async function confirmOnServer(signature) {
             try {
                 addDebugLog('Sending confirmation to server...');
@@ -376,7 +374,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        telegram_id: telegramId,  // ✅ اضافه شد
+                        telegram_id: telegramId,
                         signature: signature,
                         amount: commissionAmount,
                         recipient: adminWallet
@@ -388,27 +386,83 @@
                 
                 if (data.success) {
                     addDebugLog('✅ Commission confirmed on server!');
+                    return true;
                 } else {
                     addDebugLog(`⚠️ Server response not successful: ${data.message}`);
+                    return false;
                 }
             } catch (error) {
                 addDebugLog(`❌ Server confirmation error: ${error.message}`);
                 console.error('Server confirmation error:', error);
+                return false;
             }
         }
 
+        // ✅ اصلاح شده: Deep Link صحیح به Telegram Mini App
         function returnToApp() {
             addDebugLog('Returning to Telegram app...');
-            window.location.href = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
+            
+            // روش 1: Deep Link به Mini App (برای موبایل)
+            const deepLink = `https://t.me/${botUsername}/app`;
+            
+            // روش 2: Telegram Web App (برای دسکتاپ)
+            const webAppLink = `tg://resolve?domain=${botUsername}&appname=app`;
+            
+            // تشخیص موبایل یا دسکتاپ
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            
+            addDebugLog(`Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
+            addDebugLog(`Redirect URL: ${isMobile ? webAppLink : deepLink}`);
+            
+            if (isMobile) {
+                // موبایل: استفاده از tg:// protocol
+                window.location.href = webAppLink;
+                
+                // Fallback بعد از 2 ثانیه
+                setTimeout(() => {
+                    window.location.href = deepLink;
+                }, 2000);
+            } else {
+                // دسکتاپ: باز کردن در تب جدید
+                window.open(deepLink, '_blank');
+                
+                // نمایش پیام به کاربر
+                showStatus('Please return to Telegram app manually', 'info');
+                addDebugLog('Desktop: opened in new tab');
+            }
         }
 
         window.addEventListener('load', () => {
             addDebugLog('=== Page Loaded ===');
             addDebugLog(`Telegram ID: ${telegramId}`);
             addDebugLog(`Amount: ${commissionAmount} SOL`);
+            addDebugLog(`Bot Username: ${botUsername}`);
             addDebugLog(`Admin Wallet: ${adminWallet.substring(0, 8)}...`);
-            addDebugLog(`Phantom Extension: ${window.solana && window.solana.isPhantom ? 'Detected' : 'Not detected'}`);
         });
+
+        // ✅ اضافه: Handle page visibility برای تشخیص برگشت از Phantom
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                addDebugLog('🔄 Page became visible again');
+                // بررسی وضعیت پرداخت
+                checkPaymentStatusOnce();
+            }
+        });
+
+        async function checkPaymentStatusOnce() {
+            try {
+                const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
+                const data = await response.json();
+                
+                if (data.commission_paid) {
+                    addDebugLog('✅ Payment confirmed on page return!');
+                    showStatus('Payment confirmed! Returning to app...', 'success');
+                    setTimeout(returnToApp, 1000);
+                }
+            } catch (error) {
+                addDebugLog(`Status check error: ${error.message}`);
+            }
+        }
     </script>
 </body>
 </html>
