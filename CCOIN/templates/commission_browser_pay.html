@@ -238,28 +238,42 @@
             return JSON.parse(new TextDecoder().decode(decrypted));
         }
 
+        // ✅ Build redirect URL with state
+        function buildRedirectUrl(state) {
+            const baseUrl = window.location.origin + window.location.pathname;
+            const params = new URLSearchParams({
+                telegram_id: telegramId,
+                ...state
+            });
+            return `${baseUrl}?${params.toString()}`;
+        }
+
         // ✅ Step 1: Connect to Phantom
         async function connectPhantom() {
             try {
                 addDebugLog('🔐 Generating encryption keys...');
                 dappKeyPair = generateDappKeyPair();
 
+                // ✅ Encode secretKey to base64 for URL
+                const secretKeyB64 = btoa(String.fromCharCode(...dappKeyPair.secretKey));
+
+                const redirectUrl = buildRedirectUrl({
+                    step: 'connect',
+                    dapp_key: dappKeyPair.publicKey,
+                    dapp_secret: secretKeyB64  // Pass in URL
+                });
+
                 const params = new URLSearchParams({
                     dapp_encryption_public_key: dappKeyPair.publicKey,
                     cluster: 'mainnet-beta',
                     app_url: window.location.origin,
-                    redirect_link: window.location.href + '?connect=true'
+                    redirect_link: redirectUrl
                 });
 
                 const connectUrl = `${PHANTOM_CONNECT_URL}?${params.toString()}`;
                 addDebugLog('🔗 Redirecting to Phantom for connection...');
+                addDebugLog(`Redirect URL: ${redirectUrl.substring(0, 80)}...`);
                 
-                // Save keypair to localStorage
-                localStorage.setItem(`phantom_kp_${telegramId}`, JSON.stringify({
-                    publicKey: dappKeyPair.publicKey,
-                    secretKey: Array.from(dappKeyPair.secretKey)
-                }));
-
                 window.location.href = connectUrl;
             } catch (error) {
                 addDebugLog(`❌ Connect error: ${error.message}`);
@@ -269,14 +283,20 @@
         }
 
         // ✅ Step 2: Sign and send transaction
-        async function signAndSendTransaction() {
+        async function signAndSendTransaction(dappPubKey, dappSecretB64, walletPubKey, sessionToken) {
             try {
-                if (!walletPublicKey || !sharedSecret) {
-                    throw new Error('Wallet not connected');
-                }
-
                 addDebugLog('📝 Building transaction...');
                 showStatus('Creating transaction...', 'info');
+
+                // Reconstruct keypair from URL params
+                const secretKeyArray = new Uint8Array(atob(dappSecretB64).split('').map(c => c.charCodeAt(0)));
+                dappKeyPair = {
+                    publicKey: dappPubKey,
+                    secretKey: secretKeyArray
+                };
+
+                walletPublicKey = walletPubKey;
+                session = sessionToken;
 
                 const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
                 const { blockhash } = await connection.getLatestBlockhash('finalized');
@@ -309,6 +329,12 @@
                     verifySignatures: false
                 });
 
+                // Recreate shared secret
+                const urlParams = new URLSearchParams(window.location.search);
+                const phantomKey = urlParams.get('phantom_encryption_public_key');
+                const phantomPubKey = bs58.decode(phantomKey);
+                sharedSecret = nacl.box.before(phantomPubKey, dappKeyPair.secretKey);
+
                 const payload = {
                     session: session,
                     transaction: bs58.encode(serialized)
@@ -316,10 +342,19 @@
 
                 const encrypted = encryptPayload(payload, sharedSecret);
 
+                const redirectUrl = buildRedirectUrl({
+                    step: 'sign',
+                    dapp_key: dappPubKey,
+                    dapp_secret: dappSecretB64,
+                    phantom_key: phantomKey,
+                    wallet_key: walletPubKey,
+                    session: sessionToken
+                });
+
                 const params = new URLSearchParams({
                     dapp_encryption_public_key: dappKeyPair.publicKey,
                     nonce: encrypted.nonce,
-                    redirect_link: window.location.href + '?tx=true',
+                    redirect_link: redirectUrl,
                     payload: encrypted.data
                 });
 
@@ -329,6 +364,7 @@
                 window.location.href = signUrl;
             } catch (error) {
                 addDebugLog(`❌ Transaction error: ${error.message}`);
+                console.error(error);
                 showStatus('Transaction failed', 'error');
                 disablePayButton(false);
             }
@@ -337,74 +373,64 @@
         // ✅ Handle redirect from Phantom
         async function handlePhantomRedirect() {
             const urlParams = new URLSearchParams(window.location.search);
+            const step = urlParams.get('step');
 
-            // Load keypair from localStorage
-            const storedKp = localStorage.getItem(`phantom_kp_${telegramId}`);
-            if (!storedKp) {
-                addDebugLog('❌ No stored keypair found');
-                return;
-            }
-
-            const kpData = JSON.parse(storedKp);
-            dappKeyPair = {
-                publicKey: kpData.publicKey,
-                secretKey: new Uint8Array(kpData.secretKey)
-            };
+            addDebugLog(`🔄 Redirect step: ${step || 'none'}`);
 
             // Handle connection redirect
-            if (urlParams.get('connect') === 'true') {
+            if (step === 'connect') {
                 const phantomKey = urlParams.get('phantom_encryption_public_key');
                 const nonce = urlParams.get('nonce');
                 const data = urlParams.get('data');
+                const dappKey = urlParams.get('dapp_key');
+                const dappSecretB64 = urlParams.get('dapp_secret');
 
-                if (phantomKey && nonce && data) {
+                if (phantomKey && nonce && data && dappKey && dappSecretB64) {
                     try {
                         addDebugLog('🔓 Decrypting connection response...');
                         
+                        // Reconstruct keypair
+                        const secretKeyArray = new Uint8Array(atob(dappSecretB64).split('').map(c => c.charCodeAt(0)));
+                        dappKeyPair = {
+                            publicKey: dappKey,
+                            secretKey: secretKeyArray
+                        };
+
                         const phantomPubKey = bs58.decode(phantomKey);
                         sharedSecret = nacl.box.before(phantomPubKey, dappKeyPair.secretKey);
                         
                         const decrypted = decryptPayload(data, nonce, sharedSecret);
                         
-                        walletPublicKey = decrypted.public_key;
-                        session = decrypted.session;
+                        const walletPubKey = decrypted.public_key;
+                        const sessionToken = decrypted.session;
 
-                        addDebugLog(`✅ Connected: ${walletPublicKey.substring(0, 12)}...`);
-                        
-                        // Save to localStorage
-                        localStorage.setItem(`phantom_session_${telegramId}`, JSON.stringify({
-                            publicKey: walletPublicKey,
-                            session: session,
-                            sharedSecret: Array.from(sharedSecret)
-                        }));
-
-                        // Clean URL
-                        window.history.replaceState({}, document.title, window.location.pathname + `?telegram_id=${telegramId}`);
+                        addDebugLog(`✅ Connected: ${walletPubKey.substring(0, 12)}...`);
 
                         // Now sign transaction
-                        await signAndSendTransaction();
+                        await signAndSendTransaction(dappKey, dappSecretB64, walletPubKey, sessionToken);
                     } catch (error) {
                         addDebugLog(`❌ Connection decrypt error: ${error.message}`);
+                        console.error(error);
                         showStatus('Connection failed', 'error');
                     }
                 }
             }
 
             // Handle transaction redirect
-            if (urlParams.get('tx') === 'true') {
+            if (step === 'sign') {
                 const nonce = urlParams.get('nonce');
                 const data = urlParams.get('data');
+                const dappSecretB64 = urlParams.get('dapp_secret');
+                const phantomKey = urlParams.get('phantom_key');
 
-                if (nonce && data) {
+                if (nonce && data && dappSecretB64 && phantomKey) {
                     try {
                         addDebugLog('🔓 Decrypting transaction response...');
                         
-                        // Load session
-                        const storedSession = localStorage.getItem(`phantom_session_${telegramId}`);
-                        if (!storedSession) throw new Error('No session found');
-                        
-                        const sessionData = JSON.parse(storedSession);
-                        sharedSecret = new Uint8Array(sessionData.sharedSecret);
+                        // Reconstruct shared secret
+                        const secretKeyArray = new Uint8Array(atob(dappSecretB64).split('').map(c => c.charCodeAt(0)));
+                        const phantomPubKey = bs58.decode(phantomKey);
+                        sharedSecret = nacl.box.before(phantomPubKey, secretKeyArray);
                         
                         const decrypted = decryptPayload(data, nonce, sharedSecret);
                         
@@ -430,20 +456,17 @@
                         addDebugLog(`📥 Server: ${JSON.stringify(result)}`);
 
                         if (result.success) {
-                            // Clean up
-                            localStorage.removeItem(`phantom_kp_${telegramId}`);
-                            localStorage.removeItem(`phantom_session_${telegramId}`);
-                            
                             showStatus('Payment successful! ✅', 'success');
                             addDebugLog('🎉 CONFIRMED! Redirecting...');
                             
                             setTimeout(returnToApp, 2000);
                         } else {
                             showStatus('Server confirmation failed', 'error');
-                            addDebugLog(`❌ Server error: ${result.message}`);
+                            addDebugLog(`❌ Server error: ${result.message || 'unknown'}`);
                         }
                     } catch (error) {
                         addDebugLog(`❌ TX decrypt error: ${error.message}`);
+                        console.error(error);
                         showStatus('Transaction failed', 'error');
                     }
                 }
@@ -487,6 +510,7 @@
             addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
             addDebugLog(`🤖 Bot: ${botUsername}`);
+            addDebugLog(`📍 URL: ${window.location.href.substring(0, 100)}...`);
 
             // Check if redirected from Phantom
             await handlePhantomRedirect();
