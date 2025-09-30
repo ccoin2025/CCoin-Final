@@ -147,7 +147,10 @@
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
-        const RPC_URL = 'https://api.mainnet-beta.solana.com';
+        // RPC جایگزین: Ankr رایگان (برای تست؛ کلید Helius اضافه کن اگر لازم)
+        const RPC_URL = 'https://rpc.ankr.com/solana';
+        // Fallback RPC (Helius - کلید رایگان بگیر از helius.xyz)
+        const FALLBACK_RPC = 'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY'; // جایگزین کن
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -158,6 +161,27 @@
         function disablePayButton(disabled) {
             const btn = document.getElementById('pay-btn');
             if (btn) btn.disabled = disabled;
+        }
+
+        // تابع helper برای گرفتن blockhash با retry و fallback
+        async function getBlockhashWithRetry(maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
+                    const { blockhash } = await connection.getLatestBlockhash();
+                    return blockhash;
+                } catch (error) {
+                    console.error(`RPC attempt ${i + 1} failed:`, error);
+                    if (i === maxRetries - 1 && FALLBACK_RPC !== 'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY') {
+                        // Fallback به Helius
+                        const fallbackConn = new solanaWeb3.Connection(FALLBACK_RPC, 'confirmed');
+                        const { blockhash } = await fallbackConn.getLatestBlockhash();
+                        return blockhash;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Delay
+                }
+            }
+            throw new Error('Failed to get blockhash after retries');
         }
 
         // باز کردن Phantom
@@ -214,8 +238,8 @@
                     })
                 );
 
-                const { blockhash } = await connection.getLatestBlockhash();
-                transaction.recentBlockhash = blockhash;
+                // استفاده از helper برای blockhash
+                transaction.recentBlockhash = await getBlockhashWithRetry();
                 transaction.feePayer = userPublicKey;
 
                 showStatus('Please approve the transaction...', 'info');
@@ -256,17 +280,17 @@
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0 })
                 );
 
-                // Transfer
+                // Transfer (placeholder fromPubkey - Phantom جایگزین می‌کنه)
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: new solanaWeb3.PublicKey('11111111111111111111111111111111'), // placeholder
+                        fromPubkey: new solanaWeb3.PublicKey('11111111111111111111111111111111'),
                         toPubkey: new solanaWeb3.PublicKey(adminWallet),
                         lamports: Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
                     })
                 );
 
-                const { blockhash } = await connection.getLatestBlockhash();
-                transaction.recentBlockhash = blockhash;
+                // استفاده از helper برای blockhash
+                transaction.recentBlockhash = await getBlockhashWithRetry();
                 // feePayer بعداً توسط Phantom تنظیم می‌شه
 
                 // سریالایز تراکنش بدون امضا
@@ -295,7 +319,7 @@
             }
         }
 
-        // بررسی مداوم وضعیت پرداخت
+        // بررسی مداوم وضعیت پرداخت (از کد قبلی)
         function checkPaymentLoop() {
             let attempts = 0;
             const maxAttempts = 30; // 30 * 3 = 90 ثانیه
