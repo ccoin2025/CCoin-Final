@@ -138,7 +138,7 @@
         <div class="commission-info">
             <div class="amount" id="commission-amount">{{ commission_amount }} SOL</div>
             <div>Network Fee Required</div>
-            <div class="fee-info">⚡ Optimized network fee (~0.000005 SOL)</div>
+            <div class="fee-info">⚡ Minimum network fee (~0.000005 SOL)</div>
         </div>
 
         <div id="status" class="status"></div>
@@ -162,14 +162,13 @@
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         
-        // RPCهای متعدد برای اطمینان
         const RPC_URLS = [
             'https://api.mainnet-beta.solana.com',
             'https://rpc.ankr.com/solana',
             'https://solana-api.projectserum.com'
         ];
 
-        let debugMode = true; // برای دیباگ
+        let debugMode = true;
 
         function addDebugLog(message) {
             if (!debugMode) return;
@@ -193,104 +192,96 @@
             if (btn) btn.disabled = disabled;
         }
 
-        // تابع helper برای گرفتن blockhash با retry
         async function getBlockhashWithRetry(maxRetries = 3) {
-            addDebugLog('Attempting to fetch blockhash...');
+            addDebugLog('Fetching blockhash...');
             
             for (let rpcIndex = 0; rpcIndex < RPC_URLS.length; rpcIndex++) {
                 const rpc = RPC_URLS[rpcIndex];
                 
                 for (let i = 0; i < maxRetries; i++) {
                     try {
-                        addDebugLog(`Trying RPC ${rpcIndex + 1}/${RPC_URLS.length}, attempt ${i + 1}/${maxRetries}: ${rpc}`);
+                        addDebugLog(`RPC ${rpcIndex + 1}/${RPC_URLS.length}, attempt ${i + 1}`);
                         
                         const connection = new solanaWeb3.Connection(rpc, 'confirmed');
                         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
                         
-                        addDebugLog(`✅ Blockhash received: ${blockhash.substring(0, 10)}...`);
+                        addDebugLog(`✅ Blockhash: ${blockhash.substring(0, 10)}...`);
                         return { blockhash, lastValidBlockHeight, connection };
                     } catch (error) {
-                        addDebugLog(`❌ RPC ${rpc} attempt ${i + 1} failed: ${error.message}`);
+                        addDebugLog(`❌ Failed: ${error.message}`);
                         
                         if (i < maxRetries - 1) {
-                            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                            await new Promise(resolve => setTimeout(resolve, 1000));
                         }
                     }
                 }
             }
             
-            addDebugLog('❌ All RPC attempts failed!');
             return null;
         }
 
-        // باز کردن Phantom
         async function openPhantom() {
             try {
                 disablePayButton(true);
-                addDebugLog('=== Payment Process Started ===');
+                addDebugLog('=== Payment Started ===');
                 showStatus('Opening Phantom...', 'info');
 
-                // بررسی Extension
                 const hasExtension = window.solana && window.solana.isPhantom;
-                addDebugLog(`Phantom extension detected: ${hasExtension}`);
+                addDebugLog(`Extension: ${hasExtension}`);
 
                 if (hasExtension) {
-                    addDebugLog('Using Extension method');
                     await payWithExtension();
                 } else {
-                    addDebugLog('Using Mobile App method');
                     await openPhantomApp();
                 }
 
             } catch (error) {
                 console.error('Payment error:', error);
-                addDebugLog(`❌ Payment error: ${error.message}`);
+                addDebugLog(`❌ Error: ${error.message}`);
                 showStatus('Payment failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
 
-        // پرداخت با Extension
+        // 🔥 نسخه جدید با استفاده از signTransaction به جای signAndSendTransaction
         async function payWithExtension() {
             try {
                 showStatus('Connecting to wallet...', 'info');
-                addDebugLog('Requesting wallet connection...');
+                addDebugLog('Connecting wallet...');
 
                 const resp = await window.solana.connect();
                 const userPublicKey = resp.publicKey;
-                addDebugLog(`✅ Wallet connected: ${userPublicKey.toString()}`);
+                addDebugLog(`✅ Connected: ${userPublicKey.toString()}`);
 
-                showStatus('Creating transaction...', 'info');
+                showStatus('Creating optimized transaction...', 'info');
 
-                // گرفتن blockhash
                 const blockHashData = await getBlockhashWithRetry();
                 if (!blockHashData) {
-                    throw new Error('Could not fetch blockhash from any RPC. Please check your network connection.');
+                    throw new Error('Could not fetch blockhash. Please try again.');
                 }
 
                 const { blockhash, connection } = blockHashData;
+                
+                // 🔥 ساخت تراکنش با compute budget بهینه
                 const transaction = new solanaWeb3.Transaction();
 
-                addDebugLog('Adding compute budget instructions...');
+                addDebugLog('Setting compute budget: 300 CU @ 1 microLamport');
                 
-                // تنظیم Compute Budget بهینه
+                // تنظیم کمترین فی ممکن
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ 
-                        units: 300
+                        units: 300  // فقط 300 واحد برای transfer
                     })
                 );
                 
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ 
-                        microLamports: 1
+                        microLamports: 1  // کمترین priority fee
                     })
                 );
 
-                addDebugLog('Adding transfer instruction...');
-                
-                // Transfer instruction
                 const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
-                addDebugLog(`Transfer amount: ${lamports} lamports (${commissionAmount} SOL)`);
+                addDebugLog(`Transfer: ${lamports} lamports (${commissionAmount} SOL)`);
                 
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
@@ -303,68 +294,77 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
-                addDebugLog('Transaction created, requesting signature...');
+                // 🔥 استفاده از signTransaction به جای signAndSendTransaction
+                // این باعث میشه Phantom نتونه priority fee رو تغییر بده
+                addDebugLog('Requesting signature (without auto-fee)...');
                 showStatus('Please approve the transaction...', 'info');
 
-                const signed = await window.solana.signAndSendTransaction(transaction);
-                addDebugLog(`✅ Transaction sent: ${signed.signature}`);
+                const signedTransaction = await window.solana.signTransaction(transaction);
+                addDebugLog('✅ Transaction signed by user');
 
-                showStatus('Transaction sent! Confirming...', 'info');
+                showStatus('Sending transaction...', 'info');
+                addDebugLog('Sending to network...');
 
-                await connection.confirmTransaction(signed.signature, 'confirmed');
-                addDebugLog('✅ Transaction confirmed!');
+                // حالا خودمون transaction رو send می‌کنیم
+                const signature = await connection.sendRawTransaction(
+                    signedTransaction.serialize(),
+                    {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    }
+                );
+
+                addDebugLog(`✅ Sent: ${signature}`);
+                showStatus('Confirming transaction...', 'info');
+
+                await connection.confirmTransaction(signature, 'confirmed');
+                addDebugLog('✅ Confirmed!');
 
                 showStatus('Payment successful! ✅', 'success');
 
-                // ثبت در سرور
-                await confirmOnServer(signed.signature);
+                await confirmOnServer(signature);
 
                 setTimeout(returnToApp, 2000);
 
             } catch (error) {
-                console.error('Extension payment failed:', error);
-                addDebugLog(`❌ Extension payment failed: ${error.message}`);
+                console.error('Payment failed:', error);
+                addDebugLog(`❌ Failed: ${error.message}`);
                 showStatus('Payment cancelled or failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
 
-        // باز کردن اپ Phantom (موبایل) - ساده‌شده
         async function openPhantomApp() {
             try {
-                addDebugLog('Opening Phantom mobile app...');
+                addDebugLog('Opening mobile app...');
                 showStatus('Opening Phantom app...', 'info');
 
-                // استفاده از Solana Pay ساده (بدون blockhash)
                 const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Commission Payment')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
                 
-                addDebugLog(`Solana Pay URL: ${solanaPayUrl.substring(0, 100)}...`);
+                addDebugLog(`URL: ${solanaPayUrl.substring(0, 100)}...`);
                 
-                // هدایت به Phantom
                 window.location.href = solanaPayUrl;
 
-                // شروع بررسی وضعیت پرداخت بعد از 5 ثانیه
                 setTimeout(() => {
-                    addDebugLog('Starting payment status check loop...');
+                    addDebugLog('Starting payment check...');
                     checkPaymentLoop();
                 }, 5000);
 
             } catch (error) {
                 console.error('Mobile payment failed:', error);
-                addDebugLog(`❌ Mobile payment failed: ${error.message}`);
+                addDebugLog(`❌ Failed: ${error.message}`);
                 showStatus('Payment failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
 
-        // بررسی مداوم وضعیت پرداخت
         function checkPaymentLoop() {
             let attempts = 0;
-            const maxAttempts = 30; // 30 * 3 = 90 ثانیه
+            const maxAttempts = 30;
 
             const interval = setInterval(async () => {
                 attempts++;
-                addDebugLog(`Checking payment status... (${attempts}/${maxAttempts})`);
+                addDebugLog(`Checking... (${attempts}/${maxAttempts})`);
 
                 try {
                     const response = await fetch('/airdrop/commission_status');
@@ -372,27 +372,26 @@
 
                     if (data.commission_paid) {
                         clearInterval(interval);
-                        addDebugLog('✅ Payment confirmed by server!');
+                        addDebugLog('✅ Payment confirmed!');
                         showStatus('Payment confirmed! ✅', 'success');
                         setTimeout(returnToApp, 2000);
                     } else if (attempts >= maxAttempts) {
                         clearInterval(interval);
-                        addDebugLog('⏱️ Timeout reached');
-                        showStatus('Timeout. Please try again or check manually.', 'error');
+                        addDebugLog('⏱️ Timeout');
+                        showStatus('Timeout. Please try again.', 'error');
                         disablePayButton(false);
                     } else {
-                        showStatus(`Waiting for payment... (${attempts}/${maxAttempts})`, 'info');
+                        showStatus(`Waiting... (${attempts}/${maxAttempts})`, 'info');
                     }
                 } catch (error) {
-                    addDebugLog(`❌ Status check error: ${error.message}`);
+                    addDebugLog(`❌ Check error: ${error.message}`);
                 }
             }, 3000);
         }
 
-        // ثبت در سرور
         async function confirmOnServer(signature) {
             try {
-                addDebugLog('Sending confirmation to server...');
+                addDebugLog('Confirming on server...');
                 
                 const response = await fetch('/airdrop/confirm_commission', {
                     method: 'POST',
@@ -405,10 +404,9 @@
                 });
 
                 const data = await response.json();
-                addDebugLog(`Server response: ${JSON.stringify(data)}`);
+                addDebugLog(`Server: ${JSON.stringify(data)}`);
             } catch (error) {
-                addDebugLog(`❌ Server confirmation error: ${error.message}`);
-                console.error('Server confirmation error:', error);
+                addDebugLog(`❌ Server error: ${error.message}`);
             }
         }
 
@@ -417,14 +415,12 @@
             window.location.href = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
         }
 
-        // بررسی اولیه
         window.addEventListener('load', () => {
             addDebugLog('=== Page Loaded ===');
-            addDebugLog(`Telegram ID: ${telegramId}`);
-            addDebugLog(`Commission Amount: ${commissionAmount} SOL`);
-            addDebugLog(`Admin Wallet: ${adminWallet}`);
-            addDebugLog(`Phantom Extension: ${window.solana && window.solana.isPhantom ? 'Detected' : 'Not detected'}`);
-            addDebugLog(`Web3.js loaded: ${typeof solanaWeb3 !== 'undefined'}`);
+            addDebugLog(`ID: ${telegramId}`);
+            addDebugLog(`Amount: ${commissionAmount} SOL`);
+            addDebugLog(`Admin: ${adminWallet}`);
+            addDebugLog(`Extension: ${window.solana && window.solana.isPhantom ? 'Yes' : 'No'}`);
         });
     </script>
 </body>
