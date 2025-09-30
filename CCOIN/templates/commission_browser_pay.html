@@ -139,6 +139,12 @@
             overflow-y: auto;
             display: block;
         }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #ffd700;
+        }
     </style>
 </head>
 <body>
@@ -153,7 +159,9 @@
 
         <div id="status" class="status"></div>
 
-        <button class="btn" id="pay-btn" onclick="initiatePayment()">
+        <div id="loading" class="loading">Loading libraries...</div>
+
+        <button class="btn" id="pay-btn" onclick="initiatePayment()" style="display:none;">
             Continue to Phantom
         </button>
 
@@ -164,12 +172,28 @@
         <div id="debug-info" class="debug-info">🔍 Debug Log:<br></div>
     </div>
 
-    <!-- Libraries -->
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- Libraries - Load in specific order -->
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/index.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 
     <script>
+        // ✅ Wait for all libraries to load
+        let librariesLoaded = false;
+
+        function checkLibraries() {
+            if (typeof nacl !== 'undefined' && typeof bs58 !== 'undefined' && typeof solanaWeb3 !== 'undefined') {
+                librariesLoaded = true;
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('pay-btn').style.display = 'block';
+                addDebugLog('✅ All libraries loaded');
+                init();
+            } else {
+                addDebugLog('⏳ Waiting for libraries...');
+                setTimeout(checkLibraries, 100);
+            }
+        }
+
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
@@ -201,7 +225,8 @@
         }
 
         function disablePayButton(disabled) {
-            document.getElementById('pay-btn').disabled = disabled;
+            const btn = document.getElementById('pay-btn');
+            if (btn) btn.disabled = disabled;
         }
 
         // ✅ Generate keypair for encryption
@@ -260,7 +285,7 @@
                 const redirectUrl = buildRedirectUrl({
                     step: 'connect',
                     dapp_key: dappKeyPair.publicKey,
-                    dapp_secret: secretKeyB64  // Pass in URL
+                    dapp_secret: secretKeyB64
                 });
 
                 const params = new URLSearchParams({
@@ -271,12 +296,12 @@
                 });
 
                 const connectUrl = `${PHANTOM_CONNECT_URL}?${params.toString()}`;
-                addDebugLog('🔗 Redirecting to Phantom for connection...');
-                addDebugLog(`Redirect URL: ${redirectUrl.substring(0, 80)}...`);
+                addDebugLog('🔗 Redirecting to Phantom...');
                 
                 window.location.href = connectUrl;
             } catch (error) {
                 addDebugLog(`❌ Connect error: ${error.message}`);
+                console.error(error);
                 showStatus('Connection failed', 'error');
                 disablePayButton(false);
             }
@@ -303,7 +328,6 @@
                 
                 const transaction = new solanaWeb3.Transaction();
 
-                // Compute budget
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
                 );
@@ -311,7 +335,6 @@
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
                 );
 
-                // Transfer
                 const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
@@ -329,7 +352,6 @@
                     verifySignatures: false
                 });
 
-                // Recreate shared secret
                 const urlParams = new URLSearchParams(window.location.search);
                 const phantomKey = urlParams.get('phantom_encryption_public_key');
                 const phantomPubKey = bs58.decode(phantomKey);
@@ -377,7 +399,6 @@
 
             addDebugLog(`🔄 Redirect step: ${step || 'none'}`);
 
-            // Handle connection redirect
             if (step === 'connect') {
                 const phantomKey = urlParams.get('phantom_encryption_public_key');
                 const nonce = urlParams.get('nonce');
@@ -389,7 +410,6 @@
                     try {
                         addDebugLog('🔓 Decrypting connection response...');
                         
-                        // Reconstruct keypair
                         const secretKeyArray = new Uint8Array(atob(dappSecretB64).split('').map(c => c.charCodeAt(0)));
                         dappKeyPair = {
                             publicKey: dappKey,
@@ -406,7 +426,6 @@
 
                         addDebugLog(`✅ Connected: ${walletPubKey.substring(0, 12)}...`);
 
-                        // Now sign transaction
                         await signAndSendTransaction(dappKey, dappSecretB64, walletPubKey, sessionToken);
                     } catch (error) {
                         addDebugLog(`❌ Connection decrypt error: ${error.message}`);
@@ -416,7 +435,6 @@
                 }
             }
 
-            // Handle transaction redirect
             if (step === 'sign') {
                 const nonce = urlParams.get('nonce');
                 const data = urlParams.get('data');
@@ -427,7 +445,6 @@
                     try {
                         addDebugLog('🔓 Decrypting transaction response...');
                         
-                        // Reconstruct shared secret
                         const secretKeyArray = new Uint8Array(atob(dappSecretB64).split('').map(c => c.charCodeAt(0)));
                         const phantomPubKey = bs58.decode(phantomKey);
                         sharedSecret = nacl.box.before(phantomPubKey, secretKeyArray);
@@ -440,7 +457,6 @@
 
                         showStatus('Confirming on server...', 'info');
 
-                        // Confirm on server
                         const response = await fetch('/airdrop/confirm_commission', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -458,11 +474,10 @@
                         if (result.success) {
                             showStatus('Payment successful! ✅', 'success');
                             addDebugLog('🎉 CONFIRMED! Redirecting...');
-                            
                             setTimeout(returnToApp, 2000);
                         } else {
                             showStatus('Server confirmation failed', 'error');
-                            addDebugLog(`❌ Server error: ${result.message || 'unknown'}`);
+                            addDebugLog(`❌ Server: ${result.message || 'unknown'}`);
                         }
                     } catch (error) {
                         addDebugLog(`❌ TX decrypt error: ${error.message}`);
@@ -473,48 +488,48 @@
             }
         }
 
-        // ✅ Initiate payment
-        async function initiatePayment() {
+        function initiatePayment() {
+            if (!librariesLoaded) {
+                showStatus('Libraries not loaded yet', 'error');
+                return;
+            }
+            
             disablePayButton(true);
             addDebugLog('═══ Payment Started ═══');
             addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
             
             showStatus('Connecting to Phantom...', 'info');
-            await connectPhantom();
+            connectPhantom();
         }
 
-        // ✅ Return to Telegram app
         function returnToApp() {
             addDebugLog('🔙 Returning to Telegram...');
 
             const deepLink = `https://t.me/${botUsername}/app`;
             const webAppLink = `tg://resolve?domain=${botUsername}&appname=app`;
-
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
             if (isMobile) {
                 window.location.href = webAppLink;
-                setTimeout(() => {
-                    window.location.href = deepLink;
-                }, 2000);
+                setTimeout(() => window.location.href = deepLink, 2000);
             } else {
                 window.open(deepLink, '_blank');
                 showStatus('Please return to Telegram manually', 'info');
             }
         }
 
-        // ✅ On page load
-        window.addEventListener('load', async () => {
-            addDebugLog('═══ Page Loaded ═══');
+        function init() {
+            addDebugLog('═══ Page Initialized ═══');
             addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
             addDebugLog(`🤖 Bot: ${botUsername}`);
-            addDebugLog(`📍 URL: ${window.location.href.substring(0, 100)}...`);
+            
+            handlePhantomRedirect();
+        }
 
-            // Check if redirected from Phantom
-            await handlePhantomRedirect();
-        });
+        // Start checking for libraries
+        window.addEventListener('load', checkLibraries);
     </script>
 </body>
 </html>
