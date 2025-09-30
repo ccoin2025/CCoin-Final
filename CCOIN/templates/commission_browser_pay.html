@@ -285,79 +285,100 @@
             }
         }
 
-        async function payWithPhantom() {
-            let signature = null;
+       async function payWithPhantom() {
+           try {
+               showStatus('Connecting wallet...', 'info');
+               addDebugLog('🔌 Requesting wallet connection...');
 
-            try {
-                showStatus('Connecting wallet...', 'info');
-                addDebugLog('🔌 Requesting wallet connection...');
+               const resp = await window.solana.connect();
+               const userPublicKey = resp.publicKey;
+               addDebugLog(`✅ Connected: ${userPublicKey.toString().substring(0, 12)}...`);
 
-                const resp = await window.solana.connect();
-                const userPublicKey = resp.publicKey;
-                addDebugLog(`✅ Connected: ${userPublicKey.toString().substring(0, 12)}...`);
+               showStatus('Creating transaction...', 'info');
+               addDebugLog('📝 Building transaction...');
 
-                showStatus('Creating transaction...', 'info');
-                addDebugLog('📝 Building transaction...');
+               const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
+               const {blockhash} = await connection.getLatestBlockhash('finalized');
 
-                const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-                const { blockhash } = await connection.getLatestBlockhash('finalized');
-                addDebugLog(`🔗 Blockhash: ${blockhash.substring(0, 12)}...`);
+               const transaction = new solanaWeb3.Transaction();
 
-                const transaction = new solanaWeb3.Transaction();
+               transaction.add(
+                   solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({units: 1000})
+               );
+               transaction.add(
+                   solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({microLamports: 1})
+               );
 
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
-                );
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
-                );
-                addDebugLog('⚙️ Compute budget added');
+               const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
+               transaction.add(
+                   solanaWeb3.SystemProgram.transfer({
+                       fromPubkey: userPublicKey,
+                       toPubkey: new solanaWeb3.PublicKey(adminWallet),
+                       lamports: lamports
+                   })
+               );
 
-                const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
-                transaction.add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: userPublicKey,
-                        toPubkey: new solanaWeb3.PublicKey(adminWallet),
-                        lamports: lamports
-                    })
-                );
-                addDebugLog(`💸 Transfer: ${lamports} lamports`);
+               transaction.recentBlockhash = blockhash;
+               transaction.feePayer = userPublicKey;
 
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = userPublicKey;
+               showStatus('Please approve in Phantom...', 'info');
+               addDebugLog('⏳ Waiting for approval...');
 
-                showStatus('Please approve in Phantom...', 'info');
-                addDebugLog('⏳ Waiting for approval...');
-                addDebugLog('⚠️ Return to this page after approving!');
+               // ✅ ارسال transaction
+               const signed = await window.solana.signAndSendTransaction(transaction);
+               const signature = signed.signature;
 
-                // ✅ ارسال transaction
-                const signed = await window.solana.signAndSendTransaction(transaction);
-                signature = signed.signature;
+               addDebugLog(`✅ TX SENT: ${signature}`);
+               addDebugLog(`📍 https://solscan.io/tx/${signature}`);
 
-                addDebugLog(`✅ TX SENT: ${signature}`);
-                addDebugLog(`📍 https://solscan.io/tx/${signature}`);
+               savePendingTransaction(signature);
 
-                // ✅ ذخیره در localStorage
-                savePendingTransaction(signature);
+               showStatus('Transaction sent! Waiting 10 seconds...', 'info');
+               addDebugLog('⏳ Waiting 10s for blockchain confirmation...');
 
-                // ✅ شروع check loop در background
-                startBackgroundCheck(signature);
+               // ✅ صبر کن 10 ثانیه
+               await new Promise(resolve => setTimeout(resolve, 10000));
 
-                showStatus('Transaction sent! Confirming...', 'info');
+               // ✅ بعد از 10 ثانیه، از سرور بخواه که خودش check کنه
+               showStatus('Verifying on server...', 'info');
+               addDebugLog('📤 Asking server to verify manually...');
 
-            } catch (error) {
-                console.error('Payment failed:', error);
-                addDebugLog(`❌ FAILED: ${error.message}`);
+               const verifyResponse = await fetch('/airdrop/verify_commission_manual', {
+                   method: 'POST',
+                   headers: {'Content-Type': 'application/json'},
+                   body: JSON.stringify({
+                       telegram_id: telegramId
+                   })
+               });
 
-                if (error.message.includes('User rejected')) {
-                    showStatus('Payment cancelled', 'error');
-                } else {
-                    showStatus('Payment failed: ' + error.message, 'error');
-                }
+               const verifyData = await verifyResponse.json();
+               addDebugLog(`📥 Server response: ${JSON.stringify(verifyData)}`);
 
-                disablePayButton(false);
-            }
-        }
+               if (verifyData.success) {
+                   clearPendingTransaction();
+                   showStatus('Payment verified! ✅', 'success');
+                   addDebugLog('🎉 VERIFIED!');
+                   setTimeout(returnToApp, 2000);
+               } else {
+                   // اگه server پیدا نکرد، شروع background check
+                   addDebugLog('⚠️ Server could not verify yet, starting background check...');
+                   showStatus('Checking in background...', 'info');
+                   startBackgroundCheck(signature);
+               }
+
+           } catch (error) {
+               console.error('Payment failed:', error);
+               addDebugLog(`❌ FAILED: ${error.message}`);
+
+               if (error.message.includes('User rejected')) {
+                   showStatus('Payment cancelled', 'error');
+               } else {
+                   showStatus('Payment failed: ' + error.message, 'error');
+               }
+
+               disablePayButton(false);
+           }
+       }
 
         async function openPhantomApp() {
             showStatus('Opening Phantom app...', 'info');
