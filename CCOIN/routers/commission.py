@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET
+from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
 from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
@@ -62,6 +62,8 @@ async def commission_browser_pay(
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
+        "bot_username": BOT_USERNAME  # ✅ اضافه شد
+
     })
 
 @router.get("/pay", response_class=JSONResponse)
@@ -251,3 +253,4 @@ async def get_commission_status(
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
     }
+
