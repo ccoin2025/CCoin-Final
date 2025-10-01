@@ -61,10 +61,10 @@ async def commission_browser_pay(
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET,  # ✅ کاما اضافه شد
+        "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME
     })
-
+    
 @router.get("/pay", response_class=JSONResponse)
 @limiter.limit("10/minute")
 async def commission_payment_page(
