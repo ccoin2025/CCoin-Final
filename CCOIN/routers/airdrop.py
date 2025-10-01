@@ -149,9 +149,9 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
 @limiter.limit("3/minute")
 async def confirm_commission(request: Request, db: Session = Depends(get_db)):
     """✅ اصلاح شده: گرفتن telegram_id از body به جای session"""
-    
+
     body = await request.json()
-    telegram_id = body.get("telegram_id")  # ✅ اضافه شد
+    telegram_id = body.get("telegram_id")
     tx_signature = body.get("signature")
     amount = body.get("amount", COMMISSION_AMOUNT)
     recipient = body.get("recipient", ADMIN_WALLET)
@@ -195,10 +195,10 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
         for attempt in range(retries):
             try:
                 print(f"🔍 Verifying transaction (attempt {attempt + 1}/{retries}): {tx_signature}")
-                
+
                 tx_info = solana_client.get_transaction(
-                    tx_signature, 
-                    encoding="json", 
+                    tx_signature,
+                    encoding="json",
                     commitment="confirmed"
                 )
 
@@ -216,7 +216,12 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
                     if redis_client:
                         redis_client.setex(cache_key, 3600, "confirmed")
 
-                    return {"success": True, "message": "Commission confirmed successfully!"}
+                    # ✅ Return با redirect URL
+                    return {
+                        "success": True, 
+                        "message": "Commission confirmed successfully!",
+                        "redirect_url": f"/airdrop?telegram_id={telegram_id}"
+                    }
                 else:
                     error_msg = "Transaction failed or not found on blockchain"
                     print(f"❌ {error_msg}: {tx_signature}")
