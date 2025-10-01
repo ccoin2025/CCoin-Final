@@ -164,15 +164,11 @@
         <div id="debug-info" class="debug-info">🔍 Debug Log:<br></div>
     </div>
 
-    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
-
     <script>
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         const botUsername = '{{ bot_username }}';
-
-        const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
         function addDebugLog(message) {
             const debugDiv = document.getElementById('debug-info');
@@ -243,7 +239,7 @@
             }
         }
 
-        // ✅ Initiate payment with Phantom (اصلاح شده)
+        // ✅ Initiate payment - استفاده از Backend برای ساخت transaction
         async function initiatePayment() {
             disablePayButton(true);
             addDebugLog('═══ Payment Started ═══');
@@ -251,81 +247,17 @@
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
 
             try {
-                // Check if Phantom is available
-                const provider = window.solana;
+                // بررسی اگر در Phantom browser هستیم
+                const isPhantomBrowser = window.solana && window.solana.isPhantom;
+                addDebugLog(`🔍 Phantom detected: ${isPhantomBrowser}`);
 
-                if (!provider || !provider.isPhantom) {
-                    addDebugLog('❌ Phantom not detected');
-
-                    // Redirect to Phantom with return URL
-                    const returnUrl = encodeURIComponent(window.location.href);
-                    const phantomUrl = `https://phantom.app/ul/browse/${returnUrl}?ref=${window.location.origin}`;
-
-                    addDebugLog('🔗 Opening Phantom...');
-                    window.location.href = phantomUrl;
-                    return;
+                if (isPhantomBrowser) {
+                    // ✅ اگر در Phantom browser هستیم، از provider استفاده کنیم
+                    await payWithPhantomProvider();
+                } else {
+                    // ✅ اگر در مرورگر عادی هستیم، از deeplink استفاده کنیم
+                    await payWithDeeplink();
                 }
-
-                showStatus('Connecting wallet...', 'info');
-                addDebugLog('🔌 Requesting connection...');
-
-                const resp = await provider.connect();
-                const userPublicKey = resp.publicKey;
-                addDebugLog(`✅ Connected: ${userPublicKey.toString().substring(0, 12)}...`);
-
-                showStatus('Creating transaction...', 'info');
-                addDebugLog('📝 Building transaction...');
-
-                const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-                const { blockhash } = await connection.getLatestBlockhash('finalized');
-
-                const transaction = new solanaWeb3.Transaction();
-
-                // Low priority fee
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
-                );
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
-                );
-
-                const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
-                transaction.add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: userPublicKey,
-                        toPubkey: new solanaWeb3.PublicKey(adminWallet),
-                        lamports: lamports
-                    })
-                );
-
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = userPublicKey;
-
-                showStatus('Please approve in Phantom...', 'info');
-                addDebugLog('⏳ Waiting for signature...');
-
-                // ✅ استفاده از signTransaction به جای signAndSendTransaction
-                const signedTx = await provider.signTransaction(transaction);
-                addDebugLog('✅ Transaction signed');
-
-                showStatus('Sending transaction...', 'info');
-                addDebugLog('📡 Broadcasting to network...');
-
-                // ✅ ارسال دستی به شبکه
-                const signature = await connection.sendRawTransaction(signedTx.serialize());
-
-                addDebugLog(`✅ TX sent: ${signature}`);
-                addDebugLog(`📍 https://solscan.io/tx/${signature}`);
-
-                showStatus('Confirming on blockchain...', 'info');
-                addDebugLog('⏳ Waiting for confirmation...');
-
-                // ✅ تأیید transaction
-                await connection.confirmTransaction(signature, 'confirmed');
-                addDebugLog('✅ Transaction confirmed on blockchain');
-
-                // ✅ ارسال به backend برای ذخیره
-                await confirmTransaction(signature);
 
             } catch (error) {
                 console.error('Payment failed:', error);
@@ -339,6 +271,88 @@
 
                 disablePayButton(false);
             }
+        }
+
+        // ✅ پرداخت با Phantom Provider (وقتی در Phantom browser هستیم)
+        async function payWithPhantomProvider() {
+            showStatus('Connecting wallet...', 'info');
+            addDebugLog('🔌 Connecting via Phantom provider...');
+
+            const provider = window.solana;
+            await provider.connect();
+            const userPublicKey = provider.publicKey.toString();
+            addDebugLog(`✅ Connected: ${userPublicKey.substring(0, 12)}...`);
+
+            showStatus('Preparing transaction...', 'info');
+            addDebugLog('📝 Requesting transaction from backend...');
+
+            // ✅ دریافت transaction از backend
+            const response = await fetch('/commission/prepare_transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    telegram_id: telegramId,
+                    amount: commissionAmount,
+                    recipient: adminWallet
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to prepare transaction');
+            }
+
+            const data = await response.json();
+            addDebugLog('✅ Transaction received from backend');
+
+            // ✅ Deserialize transaction
+            const transactionBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+            
+            showStatus('Please approve in Phantom...', 'info');
+            addDebugLog('⏳ Waiting for signature...');
+
+            // ✅ امضا و ارسال با provider
+            const signedTx = await provider.signAndSendTransaction({
+                message: transactionBuffer
+            });
+
+            const signature = signedTx.signature;
+            addDebugLog(`✅ TX sent: ${signature}`);
+            addDebugLog(`📍 https://solscan.io/tx/${signature}`);
+
+            showStatus('Confirming on blockchain...', 'info');
+            
+            // ✅ صبر کنید تا تأیید شود
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // ✅ ارسال به backend برای تأیید
+            await confirmTransaction(signature);
+        }
+
+        // ✅ پرداخت با Deeplink (وقتی در مرورگر عادی هستیم)
+        async function payWithDeeplink() {
+            addDebugLog('📱 Using deeplink method...');
+            showStatus('Redirecting to Phantom...', 'info');
+
+            // ✅ ساخت Solana Pay URL
+            const amount = commissionAmount;
+            const recipient = adminWallet;
+            const label = encodeURIComponent('CCoin Commission');
+            const message = encodeURIComponent('Payment for airdrop eligibility');
+            const memo = encodeURIComponent(`User: ${telegramId}`);
+            
+            // ✅ Callback URL
+            const callbackUrl = encodeURIComponent(window.location.href);
+
+            // ✅ Solana Pay URL
+            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=${memo}`;
+            
+            addDebugLog(`🔗 Solana Pay URL: ${solanaPayUrl}`);
+
+            // ✅ Phantom universal link
+            const phantomUrl = `https://phantom.app/ul/v1/browse/${encodeURIComponent(solanaPayUrl)}?ref=${callbackUrl}`;
+
+            addDebugLog('🚀 Opening Phantom app...');
+            window.location.href = phantomUrl;
         }
 
         function returnToApp() {
