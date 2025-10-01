@@ -136,7 +136,10 @@ async def prepare_transaction(
             print(f"No wallet connected for user: {telegram_id}")
             raise HTTPException(status_code=400, detail="Wallet not connected")
 
-        # ساخت تراکنش با solders
+        # ✅ ساخت تراکنش با solders در backend
+        from solana.rpc.async_api import AsyncClient
+        
+        # ✅ استفاده از RPC endpoint خودتان (نه public endpoint)
         client = AsyncClient(SOLANA_RPC)
 
         # ساخت public keys
@@ -150,8 +153,8 @@ async def prepare_transaction(
         compute_limit_ix = set_compute_unit_limit(200_000)
         instructions.append(compute_limit_ix)
 
-        # INSTRUCTION 2: تنظیم Compute Unit Price
-        compute_price_ix = set_compute_unit_price(0)
+        # INSTRUCTION 2: تنظیم Compute Unit Price (حداقل)
+        compute_price_ix = set_compute_unit_price(1)
         instructions.append(compute_price_ix)
 
         # INSTRUCTION 3: Transfer اصلی
@@ -187,7 +190,7 @@ async def prepare_transaction(
 
         await client.close()
 
-        print(f"✅ Transaction prepared with minimal fee for user: {telegram_id}")
+        print(f"✅ Transaction prepared successfully for user: {telegram_id}")
 
         return {
             "success": True,
