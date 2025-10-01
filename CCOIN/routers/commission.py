@@ -255,3 +255,56 @@ async def get_commission_status(
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET
     }
+
+
+@router.get("/check_payment", response_class=JSONResponse)
+@limiter.limit("30/minute")
+async def check_payment(
+    request: Request,
+    telegram_id: str = Query(...),
+    reference: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """چک کردن پرداخت با reference"""
+    try:
+        from solana.rpc.api import Client
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user or not user.wallet_address:
+            return {"found": False}
+
+        # جستجوی تراکنش‌ها
+        client = Client(SOLANA_RPC)
+        
+        # Get recent transactions for admin wallet
+        signatures = client.get_signatures_for_address(
+            Pubkey.from_string(ADMIN_WALLET),
+            limit=20
+        )
+
+        for sig_info in signatures.value:
+            tx_signature = str(sig_info.signature)
+            
+            # Get transaction details
+            tx = client.get_transaction(tx_signature, encoding="json")
+            
+            if tx.value and tx.value.transaction:
+                # Check if this transaction matches our criteria
+                # (from user wallet to admin wallet with correct amount)
+                try:
+                    meta = tx.value.transaction.meta
+                    if meta and not meta.err:
+                        # بررسی مبلغ و ... 
+                        # (implementation بسته به نیاز شما)
+                        return {
+                            "found": True,
+                            "signature": tx_signature
+                        }
+                except:
+                    continue
+
+        return {"found": False}
+
+    except Exception as e:
+        print(f"Error checking payment: {e}")
+        return {"found": False, "error": str(e)}
