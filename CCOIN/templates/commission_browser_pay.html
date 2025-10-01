@@ -151,12 +151,6 @@
             <div>Commission Amount</div>
         </div>
 
-        <div class="fee-warning">
-            <div class="fee-warning-title">⚠️ Network Fee Notice</div>
-            Phantom wallet adds a priority fee automatically. 
-            You can reduce it manually in Phantom popup!
-        </div>
-
         <div id="status" class="status"></div>
 
         <button class="btn" id="pay-btn" onclick="initiatePayment()">
@@ -177,7 +171,7 @@
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         const botUsername = '{{ bot_username }}';
-        
+
         const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
         function addDebugLog(message) {
@@ -204,7 +198,7 @@
         function checkPaymentStatus() {
             const urlParams = new URLSearchParams(window.location.search);
             const signature = urlParams.get('sig');
-            
+
             if (signature) {
                 addDebugLog(`🔄 Returned with signature: ${signature.substring(0, 16)}...`);
                 confirmTransaction(signature);
@@ -234,7 +228,11 @@
                 if (result.success) {
                     showStatus('Payment successful! ✅', 'success');
                     addDebugLog('🎉 CONFIRMED!');
-                    setTimeout(returnToApp, 2000);
+                    
+                    // ✅ بازگشت به تلگرام
+                    setTimeout(() => {
+                        returnToApp();
+                    }, 2000);
                 } else {
                     showStatus('Verification failed', 'error');
                     addDebugLog(`❌ ${result.message || 'Unknown error'}`);
@@ -245,7 +243,7 @@
             }
         }
 
-        // ✅ Initiate payment with Phantom
+        // ✅ Initiate payment with Phantom (اصلاح شده)
         async function initiatePayment() {
             disablePayButton(true);
             addDebugLog('═══ Payment Started ═══');
@@ -255,14 +253,14 @@
             try {
                 // Check if Phantom is available
                 const provider = window.solana;
-                
+
                 if (!provider || !provider.isPhantom) {
                     addDebugLog('❌ Phantom not detected');
-                    
+
                     // Redirect to Phantom with return URL
                     const returnUrl = encodeURIComponent(window.location.href);
                     const phantomUrl = `https://phantom.app/ul/browse/${returnUrl}?ref=${window.location.origin}`;
-                    
+
                     addDebugLog('🔗 Opening Phantom...');
                     window.location.href = phantomUrl;
                     return;
@@ -306,16 +304,28 @@
                 showStatus('Please approve in Phantom...', 'info');
                 addDebugLog('⏳ Waiting for signature...');
 
-                const signed = await provider.signAndSendTransaction(transaction);
-                const signature = signed.signature;
+                // ✅ استفاده از signTransaction به جای signAndSendTransaction
+                const signedTx = await provider.signTransaction(transaction);
+                addDebugLog('✅ Transaction signed');
 
-                addDebugLog(`✅ TX: ${signature}`);
+                showStatus('Sending transaction...', 'info');
+                addDebugLog('📡 Broadcasting to network...');
+
+                // ✅ ارسال دستی به شبکه
+                const signature = await connection.sendRawTransaction(signedTx.serialize());
+
+                addDebugLog(`✅ TX sent: ${signature}`);
                 addDebugLog(`📍 https://solscan.io/tx/${signature}`);
 
-                // Redirect to self with signature
-                const params = new URLSearchParams(window.location.search);
-                params.set('sig', signature);
-                window.location.href = `${window.location.pathname}?${params.toString()}`;
+                showStatus('Confirming on blockchain...', 'info');
+                addDebugLog('⏳ Waiting for confirmation...');
+
+                // ✅ تأیید transaction
+                await connection.confirmTransaction(signature, 'confirmed');
+                addDebugLog('✅ Transaction confirmed on blockchain');
+
+                // ✅ ارسال به backend برای ذخیره
+                await confirmTransaction(signature);
 
             } catch (error) {
                 console.error('Payment failed:', error);
@@ -353,7 +363,7 @@
             addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
             addDebugLog(`🤖 Bot: ${botUsername}`);
-            
+
             // Check if we have a signature from redirect
             checkPaymentStatus();
         });
