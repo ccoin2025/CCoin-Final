@@ -6,6 +6,10 @@
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Pay Commission</title>
+    
+    <!-- ✅ bs58 library برای ساخت reference -->
+    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
+    
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -152,15 +156,15 @@
         </div>
 
         <div class="fee-warning">
-            <div class="fee-warning-title">⚠️ Important</div>
-            After payment, please return to this page to confirm.
-            You will be automatically redirected back to the app.
+            <div class="fee-warning-title">⚠️ How it works</div>
+            Click "Pay Now" to open your Phantom wallet.
+            After payment, return here and we'll verify automatically.
         </div>
 
         <div id="status" class="status"></div>
 
-        <button class="btn" id="pay-btn" onclick="initiatePayment()">
-            Pay with Phantom
+        <button class="btn" id="pay-btn" onclick="startPayment()">
+            💳 Pay Now
         </button>
 
         <button class="btn return-btn" onclick="returnToApp()">
@@ -175,6 +179,8 @@
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         const botUsername = '{{ bot_username }}';
+
+        let pollingInterval = null;
 
         function addDebugLog(message) {
             const debugDiv = document.getElementById('debug-info');
@@ -196,45 +202,52 @@
             document.getElementById('pay-btn').disabled = disabled;
         }
 
-        async function initiatePayment() {
+        // ✅ تولید reference معتبر (base58-encoded 32-byte)
+        function generateReference() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            const encoded = bs58.encode(array);
+            addDebugLog(`🔑 Generated reference (base58): ${encoded.substring(0, 16)}...`);
+            return encoded;
+        }
+
+        // ✅ شروع پرداخت
+        async function startPayment() {
             disablePayButton(true);
             addDebugLog('═══ Payment Started ═══');
             addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
 
             try {
-                showStatus('Preparing payment link...', 'info');
-
-                // ✅ ساخت Solana Pay URL
-                const recipient = adminWallet;
-                const amount = commissionAmount;
-                const label = encodeURIComponent('CCoin Commission');
-                const message = encodeURIComponent('Airdrop Eligibility Fee');
-                
-                // Reference برای tracking
+                // تولید reference
                 const reference = generateReference();
-                
-                // Solana Pay URL
-                const solanaPayUrl = `solana:${recipient}?` +
-                    `amount=${amount}&` +
-                    `label=${label}&` +
-                    `message=${message}&` +
-                    `reference=${reference}&` +
-                    `memo=${encodeURIComponent('CCoin-' + telegramId)}`;
 
-                addDebugLog(`💳 Solana Pay URL: ${solanaPayUrl.substring(0, 80)}...`);
-
-                // ذخیره reference برای بعد
-                sessionStorage.setItem('payment_reference', reference);
+                // ذخیره reference
+                sessionStorage.setItem('commission_reference', reference);
                 sessionStorage.setItem('payment_start_time', Date.now().toString());
 
-                showStatus('Opening Phantom Wallet...', 'info');
+                // ساخت Solana Pay URL
+                const memo = `CCoin-${telegramId}`;
+                const solanaPayUrl = 
+                    `solana:${adminWallet}?` +
+                    `amount=${commissionAmount}&` +
+                    `reference=${reference}&` +
+                    `memo=${encodeURIComponent(memo)}&` +
+                    `label=${encodeURIComponent('CCoin Commission')}&` +
+                    `message=${encodeURIComponent('Airdrop Eligibility Fee')}`;
+
+                addDebugLog(`🔗 Solana Pay URL created`);
+                addDebugLog(`📍 Recipient: ${adminWallet.substring(0, 16)}...`);
+
+                showStatus('Opening wallet...', 'info');
                 
-                // ✅ Open in Phantom
+                // Redirect به wallet
                 window.location.href = solanaPayUrl;
 
-                // شروع polling برای چک کردن payment
-                setTimeout(() => startPaymentPolling(reference), 3000);
+                // شروع polling بعد از 3 ثانیه
+                setTimeout(() => {
+                    checkPayment(reference);
+                }, 3000);
 
             } catch (error) {
                 addDebugLog(`❌ Error: ${error.message}`);
@@ -243,47 +256,61 @@
             }
         }
 
-        function generateReference() {
-            const array = new Uint8Array(32);
-            crypto.getRandomValues(array);
-            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-        }
+        // ✅ چک کردن وضعیت پرداخت
+        async function checkPayment(reference) {
+            addDebugLog('🔄 Starting payment verification...');
+            showStatus('Waiting for payment...', 'info');
 
-        async function startPaymentPolling(reference) {
-            addDebugLog('🔄 Starting payment check...');
-            
             let attempts = 0;
-            const maxAttempts = 60; // 5 دقیقه
-            
-            const pollInterval = setInterval(async () => {
+            const maxAttempts = 60; // 5 دقیقه (60 × 5 ثانیه)
+
+            pollingInterval = setInterval(async () => {
                 attempts++;
-                addDebugLog(`🔍 Checking payment... (${attempts}/${maxAttempts})`);
+                addDebugLog(`🔍 Checking... (${attempts}/${maxAttempts})`);
 
                 try {
-                    // Check با backend
-                    const response = await fetch(`/commission/check_payment?telegram_id=${telegramId}&reference=${reference}`);
-                    const data = await response.json();
+                    const response = await fetch(
+                        `/commission/check_payment?telegram_id=${telegramId}&reference=${reference}`,
+                        { method: 'GET' }
+                    );
 
-                    if (data.found && data.signature) {
-                        clearInterval(pollInterval);
-                        addDebugLog(`✅ Payment found: ${data.signature}`);
-                        await confirmTransaction(data.signature);
+                    const data = await response.json();
+                    addDebugLog(`📥 Response: ${JSON.stringify(data)}`);
+
+                    if (data.status === 'confirmed' && data.signature) {
+                        // ✅ پرداخت تأیید شد
+                        clearInterval(pollingInterval);
+                        addDebugLog(`✅ Payment confirmed!`);
+                        addDebugLog(`📝 Signature: ${data.signature.substring(0, 16)}...`);
+                        
+                        showStatus('Payment confirmed! ✅', 'success');
+
+                        // ذخیره در دیتابیس
+                        await confirmWithBackend(data.signature);
+
+                    } else if (data.status === 'pending') {
+                        // در حال بررسی
+                        addDebugLog(`⏳ Still pending...`);
+                        
                     } else if (attempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        addDebugLog('❌ Payment timeout');
-                        showStatus('Payment check timed out. Please check manually.', 'error');
+                        // timeout
+                        clearInterval(pollingInterval);
+                        addDebugLog('⏰ Timeout - please check manually');
+                        showStatus('Verification timeout. Please contact support.', 'error');
                         disablePayButton(false);
                     }
+
                 } catch (error) {
-                    addDebugLog(`⚠️ Poll error: ${error.message}`);
+                    addDebugLog(`⚠️ Check error: ${error.message}`);
                 }
+
             }, 5000); // هر 5 ثانیه
         }
 
-        async function confirmTransaction(signature) {
+        // ✅ تأیید نهایی با backend
+        async function confirmWithBackend(signature) {
             try {
-                showStatus('Confirming payment...', 'info');
-                addDebugLog('📤 Verifying with backend...');
+                addDebugLog('📤 Confirming with backend...');
 
                 const response = await fetch('/airdrop/confirm_commission', {
                     method: 'POST',
@@ -299,13 +326,20 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    showStatus('Payment confirmed! ✅', 'success');
-                    addDebugLog('🎉 Success!');
+                    addDebugLog('🎉 Backend confirmed!');
+                    showStatus('Payment successful! Redirecting...', 'success');
+                    
+                    // پاک کردن session
+                    sessionStorage.removeItem('commission_reference');
+                    sessionStorage.removeItem('payment_start_time');
+
+                    // بازگشت به اپ
                     setTimeout(() => returnToApp(), 2000);
                 } else {
+                    addDebugLog(`❌ Backend error: ${result.message}`);
                     showStatus('Verification failed', 'error');
-                    addDebugLog(`❌ ${result.message || 'Unknown error'}`);
                 }
+
             } catch (error) {
                 addDebugLog(`❌ Confirm error: ${error.message}`);
                 showStatus('Confirmation failed', 'error');
@@ -313,21 +347,59 @@
         }
 
         function returnToApp() {
+            // پاک کردن polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+
             addDebugLog('🔙 Returning to Telegram...');
+
             const deepLink = `https://t.me/${botUsername}/app`;
-            window.location.href = deepLink;
+            const webAppLink = `tg://resolve?domain=${botUsername}&appname=app`;
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                window.location.href = webAppLink;
+                setTimeout(() => window.location.href = deepLink, 2000);
+            } else {
+                window.open(deepLink, '_blank');
+                showStatus('Please return to Telegram manually', 'info');
+            }
         }
 
+        // ✅ On load - ادامه polling اگر reference داریم
         window.addEventListener('load', () => {
             addDebugLog('═══ Page Loaded ═══');
-            addDebugLog(`👤 ID: ${telegramId}`);
+            addDebugLog(`👤 Telegram ID: ${telegramId}`);
             addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
-            
-            // چک کنید اگر از پرداخت برگشته
-            const ref = sessionStorage.getItem('payment_reference');
-            if (ref) {
-                addDebugLog('🔄 Checking for completed payment...');
-                startPaymentPolling(ref);
+            addDebugLog(`🤖 Bot: ${botUsername}`);
+
+            // چک کنید اگر قبلاً payment شروع شده
+            const savedReference = sessionStorage.getItem('commission_reference');
+            const startTime = sessionStorage.getItem('payment_start_time');
+
+            if (savedReference && startTime) {
+                const elapsed = Date.now() - parseInt(startTime);
+                const minutes = Math.floor(elapsed / 60000);
+                
+                addDebugLog(`🔄 Found pending payment (${minutes} min ago)`);
+                addDebugLog(`🔑 Reference: ${savedReference.substring(0, 16)}...`);
+
+                // ادامه polling
+                if (minutes < 10) {
+                    checkPayment(savedReference);
+                } else {
+                    addDebugLog('⏰ Payment expired, please try again');
+                    sessionStorage.removeItem('commission_reference');
+                    sessionStorage.removeItem('payment_start_time');
+                }
+            }
+        });
+
+        // ✅ پاک کردن polling وقتی صفحه بسته میشه
+        window.addEventListener('beforeunload', () => {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
             }
         });
     </script>
