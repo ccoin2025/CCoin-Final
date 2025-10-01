@@ -19,6 +19,7 @@
             padding: 20px;
             box-sizing: border-box;
         }
+
         .container {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -29,26 +30,31 @@
             max-width: 450px;
             width: 100%;
         }
+
         .logo {
             font-size: 48px;
             margin-bottom: 20px;
         }
+
         h1 {
             margin-bottom: 20px;
             font-size: 24px;
         }
+
         .commission-info {
             background: rgba(255, 255, 255, 0.1);
             padding: 20px;
             border-radius: 15px;
             margin-bottom: 20px;
         }
+
         .amount {
             font-size: 32px;
             font-weight: bold;
             color: #ffd700;
             margin-bottom: 10px;
         }
+
         .fee-warning {
             background: rgba(255, 152, 0, 0.2);
             border: 2px solid #ff9800;
@@ -58,12 +64,14 @@
             font-size: 13px;
             line-height: 1.6;
         }
+
         .fee-warning-title {
             font-weight: bold;
             color: #ffa726;
             margin-bottom: 8px;
             font-size: 15px;
         }
+
         .btn {
             background: linear-gradient(45deg, #ffd700, #ffed4e);
             color: #000;
@@ -77,19 +85,23 @@
             transition: all 0.3s ease;
             margin: 10px 0;
         }
+
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
         }
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
+
         .return-btn {
             background: rgba(255, 255, 255, 0.2);
             color: white;
         }
+
         .status {
             margin: 20px 0;
             padding: 10px;
@@ -97,21 +109,25 @@
             display: none;
             font-size: 14px;
         }
+
         .status.success {
             background: rgba(76, 175, 80, 0.2);
             color: #4caf50;
             display: block;
         }
+
         .status.error {
             background: rgba(244, 67, 54, 0.2);
             color: #f44336;
             display: block;
         }
+
         .status.info {
             background: rgba(33, 150, 243, 0.2);
             color: #2196f3;
             display: block;
         }
+
         .debug-info {
             margin-top: 20px;
             padding: 10px;
@@ -129,117 +145,152 @@
     <div class="container">
         <div class="logo">💰</div>
         <h1>Commission Payment</h1>
+
         <div class="commission-info">
             <div class="amount">{{ commission_amount }} SOL</div>
             <div>Commission Amount</div>
         </div>
+
+        <div class="fee-warning">
+            <div class="fee-warning-title">⚠️ Important</div>
+            Click below to open Phantom and approve the payment.
+        </div>
+
         <div id="status" class="status"></div>
-        <button class="btn" id="pay-btn" onclick="initiatePayment()">
-            Pay with Phantom
+
+        <button class="btn" id="pay-btn" onclick="openInPhantom()">
+            🦄 Pay with Phantom
         </button>
+
         <button class="btn return-btn" onclick="returnToApp()">
             Cancel & Return
         </button>
+
         <div id="debug-info" class="debug-info">🔍 Debug Log:<br></div>
     </div>
+
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+
     <script>
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
         const botUsername = '{{ bot_username }}';
-        function addDebugLog(message) {
-            const debugDiv = document.getElementById('debug-info');
-            const time = new Date().toLocaleTimeString();
-            const logMessage = `[${time}] ${message}`;
-            debugDiv.innerHTML += logMessage + '<br>';
-            debugDiv.scrollTop = debugDiv.scrollHeight;
-            console.log(logMessage);
+
+        function log(msg) {
+            const debug = document.getElementById('debug-info');
+            if (debug) {
+                debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
+                debug.scrollTop = debug.scrollHeight;
+            }
+            console.log(msg);
         }
+
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = `status ${type}`;
-            addDebugLog(`📌 ${message}`);
+            log(`📌 ${message}`);
         }
-        function disablePayButton(disabled) {
-            document.getElementById('pay-btn').disabled = disabled;
+
+        function openInPhantom() {
+            log('🚀 Starting Phantom payment...');
+
+            // اگر در Phantom browser هستیم
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Already in Phantom browser');
+                payWithPhantom();
+                return;
+            }
+
+            // اگر در مرورگر عادی هستیم
+            const currentUrl = window.location.href;
+            log('📍 Current URL: ' + currentUrl);
+
+            // ✅ روش 1: استفاده از browse deeplink (مثل wallet connect)
+            const browseUrl = `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}`;
+            log('🔗 Opening via browse: ' + browseUrl);
+
+            window.location.href = browseUrl;
         }
-        async function initiatePayment() {
-            disablePayButton(true);
-            addDebugLog('═══ Payment Started ═══');
-            addDebugLog(`👤 Telegram ID: ${telegramId}`);
-            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
+
+        async function payWithPhantom() {
             try {
-                showStatus('Preparing payment link...', 'info');
-                // ✅ ساخت Solana Pay URL
-                const recipient = adminWallet;
-                const amount = commissionAmount;
-                const label = encodeURIComponent('CCoin Commission');
-                const message = encodeURIComponent('Airdrop Eligibility Fee');
+                log('💰 Starting payment in Phantom...');
+                showStatus('Connecting wallet...', 'info');
+
+                const provider = window.solana;
                 
-                // Reference برای tracking
-                const reference = generateReference();
+                // اتصال
+                await provider.connect();
+                const userPublicKey = provider.publicKey.toString();
+                log('✅ Connected: ' + userPublicKey.substring(0, 12) + '...');
+
+                showStatus('Creating transaction...', 'info');
+                log('📝 Building transaction...');
+
+                // ساخت transaction
+                const connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
                 
-                // Solana Pay URL
-                const solanaPayUrl = `solana:${recipient}?` +
-                    `amount=${amount}&` +
-                    `label=${label}&` +
-                    `message=${message}&` +
-                    `reference=${reference}&` +
-                    `memo=${encodeURIComponent('CCoin-' + telegramId)}`;
-                addDebugLog(`💳 Solana Pay URL: ${solanaPayUrl.substring(0, 80)}...`);
-                // ذخیره reference برای بعد
-                sessionStorage.setItem('payment_reference', reference);
-                sessionStorage.setItem('payment_start_time', Date.now().toString());
-                showStatus('Opening Phantom Wallet...', 'info');
+                const { blockhash } = await connection.getLatestBlockhash('finalized');
+                log('✅ Blockhash: ' + blockhash.substring(0, 16) + '...');
+
+                const transaction = new solanaWeb3.Transaction();
                 
-                // ✅ Open in Phantom
-                window.location.href = solanaPayUrl;
-                // شروع polling برای چک کردن payment
-                setTimeout(() => startPaymentPolling(reference), 3000);
+                // Compute budget
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1000 })
+                );
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
+                );
+
+                // Transfer
+                const lamports = Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
+                transaction.add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: provider.publicKey,
+                        toPubkey: new solanaWeb3.PublicKey(adminWallet),
+                        lamports: lamports
+                    })
+                );
+
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = provider.publicKey;
+
+                showStatus('Please approve in Phantom...', 'info');
+                log('⏳ Waiting for approval...');
+
+                // ✅ Sign transaction
+                const signedTx = await provider.signTransaction(transaction);
+                log('✅ Transaction signed');
+
+                showStatus('Sending transaction...', 'info');
+                log('📡 Broadcasting...');
+
+                // ✅ Send
+                const signature = await connection.sendRawTransaction(signedTx.serialize());
+                log('✅ TX sent: ' + signature);
+                log('📍 https://solscan.io/tx/' + signature);
+
+                showStatus('Confirming...', 'info');
+                
+                // تأیید
+                await connection.confirmTransaction(signature, 'confirmed');
+                log('✅ Confirmed on-chain');
+
+                // ارسال به backend
+                showStatus('Verifying payment...', 'info');
+                await confirmWithBackend(signature);
+
             } catch (error) {
-                addDebugLog(`❌ Error: ${error.message}`);
-                showStatus('Failed to create payment link', 'error');
-                disablePayButton(false);
+                log('❌ Error: ' + error.message);
+                showStatus('Payment failed: ' + error.message, 'error');
             }
         }
-        function generateReference() {
-            const array = new Uint8Array(32);
-            crypto.getRandomValues(array);
-            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-        }
-        async function startPaymentPolling(reference) {
-            addDebugLog('🔄 Starting payment check...');
-            
-            let attempts = 0;
-            const maxAttempts = 60; // 5 دقیقه
-            
-            const pollInterval = setInterval(async () => {
-                attempts++;
-                addDebugLog(`🔍 Checking payment... (${attempts}/${maxAttempts})`);
-                try {
-                    // Check با backend
-                    const response = await fetch(`/commission/check_payment?telegram_id=${telegramId}&reference=${reference}`);
-                    const data = await response.json();
-                    if (data.found && data.signature) {
-                        clearInterval(pollInterval);
-                        addDebugLog(`✅ Payment found: ${data.signature}`);
-                        await confirmTransaction(data.signature);
-                    } else if (attempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        addDebugLog('❌ Payment timeout');
-                        showStatus('Payment check timed out. Please check manually.', 'error');
-                        disablePayButton(false);
-                    }
-                } catch (error) {
-                    addDebugLog(`⚠️ Poll error: ${error.message}`);
-                }
-            }, 5000); // هر 5 ثانیه
-        }
-        async function confirmTransaction(signature) {
+
+        async function confirmWithBackend(signature) {
             try {
-                showStatus('Confirming payment...', 'info');
-                addDebugLog('📤 Verifying with backend...');
                 const response = await fetch('/airdrop/confirm_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -250,35 +301,42 @@
                         recipient: adminWallet
                     })
                 });
+
                 const result = await response.json();
+
                 if (result.success) {
-                    showStatus('Payment confirmed! ✅', 'success');
-                    addDebugLog('🎉 Success!');
+                    showStatus('Payment successful! ✅', 'success');
+                    log('🎉 Payment confirmed!');
                     setTimeout(() => returnToApp(), 2000);
                 } else {
                     showStatus('Verification failed', 'error');
-                    addDebugLog(`❌ ${result.message || 'Unknown error'}`);
+                    log('❌ ' + (result.message || 'Unknown error'));
                 }
             } catch (error) {
-                addDebugLog(`❌ Confirm error: ${error.message}`);
-                showStatus('Confirmation failed', 'error');
+                log('❌ Backend error: ' + error.message);
+                showStatus('Verification failed', 'error');
             }
         }
+
         function returnToApp() {
-            addDebugLog('🔙 Returning to Telegram...');
+            log('🔙 Returning to Telegram...');
             const deepLink = `https://t.me/${botUsername}/app`;
             window.location.href = deepLink;
         }
+
+        // ✅ چک کن اگر در Phantom browser هستیم
         window.addEventListener('load', () => {
-            addDebugLog('═══ Page Loaded ═══');
-            addDebugLog(`👤 ID: ${telegramId}`);
-            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
-            
-            // چک کنید اگر از پرداخت برگشته
-            const ref = sessionStorage.getItem('payment_reference');
-            if (ref) {
-                addDebugLog('🔄 Checking for completed payment...');
-                startPaymentPolling(ref);
+            log('═══ Page Loaded ═══');
+            log('👤 Telegram ID: ' + telegramId);
+            log('💰 Amount: ' + commissionAmount + ' SOL');
+
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom browser detected');
+                document.querySelector('h1').textContent = 'Complete Payment';
+                document.querySelector('.fee-warning p').textContent = 'Click below to complete the payment.';
+                document.querySelector('.btn').textContent = '✅ Complete Payment';
+            } else {
+                log('📱 Regular browser - will redirect to Phantom');
             }
         });
     </script>
