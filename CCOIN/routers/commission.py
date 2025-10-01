@@ -268,43 +268,54 @@ async def check_payment(
     """چک کردن پرداخت با reference"""
     try:
         from solana.rpc.api import Client
+        from solders.pubkey import Pubkey
+        import base58
+        
+        print(f"🔍 Checking payment for {telegram_id}, reference: {reference[:16]}...")
         
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user or not user.wallet_address:
-            return {"found": False}
+            return {"status": "error", "message": "User or wallet not found"}
 
-        # جستجوی تراکنش‌ها
+        # جستجوی تراکنش‌های اخیر admin wallet
         client = Client(SOLANA_RPC)
         
-        # Get recent transactions for admin wallet
-        signatures = client.get_signatures_for_address(
-            Pubkey.from_string(ADMIN_WALLET),
-            limit=20
-        )
-
-        for sig_info in signatures.value:
-            tx_signature = str(sig_info.signature)
+        try:
+            # Decode reference
+            reference_bytes = base58.b58decode(reference)
+            reference_pubkey = Pubkey.from_bytes(reference_bytes)
             
-            # Get transaction details
-            tx = client.get_transaction(tx_signature, encoding="json")
+            # Get signatures for reference
+            signatures = client.get_signatures_for_address(
+                reference_pubkey,
+                limit=10
+            )
             
-            if tx.value and tx.value.transaction:
-                # Check if this transaction matches our criteria
-                # (from user wallet to admin wallet with correct amount)
-                try:
-                    meta = tx.value.transaction.meta
-                    if meta and not meta.err:
-                        # بررسی مبلغ و ... 
-                        # (implementation بسته به نیاز شما)
-                        return {
-                            "found": True,
-                            "signature": tx_signature
-                        }
-                except:
-                    continue
-
-        return {"found": False}
-
+            if signatures.value and len(signatures.value) > 0:
+                # پیدا شد! بررسی تراکنش
+                tx_signature = str(signatures.value[0].signature)
+                
+                print(f"✅ Found transaction: {tx_signature}")
+                
+                # بررسی جزئیات تراکنش
+                tx = client.get_transaction(tx_signature, encoding="json", max_supported_transaction_version=0)
+                
+                if tx.value and tx.value.meta and not tx.value.meta.err:
+                    print(f"✅ Transaction confirmed: {tx_signature}")
+                    return {
+                        "status": "confirmed",
+                        "signature": tx_signature
+                    }
+            
+            # هنوز پیدا نشد
+            return {"status": "pending"}
+            
+        except Exception as e:
+            print(f"⚠️ Check error: {e}")
+            return {"status": "pending"}
+            
     except Exception as e:
-        print(f"Error checking payment: {e}")
-        return {"found": False, "error": str(e)}
+        print(f"❌ Error checking payment: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
