@@ -64,7 +64,7 @@ async def commission_browser_pay(
         "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME
     })
-    
+
 @router.get("/pay", response_class=JSONResponse)
 @limiter.limit("10/minute")
 async def commission_payment_page(
@@ -138,7 +138,7 @@ async def prepare_transaction(
 
         # ✅ ساخت تراکنش با solders در backend
         from solana.rpc.async_api import AsyncClient
-        
+
         # ✅ استفاده از RPC endpoint خودتان (نه public endpoint)
         client = AsyncClient(SOLANA_RPC)
 
@@ -204,6 +204,77 @@ async def prepare_transaction(
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to prepare transaction: {str(e)}")
 
+@router.post("/confirm_commission", response_class=JSONResponse)
+@limiter.limit("20/minute")
+async def confirm_commission(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """✅ تایید پرداخت کمیسیون و آپدیت دیتابیس"""
+    try:
+        body = await request.json()
+        signature = body.get("signature")
+        telegram_id = body.get("telegramId")
+        amount = body.get("amount")
+        recipient = body.get("recipient")
+        
+        print(f"✅ Confirming commission for telegram_id: {telegram_id}, signature: {signature}")
+        
+        # بررسی کاربر
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # بررسی اینکه قبلاً پرداخت نشده باشد
+        if user.commission_paid:
+            return {
+                "success": True,
+                "message": "Commission already confirmed",
+                "already_paid": True
+            }
+        
+        # تایید تراکنش در بلاکچین
+        client = Client(SOLANA_RPC)
+        
+        try:
+            # دریافت تراکنش
+            tx = client.get_transaction(
+                signature,
+                encoding="json",
+                max_supported_transaction_version=0
+            )
+            
+            if not tx.value:
+                return {"success": False, "message": "Transaction not found"}
+            
+            # بررسی خطا
+            if tx.value.meta and tx.value.meta.err:
+                return {"success": False, "message": "Transaction failed on blockchain"}
+            
+            # آپدیت دیتابیس
+            user.commission_paid = True
+            user.commission_tx = signature
+            user.commission_paid_at = datetime.utcnow()
+            db.commit()
+            
+            print(f"✅ Commission confirmed successfully for user: {telegram_id}")
+            
+            return {
+                "success": True,
+                "message": "Commission payment confirmed",
+                "signature": signature
+            }
+            
+        except Exception as e:
+            print(f"❌ Error verifying transaction: {e}")
+            return {"success": False, "message": f"Verification error: {str(e)}"}
+            
+    except Exception as e:
+        print(f"❌ Error confirming commission: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/success", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_success(
@@ -256,7 +327,6 @@ async def get_commission_status(
         "admin_wallet": ADMIN_WALLET
     }
 
-
 @router.get("/check_payment", response_class=JSONResponse)
 @limiter.limit("30/minute")
 async def check_payment(
@@ -270,50 +340,50 @@ async def check_payment(
         from solana.rpc.api import Client
         from solders.pubkey import Pubkey
         import base58
-        
+
         print(f"🔍 Checking payment for {telegram_id}, reference: {reference[:16]}...")
-        
+
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user or not user.wallet_address:
             return {"status": "error", "message": "User or wallet not found"}
 
         # جستجوی تراکنش‌های اخیر admin wallet
         client = Client(SOLANA_RPC)
-        
+
         try:
             # Decode reference
             reference_bytes = base58.b58decode(reference)
             reference_pubkey = Pubkey.from_bytes(reference_bytes)
-            
+
             # Get signatures for reference
             signatures = client.get_signatures_for_address(
                 reference_pubkey,
                 limit=10
             )
-            
+
             if signatures.value and len(signatures.value) > 0:
                 # پیدا شد! بررسی تراکنش
                 tx_signature = str(signatures.value[0].signature)
-                
+
                 print(f"✅ Found transaction: {tx_signature}")
-                
+
                 # بررسی جزئیات تراکنش
                 tx = client.get_transaction(tx_signature, encoding="json", max_supported_transaction_version=0)
-                
+
                 if tx.value and tx.value.meta and not tx.value.meta.err:
                     print(f"✅ Transaction confirmed: {tx_signature}")
                     return {
                         "status": "confirmed",
                         "signature": tx_signature
                     }
-            
+
             # هنوز پیدا نشد
             return {"status": "pending"}
-            
+
         except Exception as e:
             print(f"⚠️ Check error: {e}")
             return {"status": "pending"}
-            
+
     except Exception as e:
         print(f"❌ Error checking payment: {e}")
         import traceback
