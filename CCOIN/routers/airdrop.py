@@ -495,3 +495,126 @@ async def check_commission_status(request: Request, db: Session = Depends(get_db
     return JSONResponse({
         "paid": user.commission_paid
     })
+
+@router.post("/auto_verify_commission")
+@limiter.limit("5/minute")
+async def auto_verify_commission(request: Request, db: Session = Depends(get_db)):
+    """
+    ✅ بررسی خودکار تراکنش‌های اخیر کاربر به admin wallet
+    این endpoint بدون نیاز به signature، تراکنش‌ها را چک می‌کند
+    """
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            return {"success": True, "message": "Commission already paid", "already_paid": True}
+
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="No wallet connected")
+
+        print(f"🔍 Auto-verifying commission for user: {telegram_id}, wallet: {user.wallet_address}")
+
+        # دریافت تراکنش‌های اخیر wallet کاربر
+        from solders.pubkey import Pubkey
+        
+        user_pubkey = Pubkey.from_string(user.wallet_address)
+        admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
+
+        # گرفتن آخرین تراکنش‌ها (10 تا اخیر)
+        signatures = solana_client.get_signatures_for_address(
+            user_pubkey,
+            limit=10
+        )
+
+        if not signatures.value:
+            return {"success": False, "message": "No transactions found"}
+
+        # بررسی هر تراکنش
+        for sig_info in signatures.value:
+            try:
+                signature = str(sig_info.signature)
+                
+                # دریافت جزئیات تراکنش
+                tx = solana_client.get_transaction(
+                    signature,
+                    encoding="json",
+                    max_supported_transaction_version=0
+                )
+
+                if not tx.value or not tx.value.transaction:
+                    continue
+
+                # بررسی اینکه تراکنش خطا نداشته باشد
+                if tx.value.meta and tx.value.meta.err:
+                    continue
+
+                # بررسی postBalances و preBalances
+                if not tx.value.meta or not tx.value.meta.post_balances:
+                    continue
+
+                # استخراج account keys
+                if hasattr(tx.value.transaction, 'message'):
+                    message = tx.value.transaction.message
+                    
+                    # بررسی اینکه admin wallet در account keys باشد
+                    account_keys = []
+                    if hasattr(message, 'account_keys'):
+                        account_keys = [str(key) for key in message.account_keys]
+                    
+                    # چک کردن اینکه admin wallet گیرنده باشد
+                    if ADMIN_WALLET in account_keys:
+                        admin_index = account_keys.index(ADMIN_WALLET)
+                        
+                        # محاسبه مقدار transfer شده
+                        pre_balance = tx.value.meta.pre_balances[admin_index] if admin_index < len(tx.value.meta.pre_balances) else 0
+                        post_balance = tx.value.meta.post_balances[admin_index] if admin_index < len(tx.value.meta.post_balances) else 0
+                        
+                        transfer_amount_lamports = post_balance - pre_balance
+                        transfer_amount_sol = transfer_amount_lamports / 1_000_000_000
+                        
+                        print(f"📊 Found transfer: {transfer_amount_sol} SOL (expected: {COMMISSION_AMOUNT})")
+                        
+                        # بررسی مقدار (با tolerance 1%)
+                        expected = COMMISSION_AMOUNT
+                        tolerance = expected * 0.01
+                        
+                        if abs(transfer_amount_sol - expected) <= tolerance:
+                            # ✅ تراکنش معتبر پیدا شد!
+                            print(f"✅ Valid commission payment found: {signature}")
+                            
+                            user.commission_paid = True
+                            user.commission_transaction_hash = signature
+                            user.commission_payment_date = datetime.utcnow()
+                            db.commit()
+                            
+                            return {
+                                "success": True,
+                                "message": "Commission verified and confirmed!",
+                                "signature": signature,
+                                "amount": transfer_amount_sol
+                            }
+
+            except Exception as e:
+                print(f"⚠️ Error checking transaction {sig_info.signature}: {e}")
+                continue
+
+        # هیچ تراکنش معتبر پیدا نشد
+        return {
+            "success": False,
+            "message": "No valid commission payment found in recent transactions"
+        }
+
+    except Exception as e:
+        print(f"❌ Auto-verify error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
