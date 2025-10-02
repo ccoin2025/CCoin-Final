@@ -41,26 +41,6 @@
             font-size: 24px;
         }
 
-        .commission-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-        }
-
-        .amount {
-            font-size: 32px;
-            font-weight: bold;
-            color: #ffd700;
-            margin-bottom: 10px;
-        }
-
-        .fee-info {
-            font-size: 14px;
-            color: #90ee90;
-            margin-top: 10px;
-        }
-
         .btn {
             background: linear-gradient(45deg, #ffd700, #ffed4e);
             color: #000;
@@ -126,23 +106,20 @@
         <div id="status" class="status"></div>
 
         <button class="btn" id="pay-btn" onclick="openPhantom()">
-            <i class="fas fa-wallet"></i> Pay with Phantom
+            Pay with Phantom
         </button>
 
         <button class="btn return-btn" onclick="returnToApp()">
-            <i class="fas fa-arrow-left"></i> Return to App
+            Return to App
         </button>
     </div>
 
-    <!-- Solana Web3.js از CDN -->
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 
     <script>
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
         const adminWallet = '{{ admin_wallet }}';
-        
-        // RPCهای متعدد برای اطمینان
         const RPC_URLS = [
             'https://rpc.ankr.com/solana',
             'https://solana-api.projectserum.com'
@@ -159,17 +136,14 @@
             if (btn) btn.disabled = disabled;
         }
 
-        // تابع helper برای گرفتن blockhash با retry قوی‌تر
         async function getBlockhashWithRetry(maxRetries = 5) {
             for (let rpc of RPC_URLS) {
                 for (let i = 0; i < maxRetries; i++) {
                     try {
                         const connection = new solanaWeb3.Connection(rpc, 'confirmed');
                         const { blockhash } = await connection.getLatestBlockhash();
-                        console.log(`Blockhash fetched from ${rpc}`);
                         return blockhash;
                     } catch (error) {
-                        console.error(`RPC ${rpc} attempt ${i + 1} failed:`, error);
                         await new Promise(resolve => setTimeout(resolve, 3000 * (i + 1)));
                     }
                 }
@@ -177,20 +151,16 @@
             return null;
         }
 
-        // باز کردن Phantom
         async function openPhantom() {
             try {
                 disablePayButton(true);
                 showStatus('Opening Phantom...', 'info');
 
-                // بررسی Extension
                 const hasExtension = window.solana && window.solana.isPhantom;
 
                 if (hasExtension) {
-                    // روش 1: استفاده از Extension
                     await payWithExtension();
                 } else {
-                    // روش 2: باز کردن اپ موبایل
                     await openPhantomApp();
                 }
 
@@ -201,28 +171,22 @@
             }
         }
 
-        // پرداخت با Extension
         async function payWithExtension() {
             try {
                 showStatus('Connecting to wallet...', 'info');
-
                 const resp = await window.solana.connect();
                 const userPublicKey = resp.publicKey;
 
                 showStatus('Creating transaction...', 'info');
-
                 const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
 
-                // تنظیم Compute Budget برای کاهش فی
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
                 );
                 transaction.add(
                     solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
                 );
-
-                // Transfer
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: userPublicKey,
@@ -231,52 +195,42 @@
                     })
                 );
 
-                // گرفتن blockhash
                 const blockhash = await getBlockhashWithRetry();
                 if (!blockhash) {
-                    throw new Error('Could not fetch blockhash. Please try again or check your network.');
+                    throw new Error('Could not fetch blockhash');
                 }
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
-                showStatus('Please approve the transaction...', 'info');
-
+                showStatus('Please approve in Phantom...', 'info');
                 const signed = await window.solana.signAndSendTransaction(transaction);
 
-                showStatus('Transaction sent! Confirming...', 'info');
-
+                showStatus('Confirming payment...', 'info');
                 await connection.confirmTransaction(signed.signature, 'confirmed');
 
-                showStatus('Payment successful! ✅', 'success');
-
-                // ثبت در سرور
-                await confirmOnServer(signed.signature);
-
-                setTimeout(returnToApp, 2000);
+                showStatus('Verifying on server...', 'info');
+                
+                // ✅ استفاده از auto-verify بدون نیاز به signature
+                await autoVerifyPayment();
 
             } catch (error) {
-                console.error('Extension payment failed:', error);
-                showStatus('Payment cancelled or failed: ' + error.message, 'error');
+                console.error('Payment failed:', error);
+                showStatus('Payment failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
 
-        // باز کردن اپ Phantom (موبایل)
         async function openPhantomApp() {
             try {
                 showStatus('Opening Phantom app...', 'info');
                 
-                // استفاده از Solana Pay URL ساده
-                const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
+                const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}`;
                 
-                console.log('Opening Solana Pay URL:', solanaPayUrl);
-                
-                // هدایت به Phantom
                 window.location.href = solanaPayUrl;
                 
-                // شروع بررسی وضعیت پرداخت
+                // بعد از 5 ثانیه، شروع به auto-verify کن
                 setTimeout(() => {
-                    checkPaymentLoop();
+                    autoVerifyLoop();
                 }, 5000);
                 
             } catch (error) {
@@ -286,67 +240,56 @@
             }
         }
 
-        // بررسی مداوم وضعیت پرداخت
-        function checkPaymentLoop() {
-            let attempts = 0;
-            const maxAttempts = 30;
-
-            const interval = setInterval(async () => {
-                attempts++;
-
-                try {
-                    const response = await fetch(`/airdrop/commission_status?telegram_id=${telegramId}`);
-                    const data = await response.json();
-
-                    if (data.commission_paid) {
-                        clearInterval(interval);
-                        showStatus('Payment confirmed! ✅', 'success');
-                        setTimeout(returnToApp, 2000);
-                    } else if (attempts >= maxAttempts) {
-                        clearInterval(interval);
-                        showStatus('Timeout. Please try again or check manually.', 'error');
-                        disablePayButton(false);
-                    } else {
-                        showStatus(`Waiting for payment... (${attempts}/${maxAttempts})`, 'info');
-                    }
-                } catch (error) {
-                    console.error('Status check error:', error);
-                }
-            }, 3000);
-        }
-
-        // ثبت در سرور (برای دسکتاپ) - ✅ اصلاح شده
-        async function confirmOnServer(signature) {
+        // ✅ تابع جدید: Auto-verify بدون signature
+        async function autoVerifyPayment() {
             try {
-                console.log('✅ Confirming transaction on server:', signature);
-                
-                const response = await fetch('/airdrop/confirm_commission', {
+                const response = await fetch('/airdrop/auto_verify_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        signature: signature,
-                        amount: commissionAmount,
-                        recipient: adminWallet,
-                        telegram_id: telegramId  // ✅ تغییر از telegramId به telegram_id
+                        telegram_id: telegramId
                     })
                 });
 
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    console.log('✅ Commission confirmed on server:', data);
+                    showStatus('Payment verified! ✅', 'success');
+                    setTimeout(returnToApp, 2000);
+                    return true;
                 } else {
-                    console.error('❌ Server confirmation failed:', data.message);
+                    console.log('Verification result:', data.message);
+                    return false;
                 }
             } catch (error) {
-                console.error('❌ Error confirming on server:', error);
+                console.error('Auto-verify error:', error);
+                return false;
             }
         }
 
-        // بازگشت به اپ
+        // Loop برای موبایل
+        function autoVerifyLoop() {
+            let attempts = 0;
+            const maxAttempts = 20;
+
+            const interval = setInterval(async () => {
+                attempts++;
+                showStatus(`Checking payment... (${attempts}/${maxAttempts})`, 'info');
+
+                const verified = await autoVerifyPayment();
+
+                if (verified) {
+                    clearInterval(interval);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    showStatus('Timeout. Please refresh and try again.', 'error');
+                    disablePayButton(false);
+                }
+            }, 5000); // هر 5 ثانیه
+        }
+
         function returnToApp() {
-            const botUsername = '{{ bot_username }}';
-            window.location.href = `https://t.me/${botUsername}`;
+            window.location.href = `https://t.me/{{ bot_username }}`;
         }
     </script>
 </body>
