@@ -31,15 +31,8 @@
             width: 100%;
         }
 
-        .logo {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        h1 {
-            margin-bottom: 30px;
-            font-size: 24px;
-        }
+        .logo { font-size: 48px; margin-bottom: 20px; }
+        h1 { margin-bottom: 30px; font-size: 24px; }
 
         .btn {
             background: linear-gradient(45deg, #ffd700, #ffed4e);
@@ -102,16 +95,9 @@
     <div class="container">
         <div class="logo">💰</div>
         <h1>Commission Payment</h1>
-
         <div id="status" class="status"></div>
-
-        <button class="btn" id="pay-btn" onclick="openPhantom()">
-            Pay with Phantom
-        </button>
-
-        <button class="btn return-btn" onclick="returnToApp()">
-            Return to App
-        </button>
+        <button class="btn" id="pay-btn" onclick="openPhantom()">Pay with Phantom</button>
+        <button class="btn return-btn" onclick="returnToApp()">Return to App</button>
     </div>
 
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
@@ -119,11 +105,7 @@
     <script>
         const telegramId = '{{ telegram_id }}';
         const commissionAmount = {{ commission_amount }};
-        const adminWallet = '{{ admin_wallet }}';
-        const RPC_URLS = [
-            'https://rpc.ankr.com/solana',
-            'https://solana-api.projectserum.com'
-        ];
+        const baseUrl = window.location.origin;
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -136,21 +118,6 @@
             if (btn) btn.disabled = disabled;
         }
 
-        async function getBlockhashWithRetry(maxRetries = 5) {
-            for (let rpc of RPC_URLS) {
-                for (let i = 0; i < maxRetries; i++) {
-                    try {
-                        const connection = new solanaWeb3.Connection(rpc, 'confirmed');
-                        const { blockhash } = await connection.getLatestBlockhash();
-                        return blockhash;
-                    } catch (error) {
-                        await new Promise(resolve => setTimeout(resolve, 3000 * (i + 1)));
-                    }
-                }
-            }
-            return null;
-        }
-
         async function openPhantom() {
             try {
                 disablePayButton(true);
@@ -161,7 +128,7 @@
                 if (hasExtension) {
                     await payWithExtension();
                 } else {
-                    await openPhantomApp();
+                    await payWithTransactionRequest();
                 }
 
             } catch (error) {
@@ -171,6 +138,7 @@
             }
         }
 
+        // ✅ Extension: استفاده از Phantom مستقیم
         async function payWithExtension() {
             try {
                 showStatus('Connecting to wallet...', 'info');
@@ -178,27 +146,18 @@
                 const userPublicKey = resp.publicKey;
 
                 showStatus('Creating transaction...', 'info');
-                const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
+                const connection = new solanaWeb3.Connection('https://rpc.ankr.com/solana', 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
 
                 transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
-                );
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
-                );
-                transaction.add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: userPublicKey,
-                        toPubkey: new solanaWeb3.PublicKey(adminWallet),
+                        toPubkey: new solanaWeb3.PublicKey('{{ admin_wallet }}'),
                         lamports: Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
                     })
                 );
 
-                const blockhash = await getBlockhashWithRetry();
-                if (!blockhash) {
-                    throw new Error('Could not fetch blockhash');
-                }
+                const { blockhash } = await connection.getLatestBlockhash();
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
@@ -209,8 +168,6 @@
                 await connection.confirmTransaction(signed.signature, 'confirmed');
 
                 showStatus('Verifying on server...', 'info');
-                
-                // ✅ استفاده از auto-verify بدون نیاز به signature
                 await autoVerifyPayment();
 
             } catch (error) {
@@ -220,15 +177,22 @@
             }
         }
 
-        async function openPhantomApp() {
+        // ✅ Mobile: استفاده از Solana Pay Transaction Request
+        async function payWithTransactionRequest() {
             try {
                 showStatus('Opening Phantom app...', 'info');
                 
-                const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}`;
+                // ✅ استفاده از Transaction Request URL
+                const transactionRequestUrl = `${baseUrl}/commission/transaction_request?telegram_id=${telegramId}`;
+                const encodedUrl = encodeURIComponent(transactionRequestUrl);
+                const solanaPayUrl = `solana:${encodedUrl}`;
                 
+                console.log('🔗 Transaction Request URL:', solanaPayUrl);
+                
+                // هدایت به Phantom
                 window.location.href = solanaPayUrl;
                 
-                // بعد از 5 ثانیه، شروع به auto-verify کن
+                // شروع polling برای تایید
                 setTimeout(() => {
                     autoVerifyLoop();
                 }, 5000);
@@ -240,15 +204,13 @@
             }
         }
 
-        // ✅ تابع جدید: Auto-verify بدون signature
+        // ✅ Auto-verify
         async function autoVerifyPayment() {
             try {
                 const response = await fetch('/airdrop/auto_verify_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: telegramId
-                    })
+                    body: JSON.stringify({ telegram_id: telegramId })
                 });
 
                 const data = await response.json();
@@ -257,17 +219,15 @@
                     showStatus('Payment verified! ✅', 'success');
                     setTimeout(returnToApp, 2000);
                     return true;
-                } else {
-                    console.log('Verification result:', data.message);
-                    return false;
                 }
+                return false;
             } catch (error) {
                 console.error('Auto-verify error:', error);
                 return false;
             }
         }
 
-        // Loop برای موبایل
+        // Loop for mobile
         function autoVerifyLoop() {
             let attempts = 0;
             const maxAttempts = 20;
@@ -285,7 +245,7 @@
                     showStatus('Timeout. Please refresh and try again.', 'error');
                     disablePayButton(false);
                 }
-            }, 5000); // هر 5 ثانیه
+            }, 5000);
         }
 
         function returnToApp() {
