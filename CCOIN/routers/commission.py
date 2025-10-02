@@ -251,10 +251,10 @@ async def confirm_commission(
             if tx.value.meta and tx.value.meta.err:
                 return {"success": False, "message": "Transaction failed on blockchain"}
             
-            # آپدیت دیتابیس
+            # ✅ آپدیت دیتابیس با نام فیلدهای صحیح
             user.commission_paid = True
-            user.commission_tx = signature
-            user.commission_paid_at = datetime.utcnow()
+            user.commission_transaction_hash = signature
+            user.commission_payment_date = datetime.utcnow()
             db.commit()
             
             print(f"✅ Commission confirmed successfully for user: {telegram_id}")
