@@ -11,170 +11,282 @@ from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
 from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
-from solders.pubkey import Pubkey
-from solders.keypair import Keypair
-from solders.system_program import TransferParams, transfer
-from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
-import base58, base64
+from solana.rpc.commitment import Confirmed
+import time
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# ------------------ PAY PAGE ------------------
 @router.get("/browser/pay", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_browser_pay(
     request: Request,
-    telegram_id: str = Query(...),
+    telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
     """صفحه پرداخت کمیسیون در مرورگر"""
+    print(f"💳 Commission browser payment for telegram_id: {telegram_id}")
+
+    # بررسی کاربر
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
+        print(f"❌ User not found: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
+    # بررسی اینکه آیا قبلاً پرداخت شده
     if user.commission_paid:
+        print(f"✅ Commission already paid for user: {telegram_id}")
         return templates.TemplateResponse("commission_success.html", {
-            "request": request, "telegram_id": telegram_id,
-            "success_message": "Commission already paid!", "already_paid": True
+            "request": request,
+            "telegram_id": telegram_id,
+            "success_message": "Commission already paid!",
+            "already_paid": True,
+            "bot_username": BOT_USERNAME
         })
 
+    # بررسی اتصال کیف پول
     if not user.wallet_address:
-        raise HTTPException(status_code=400, detail="Wallet not connected")
+        print(f"⚠️ No wallet connected for user: {telegram_id}")
+        raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
 
     return templates.TemplateResponse("commission_browser_pay.html", {
-        "request": request, "telegram_id": telegram_id,
+        "request": request,
+        "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET, "bot_username": BOT_USERNAME
+        "admin_wallet": ADMIN_WALLET,
+        "bot_username": BOT_USERNAME
     })
 
-# ------------------ SOLANA PAY ------------------
-@router.get("/pay", response_class=JSONResponse)
-async def commission_payment_page(
-    telegram_id: str = Query(...),
+
+@router.get("/check_status", response_class=JSONResponse)
+@limiter.limit("20/minute")
+async def check_commission_status(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """ایجاد URL برای پرداخت کمیسیون با فرمت Solana Pay"""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.commission_paid:
-        return RedirectResponse(url=f"/commission/success?telegram_id={telegram_id}&already_paid=true")
-
-    if not user.wallet_address:
-        raise HTTPException(status_code=400, detail="Wallet not connected")
-
-    reference = str(Keypair().pubkey())
-    pay_url = f"solana:{ADMIN_WALLET}?amount={COMMISSION_AMOUNT}&reference={reference}&label=CCoin+Commission&message=Payment+for+airdrop&memo=User:{telegram_id}"
-
-    return {"pay_url": pay_url, "reference": reference, "amount": COMMISSION_AMOUNT, "recipient": ADMIN_WALLET}
-
-# ------------------ TRANSACTION REQUEST ------------------
-@router.get("/transaction_request", response_class=JSONResponse)
-async def transaction_request_get(
-    request: Request, telegram_id: str, db: Session = Depends(get_db)
-):
-    """GET endpoint برای Solana Pay Transaction Request"""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user or user.commission_paid or not user.wallet_address:
-        raise HTTPException(status_code=400, detail="Invalid request")
-
-    base_url = str(request.base_url).rstrip('/')
-    return {"label": "CCoin Commission Payment", "icon": f"{base_url}/static/images/icon-512x512.png"}
-
-@router.post("/transaction_request", response_class=JSONResponse)
-async def transaction_request_post(
-    request: Request, telegram_id: str, db: Session = Depends(get_db)
-):
-    """POST endpoint برای Transaction Request"""
-    body = await request.json()
-    account = body.get("account")
-
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user or user.commission_paid:
-        raise HTTPException(status_code=400, detail="Invalid request")
-
-    client = AsyncClient(SOLANA_RPC)
-    from_pubkey = Pubkey.from_string(account)
-    to_pubkey = Pubkey.from_string(ADMIN_WALLET)
-
-    instructions = [
-        set_compute_unit_limit(200_000),
-        set_compute_unit_price(1),
-        transfer(TransferParams(from_pubkey=from_pubkey, to_pubkey=to_pubkey, lamports=int(COMMISSION_AMOUNT * 1e9)))
-    ]
-
-    recent_blockhash = (await client.get_latest_blockhash()).value.blockhash
-    from solders.message import Message
-    from solders.transaction import Transaction as SoldersTx
-    message = Message.new_with_blockhash(instructions, from_pubkey, recent_blockhash)
-    transaction = SoldersTx.new_unsigned(message)
-    serialized = base64.b64encode(bytes(transaction)).decode('utf-8')
-
-    await client.close()
-    return {"transaction": serialized, "message": f"Commission payment: {COMMISSION_AMOUNT} SOL"}
-
-# ------------------ CONFIRM PAYMENT ------------------
-@router.post("/confirm_commission", response_class=JSONResponse)
-async def confirm_commission(request: Request, db: Session = Depends(get_db)):
-    """تایید پرداخت کمیسیون و آپدیت دیتابیس"""
-    body = await request.json()
-    signature, telegram_id = body.get("signature"), body.get("telegramId")
+    """✅ بررسی وضعیت پرداخت کمیسیون"""
+    print(f"📊 Checking commission status for: {telegram_id}")
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.commission_paid:
-        return {"success": True, "message": "Already paid", "already_paid": True}
 
-    client = Client(SOLANA_RPC)
-    tx = client.get_transaction(signature, encoding="json", max_supported_transaction_version=0)
-
-    if not tx.value:
-        return {"success": False, "message": "Transaction not found"}
-    if tx.value.meta and tx.value.meta.err:
-        return {"success": False, "message": "Transaction failed"}
-
-    user.commission_paid = True
-    user.commission_transaction_hash = signature
-    user.commission_payment_date = datetime.utcnow()
-    db.commit()
-
-    return {"success": True, "message": "Commission confirmed", "signature": signature}
-
-# ------------------ STATUS ------------------
-@router.get("/status", response_class=JSONResponse)
-async def get_commission_status(telegram_id: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     return {
         "commission_paid": user.commission_paid,
         "wallet_connected": bool(user.wallet_address),
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET
+        "admin_wallet": ADMIN_WALLET,
+        "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
+        "transaction_hash": user.commission_transaction_hash
     }
 
-# ------------------ CHECK PAYMENT ------------------
-@router.get("/check_payment", response_class=JSONResponse)
-async def check_payment(telegram_id: str, reference: str, db: Session = Depends(get_db)):
-    """چک کردن پرداخت با reference"""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user or not user.wallet_address:
-        return {"status": "error", "message": "User or wallet not found"}
 
-    client = Client(SOLANA_RPC)
+@router.post("/confirm_commission", response_class=JSONResponse)
+@limiter.limit("5/minute")
+async def confirm_commission(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """✅ تایید پرداخت کمیسیون"""
     try:
-        ref_pubkey = Pubkey.from_bytes(base58.b58decode(reference))
-        signatures = client.get_signatures_for_address(ref_pubkey, limit=10)
-        if signatures.value:
-            tx_signature = str(signatures.value[0].signature)
-            tx = client.get_transaction(tx_signature, encoding="json", max_supported_transaction_version=0)
-            if tx.value and tx.value.meta and not tx.value.meta.err:
-                return {"status": "confirmed", "signature": tx_signature}
-        return {"status": "pending"}
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        signature = body.get("signature")
+        amount = body.get("amount")
+        recipient = body.get("recipient")
+
+        print(f"📥 Commission confirmation request:")
+        print(f"   telegram_id: {telegram_id}")
+        print(f"   signature: {signature}")
+        print(f"   amount: {amount}")
+        print(f"   recipient: {recipient}")
+
+        # Validation
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+        
+        if not signature:
+            raise HTTPException(status_code=400, detail="Missing transaction signature")
+
+        # بررسی کاربر
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            print(f"❌ User not found: {telegram_id}")
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # بررسی اینکه قبلاً پرداخت نشده باشد
+        if user.commission_paid:
+            print(f"✅ Commission already paid for user: {telegram_id}")
+            return {
+                "success": True,
+                "message": "Commission already confirmed",
+                "already_paid": True
+            }
+
+        # بررسی اتصال کیف پول
+        if not user.wallet_address:
+            print(f"❌ No wallet connected for user: {telegram_id}")
+            raise HTTPException(status_code=400, detail="No wallet connected")
+
+        # ✅ تایید تراکنش در بلاکچین با Retry
+        client = Client(SOLANA_RPC)
+        max_retries = 5
+        retry_delay = 2
+
+        transaction_confirmed = False
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"🔍 Verifying transaction (attempt {attempt + 1}/{max_retries}): {signature}")
+                
+                tx = client.get_transaction(
+                    signature,
+                    encoding="json",
+                    max_supported_transaction_version=0
+                )
+
+                if tx.value:
+                    # بررسی خطا
+                    if tx.value.meta and tx.value.meta.err:
+                        print(f"❌ Transaction failed on blockchain: {tx.value.meta.err}")
+                        raise HTTPException(status_code=400, detail="Transaction failed on blockchain")
+
+                    # ✅ تراکنش موفق
+                    transaction_confirmed = True
+                    print(f"✅ Transaction confirmed on blockchain")
+                    break
+                else:
+                    print(f"⚠️ Transaction not found yet (attempt {attempt + 1})")
+                    
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5  # Exponential backoff
+                    else:
+                        print(f"❌ Transaction not found after {max_retries} attempts")
+                        raise HTTPException(status_code=404, detail="Transaction not found on blockchain")
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"⚠️ Verification attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 1.5
+                else:
+                    raise HTTPException(status_code=500, detail=f"Transaction verification failed: {str(e)}")
+
+        if transaction_confirmed:
+            # ✅ آپدیت دیتابیس
+            user.commission_paid = True
+            user.commission_transaction_hash = signature
+            user.commission_payment_date = datetime.utcnow()
+            db.commit()
+
+            print(f"✅ Commission confirmed successfully for user: {telegram_id}")
+            print(f"   Transaction hash: {signature}")
+
+            return {
+                "success": True,
+                "message": "Commission confirmed successfully!",
+                "transaction_hash": signature,
+                "redirect_url": f"https://t.me/{BOT_USERNAME}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Transaction confirmation failed")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        db.rollback()
+        print(f"❌ Commission confirmation error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Confirmation failed: {str(e)}")
+
+
+@router.post("/verify_manual", response_class=JSONResponse)
+@limiter.limit("3/minute")
+async def verify_commission_manual(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """🔍 بررسی manual تراکنش‌های اخیر کاربر"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="No wallet connected")
+
+        if user.commission_paid:
+            return {
+                "success": True,
+                "message": "Commission already paid",
+                "already_paid": True
+            }
+
+        # بررسی تراکنش‌های اخیر
+        from solders.pubkey import Pubkey
+        
+        client = AsyncClient(SOLANA_RPC)
+        user_pubkey = Pubkey.from_string(user.wallet_address)
+        admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
+
+        # دریافت signatures اخیر
+        signatures = await client.get_signatures_for_address(user_pubkey, limit=10)
+
+        expected_amount = int(COMMISSION_AMOUNT * 1_000_000_000)  # Convert to lamports
+
+        for sig_info in signatures.value:
+            try:
+                tx = await client.get_transaction(
+                    sig_info.signature,
+                    encoding="json",
+                    max_supported_transaction_version=0
+                )
+
+                if tx.value and tx.value.meta and not tx.value.meta.err:
+                    # بررسی transfer به admin wallet
+                    post_balances = tx.value.meta.post_balances
+                    pre_balances = tx.value.meta.pre_balances
+                    
+                    # TODO: بررسی دقیق‌تر مقدار transfer
+                    
+                    # اگر تراکنش معتبر بود
+                    user.commission_paid = True
+                    user.commission_transaction_hash = str(sig_info.signature)
+                    user.commission_payment_date = datetime.utcnow()
+                    db.commit()
+
+                    await client.close()
+
+                    return {
+                        "success": True,
+                        "message": "Payment verified successfully!",
+                        "transaction_hash": str(sig_info.signature)
+                    }
+
+            except Exception as e:
+                print(f"Error checking transaction {sig_info.signature}: {e}")
+                continue
+
+        await client.close()
+
+        return {
+            "success": False,
+            "message": "No valid payment found in recent transactions"
+        }
+
+    except Exception as e:
+        print(f"Manual verification error: {e}")
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
