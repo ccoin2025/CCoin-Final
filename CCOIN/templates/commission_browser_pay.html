@@ -261,12 +261,12 @@
             }
         }
 
-        // باز کردن اپ Phantom (موبایل) - اصلاح شده ✅
+        // باز کردن اپ Phantom (موبایل)
         async function openPhantomApp() {
             try {
                 showStatus('Opening Phantom app...', 'info');
                 
-                // ✅ استفاده از Solana Pay URL ساده (بدون pre-built transaction)
+                // استفاده از Solana Pay URL ساده
                 const solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
                 
                 console.log('Opening Solana Pay URL:', solanaPayUrl);
@@ -289,7 +289,7 @@
         // بررسی مداوم وضعیت پرداخت
         function checkPaymentLoop() {
             let attempts = 0;
-            const maxAttempts = 30; // 30 * 3 = 90 ثانیه
+            const maxAttempts = 30;
 
             const interval = setInterval(async () => {
                 attempts++;
@@ -312,12 +312,14 @@
                 } catch (error) {
                     console.error('Status check error:', error);
                 }
-            }, 3000); // هر 3 ثانیه
+            }, 3000);
         }
 
         // ثبت در سرور (برای دسکتاپ) - ✅ اصلاح شده
         async function confirmOnServer(signature) {
             try {
+                console.log('✅ Confirming transaction on server:', signature);
+                
                 const response = await fetch('/airdrop/confirm_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -325,7 +327,7 @@
                         signature: signature,
                         amount: commissionAmount,
                         recipient: adminWallet,
-                        telegramId: telegramId
+                        telegram_id: telegramId  // ✅ تغییر از telegramId به telegram_id
                     })
                 });
 
