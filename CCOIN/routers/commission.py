@@ -327,6 +327,7 @@ async def get_commission_status(
         "admin_wallet": ADMIN_WALLET
     }
 
+
 @router.get("/check_payment", response_class=JSONResponse)
 @limiter.limit("30/minute")
 async def check_payment(
@@ -389,3 +390,122 @@ async def check_payment(
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+@router.get("/transaction_request", response_class=JSONResponse)
+@limiter.limit("20/minute")
+async def transaction_request_get(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    ✅ Solana Pay Transaction Request - GET
+    Wallet این را صدا می‌زند تا اطلاعات merchant را دریافت کند
+    """
+    print(f"📥 Transaction request GET for telegram_id: {telegram_id}")
+    
+    return {
+        "label": "CCoin Commission",
+        "icon": f"{request.base_url}static/images/icon-512x512.png"
+    }
+
+@router.post("/transaction_request", response_class=JSONResponse)
+@limiter.limit("20/minute")
+async def transaction_request_post(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    ✅ Solana Pay Transaction Request - POST
+    Wallet آدرس کاربر را می‌فرستد و ما transaction را برمی‌گردانیم
+    """
+    try:
+        body = await request.json()
+        account = body.get("account")
+        
+        print(f"📥 Transaction request POST for telegram_id: {telegram_id}, account: {account}")
+        
+        if not account:
+            raise HTTPException(status_code=400, detail="Missing account")
+        
+        # بررسی کاربر
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.commission_paid:
+            raise HTTPException(status_code=400, detail="Commission already paid")
+        
+        # ساخت transaction
+        from solana.rpc.async_api import AsyncClient
+        from solders.message import Message
+        from solders.transaction import Transaction as SoldersTransaction
+        
+        client = AsyncClient(SOLANA_RPC)
+        
+        # Public keys
+        from_pubkey = Pubkey.from_string(account)
+        to_pubkey = Pubkey.from_string(ADMIN_WALLET)
+        
+        # Instructions
+        instructions = []
+        
+        # Compute budget
+        compute_limit_ix = set_compute_unit_limit(200_000)
+        instructions.append(compute_limit_ix)
+        
+        compute_price_ix = set_compute_unit_price(1)
+        instructions.append(compute_price_ix)
+        
+        # Transfer
+        lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+        transfer_ix = transfer(
+            TransferParams(
+                from_pubkey=from_pubkey,
+                to_pubkey=to_pubkey,
+                lamports=lamports
+            )
+        )
+        instructions.append(transfer_ix)
+        
+        # ✅ اضافه کردن reference key برای tracking
+        reference_keypair = Keypair()
+        reference = str(reference_keypair.public_key)
+        
+        # ذخیره reference در دیتابیس یا cache
+        if redis_client:
+            redis_client.setex(f"tx_ref:{telegram_id}", 600, reference)
+        
+        # Get blockhash
+        recent_blockhash_resp = await client.get_latest_blockhash()
+        recent_blockhash = recent_blockhash_resp.value.blockhash
+        
+        # ساخت Message
+        message = Message.new_with_blockhash(
+            instructions,
+            from_pubkey,
+            recent_blockhash
+        )
+        
+        # ساخت Transaction
+        transaction = SoldersTransaction.new_unsigned(message)
+        
+        # Serialize
+        serialized_bytes = bytes(transaction)
+        base64_transaction = base64.b64encode(serialized_bytes).decode('utf-8')
+        
+        await client.close()
+        
+        print(f"✅ Transaction created for user: {telegram_id}")
+        
+        return {
+            "transaction": base64_transaction,
+            "message": f"Commission payment: {COMMISSION_AMOUNT} SOL"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error creating transaction: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
