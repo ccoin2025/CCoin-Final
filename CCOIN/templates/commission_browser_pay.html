@@ -31,8 +31,35 @@
             width: 100%;
         }
 
-        .logo { font-size: 48px; margin-bottom: 20px; }
-        h1 { margin-bottom: 30px; font-size: 24px; }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .commission-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .amount {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+
+        .fee-info {
+            font-size: 14px;
+            color: #90ee90;
+            margin-top: 10px;
+        }
 
         .btn {
             background: linear-gradient(45deg, #ffd700, #ffed4e);
@@ -95,17 +122,40 @@
     <div class="container">
         <div class="logo">💰</div>
         <h1>Commission Payment</h1>
+
         <div id="status" class="status"></div>
-        <button class="btn" id="pay-btn" onclick="openPhantom()">Pay with Phantom</button>
-        <button class="btn return-btn" onclick="returnToApp()">Return to App</button>
+
+        <button class="btn" id="pay-btn" onclick="openPhantom()">
+            <i class="fas fa-wallet"></i> Pay with Phantom
+        </button>
+
+        <button class="btn return-btn" onclick="returnToApp()">
+            <i class="fas fa-arrow-left"></i> Return to App
+        </button>
     </div>
 
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- Solana Web3.js از CDN (نسخه ثابت) -->
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
 
     <script>
+        // Validate متغیرهای قالب
         const telegramId = '{{ telegram_id }}';
-        const commissionAmount = {{ commission_amount }};
-        const baseUrl = window.location.origin;
+        const commissionAmount = Number('{{ commission_amount }}');
+        const adminWallet = '{{ admin_wallet }}';
+        const RPC_URLS = [
+            'https://rpc.ankr.com/solana',
+            'https://solana-api.projectserum.com',
+            'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY' // کلید Helius رو جایگزین کن
+        ];
+
+        // چک کردن مقادیر معتبر
+        console.log('telegramId:', telegramId);
+        console.log('commissionAmount:', commissionAmount);
+        console.log('adminWallet:', adminWallet);
+        if (!telegramId || isNaN(commissionAmount) || !adminWallet) {
+            showStatus('Invalid configuration. Please contact support.', 'error');
+            throw new Error('Invalid template variables');
+        }
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -118,19 +168,39 @@
             if (btn) btn.disabled = disabled;
         }
 
+        // تابع helper برای گرفتن blockhash
+        async function getBlockhashWithRetry(maxRetries = 5) {
+            for (let rpc of RPC_URLS) {
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        console.log(`Trying RPC ${rpc}, attempt ${i + 1}`);
+                        const connection = new solanaWeb3.Connection(rpc, 'confirmed');
+                        const { blockhash } = await connection.getLatestBlockhash();
+                        console.log(`Blockhash fetched from ${rpc}: ${blockhash}`);
+                        return blockhash;
+                    } catch (error) {
+                        console.error(`RPC ${rpc} attempt ${i + 1} failed:`, error);
+                        await new Promise(resolve => setTimeout(resolve, 3000 * (i + 1)));
+                    }
+                }
+            }
+            console.warn('All RPC attempts failed');
+            return null;
+        }
+
+        // باز کردن Phantom
         async function openPhantom() {
             try {
                 disablePayButton(true);
                 showStatus('Opening Phantom...', 'info');
 
+                // بررسی Extension
                 const hasExtension = window.solana && window.solana.isPhantom;
 
                 if (hasExtension) {
-                    // Desktop: استفاده مستقیم از Phantom Extension
                     await payWithExtension();
                 } else {
-                    // Mobile: استفاده از Solana Pay Transaction Request
-                    await payWithTransactionRequest();
+                    await openPhantomApp();
                 }
 
             } catch (error) {
@@ -140,77 +210,111 @@
             }
         }
 
-        // ✅ Desktop Extension: استفاده از window.solana
+        // پرداخت با Extension
         async function payWithExtension() {
             try {
                 showStatus('Connecting to wallet...', 'info');
+                
                 const resp = await window.solana.connect();
                 const userPublicKey = resp.publicKey;
 
                 showStatus('Creating transaction...', 'info');
-                const connection = new solanaWeb3.Connection(
-                    'https://api.devnet.solana.com',
-                    'confirmed'
-                );
-                
+
+                const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
 
-                // Add transfer instruction
+                // تنظیم Compute Budget برای کاهش فی
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
+                );
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0 })
+                );
+
+                // Transfer
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: userPublicKey,
-                        toPubkey: new solanaWeb3.PublicKey('{{ admin_wallet }}'),
+                        toPubkey: new solanaWeb3.PublicKey(adminWallet),
                         lamports: Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
                     })
                 );
 
-                // Get latest blockhash
-                const { blockhash } = await connection.getLatestBlockhash();
+                // گرفتن blockhash
+                const blockhash = await getBlockhashWithRetry();
+                if (!blockhash) {
+                    throw new Error('Could not fetch blockhash. Please try again.');
+                }
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
-                showStatus('Please approve in Phantom...', 'info');
-                const signed = await window.solana.signAndSendTransaction(transaction);
+                showStatus('Please approve the transaction...', 'info');
 
-                showStatus('Confirming payment...', 'info');
+                const signed = await window.solana.signAndSendTransaction(transaction);
+                
+                showStatus('Transaction sent! Confirming...', 'info');
+
                 await connection.confirmTransaction(signed.signature, 'confirmed');
 
-                console.log('✅ Transaction confirmed:', signed.signature);
+                showStatus('Payment successful! ✅', 'success');
 
-                showStatus('Verifying on server...', 'info');
                 await confirmOnServer(signed.signature);
+
+                setTimeout(returnToApp, 2000);
 
             } catch (error) {
                 console.error('Extension payment failed:', error);
-                showStatus('Payment failed: ' + error.message, 'error');
+                showStatus('Payment cancelled or failed: ' + error.message, 'error');
                 disablePayButton(false);
             }
         }
 
-        // ✅ Mobile: استفاده از Solana Pay Transaction Request Protocol
-        async function payWithTransactionRequest() {
+        // باز کردن اپ Phantom (موبایل)
+        async function openPhantomApp() {
             try {
+                showStatus('Preparing transaction...', 'info');
+
+                // گرفتن blockhash
+                const blockhash = await getBlockhashWithRetry();
+                let solanaPayUrl;
+
+                if (blockhash) {
+                    const connection = new solanaWeb3.Connection(RPC_URLS[0], 'confirmed');
+                    const transaction = new solanaWeb3.Transaction();
+
+                    // تنظیم Compute Budget برای کاهش فی
+                    transaction.add(
+                        solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
+                    );
+                    transaction.add(
+                        solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0 })
+                    );
+
+                    // Transfer
+                    transaction.add(
+                        solanaWeb3.SystemProgram.transfer({
+                            fromPubkey: new solanaWeb3.PublicKey('11111111111111111111111111111111'),
+                            toPubkey: new solanaWeb3.PublicKey(adminWallet),
+                            lamports: Math.floor(commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
+                        })
+                    );
+
+                    transaction.recentBlockhash = blockhash;
+                    const serializedTx = transaction.serialize({ requireAllSignatures: false }).toString('base64');
+                    solanaPayUrl = `solana:${encodeURIComponent(
+                        `${RPC_URLS[0]}?transaction=${serializedTx}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`
+                    )}`;
+                } else {
+                    // Fallback به Solana Pay ساده
+                    console.warn('No blockhash; using simple Solana Pay.');
+                    solanaPayUrl = `solana:${adminWallet}?amount=${commissionAmount}&label=${encodeURIComponent('CCoin Commission')}&message=${encodeURIComponent('Airdrop fee')}&memo=${encodeURIComponent(`User:${telegramId}`)}`;
+                }
+
                 showStatus('Opening Phantom app...', 'info');
+                console.log('Solana Pay URL:', solanaPayUrl);
 
-                // ✅ ساخت Transaction Request URL طبق استاندارد Solana Pay
-                const transactionRequestUrl = `${baseUrl}/commission/transaction_request?telegram_id=${telegramId}`;
-                
-                // ⚠️ مهم: URL را encode کنید (طبق مستندات Solana Pay)
-                const encodedUrl = encodeURIComponent(transactionRequestUrl);
-                
-                // ✅ فرمت استاندارد Solana Pay: solana:<encoded-url>
-                const solanaPayUrl = `solana:${encodedUrl}`;
-
-                console.log('🔗 Transaction Request URL:', transactionRequestUrl);
-                console.log('🔗 Solana Pay URL:', solanaPayUrl);
-
-                // هدایت به Phantom (این کار Phantom را باز می‌کند)
                 window.location.href = solanaPayUrl;
-
-                // شروع polling برای تایید خودکار
-                setTimeout(() => {
-                    autoVerifyLoop();
-                }, 5000);
+                setTimeout(() => checkPaymentLoop(), 5000);
 
             } catch (error) {
                 console.error('Mobile payment failed:', error);
@@ -219,99 +323,69 @@
             }
         }
 
-        // ✅ تایید تراکنش در سرور
-        async function confirmOnServer(signature) {
-            try {
-                const response = await fetch('/commission/confirm_commission', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        signature: signature,
-                        telegramId: telegramId,
-                        amount: commissionAmount,
-                        recipient: '{{ admin_wallet }}'
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showStatus('Payment verified! ✅', 'success');
-                    setTimeout(returnToApp, 2000);
-                    return true;
-                } else {
-                    showStatus('Verification failed: ' + data.message, 'error');
-                    disablePayButton(false);
-                    return false;
-                }
-            } catch (error) {
-                console.error('Confirmation error:', error);
-                showStatus('Verification error: ' + error.message, 'error');
-                disablePayButton(false);
-                return false;
-            }
-        }
-
-        // ✅ Auto-verify برای mobile (polling)
-        async function autoVerifyPayment() {
-            try {
-                const response = await fetch('/airdrop/auto_verify_commission', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: telegramId })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showStatus('Payment verified! ✅', 'success');
-                    setTimeout(returnToApp, 2000);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Auto-verify error:', error);
-                return false;
-            }
-        }
-
-        // ✅ Loop for mobile verification
-        function autoVerifyLoop() {
+        // بررسی مداوم وضعیت پرداخت
+        function checkPaymentLoop() {
             let attempts = 0;
-            const maxAttempts = 24; // 2 minutes (5 sec intervals)
+            const maxAttempts = 30;
 
             const interval = setInterval(async () => {
                 attempts++;
-                showStatus(`Checking payment... (${attempts}/${maxAttempts})`, 'info');
+                
+                try {
+                    const response = await fetch('/airdrop/commission_status');
+                    const data = await response.json();
 
-                const verified = await autoVerifyPayment();
-
-                if (verified) {
-                    clearInterval(interval);
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(interval);
-                    showStatus('Timeout. Please check status or try again.', 'error');
-                    disablePayButton(false);
+                    if (data.commission_paid) {
+                        clearInterval(interval);
+                        showStatus('Payment confirmed! ✅', 'success');
+                        setTimeout(returnToApp, 2000);
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        showStatus('Timeout. Please try again or check manually.', 'error');
+                        disablePayButton(false);
+                    } else {
+                        showStatus(`Waiting for payment... (${attempts}/${maxAttempts})`, 'info');
+                    }
+                } catch (error) {
+                    console.error('Status check error:', error);
                 }
-            }, 5000); // Check every 5 seconds
+            }, 3000);
+        }
+
+        // ثبت در سرور
+        async function confirmOnServer(signature) {
+            try {
+                await fetch('/airdrop/confirm_commission', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signature: signature,
+                        amount: commissionAmount,
+                        recipient: adminWallet
+                    })
+                });
+            } catch (error) {
+                console.error('Server confirmation error:', error);
+            }
         }
 
         function returnToApp() {
-            window.location.href = `https://t.me/{{ bot_username }}`;
+            window.location.href = `https://t.me/CTG_COIN_BOT/app?startapp=commission_paid`;
         }
 
-        // ✅ Auto-check commission status on page load
-        window.addEventListener('DOMContentLoaded', async () => {
+        // بررسی اولیه وضعیت
+        window.addEventListener('load', async function() {
             try {
-                const response = await fetch(`/commission/status?telegram_id=${telegramId}`);
+                const response = await fetch('/airdrop/commission_status');
                 const data = await response.json();
-                
+
                 if (data.commission_paid) {
-                    showStatus('Commission already paid! ✅', 'success');
+                    showStatus('Payment already completed! ✅', 'success');
                     disablePayButton(true);
+                    setTimeout(returnToApp, 2000);
                 }
             } catch (error) {
-                console.error('Status check error:', error);
+                console.error('Initial check error:', error);
             }
         });
     </script>
