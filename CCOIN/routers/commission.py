@@ -220,7 +220,7 @@ async def confirm_commission(
 
 
 @router.post("/verify_payment_auto", response_class=JSONResponse)
-@limiter.limit("15/minute")
+@limiter.limit("10/minute")
 async def verify_payment_auto(
     request: Request,
     db: Session = Depends(get_db)
@@ -248,25 +248,25 @@ async def verify_payment_auto(
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="No wallet connected")
 
-        # Check transactions FROM user wallet
         client = AsyncClient(SOLANA_RPC)
         
         try:
             user_pubkey = Pubkey.from_string(user.wallet_address)
+            admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
 
             print(f"🔍 Checking payments from user wallet: {telegram_id}")
             print(f"   User wallet: {user.wallet_address}")
             print(f"   Admin wallet: {ADMIN_WALLET}")
 
-            # Get recent transactions from USER wallet
+            # Get recent transactions
             signatures_response = await client.get_signatures_for_address(
                 user_pubkey,
-                limit=20
+                limit=10
             )
 
             if not signatures_response.value:
                 await client.close()
-                print(f"⚠️ No recent transactions found for user wallet")
+                print(f"⚠️ No transactions found")
                 return {
                     "success": True,
                     "payment_found": False,
@@ -274,17 +274,17 @@ async def verify_payment_auto(
                 }
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
-            tolerance = int(0.01 * 1_000_000_000)  # 0.01 SOL tolerance
+            tolerance = int(0.015 * 1_000_000_000)
 
-            print(f"   Expected amount: {expected_lamports / 1_000_000_000} SOL")
-            print(f"   Checking {len(signatures_response.value)} recent transactions...")
+            print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
+            print(f"   Checking {len(signatures_response.value)} transactions...")
 
-            # Check each transaction
             for idx, sig_info in enumerate(signatures_response.value):
                 try:
-                    # Add delay to avoid rate limiting
-                    if idx > 0 and idx % 3 == 0:
+                    if idx > 0:
                         await asyncio.sleep(0.5)
+                    
+                    print(f"   Checking tx: {sig_info.signature}")
                     
                     tx_response = await client.get_transaction(
                         sig_info.signature,
@@ -293,58 +293,78 @@ async def verify_payment_auto(
                     )
 
                     if not tx_response or not tx_response.value:
+                        print(f"     ⚠️ No data")
                         continue
 
                     tx = tx_response.value
                     
-                    # Check for errors in transaction
-                    if hasattr(tx, 'meta') and tx.meta and tx.meta.err:
-                        continue
-
-                    # Get meta and transaction data
-                    meta = getattr(tx, 'meta', None)
+                    # Access meta safely
+                    meta = None
+                    if hasattr(tx, 'meta'):
+                        meta = tx.meta
+                    elif hasattr(tx, '__dict__') and 'meta' in tx.__dict__:
+                        meta = tx.__dict__['meta']
+                    
                     if not meta:
+                        print(f"     ⚠️ No meta")
                         continue
 
-                    transaction = getattr(tx, 'transaction', None)
-                    if not transaction:
+                    # Check for errors
+                    if hasattr(meta, 'err') and meta.err:
+                        print(f"     ⚠️ Transaction failed")
+                        continue
+
+                    # Get balances
+                    pre_balances = []
+                    post_balances = []
+                    
+                    if hasattr(meta, 'pre_balances'):
+                        pre_balances = meta.pre_balances
+                    if hasattr(meta, 'post_balances'):
+                        post_balances = meta.post_balances
+                    
+                    if not pre_balances or not post_balances:
+                        print(f"     ⚠️ No balance info")
                         continue
 
                     # Get account keys
                     account_keys = []
-                    if hasattr(transaction, 'message'):
-                        message = transaction.message
-                        if hasattr(message, 'account_keys'):
-                            account_keys = message.account_keys
+                    if hasattr(tx, 'transaction'):
+                        transaction = tx.transaction
+                        if hasattr(transaction, 'message'):
+                            message = transaction.message
+                            if hasattr(message, 'account_keys'):
+                                account_keys = message.account_keys
 
-                    # Check if admin wallet is in the transaction
-                    admin_in_tx = False
-                    for key in account_keys:
-                        if str(key) == ADMIN_WALLET:
-                            admin_in_tx = True
-                            break
-
-                    if not admin_in_tx:
+                    if not account_keys:
+                        print(f"     ⚠️ No account keys")
                         continue
+
+                    # Check if admin wallet is in transaction
+                    admin_found = any(str(key) == ADMIN_WALLET for key in account_keys)
+                    
+                    if not admin_found:
+                        print(f"     ⚠️ Admin wallet not in tx")
+                        continue
+
+                    print(f"     ✅ Admin wallet found in tx")
 
                     # Check balance changes
-                    pre_balances = getattr(meta, 'pre_balances', [])
-                    post_balances = getattr(meta, 'post_balances', [])
-                    
-                    if not pre_balances or not post_balances:
-                        continue
-
-                    for acc_idx, (pre, post) in enumerate(zip(pre_balances, post_balances)):
-                        # Check if user wallet SENT money
-                        if pre > post and acc_idx < len(account_keys) and str(account_keys[acc_idx]) == user.wallet_address:
+                    for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
+                        pre = pre_balances[acc_idx]
+                        post = post_balances[acc_idx]
+                        account = str(account_keys[acc_idx])
+                        
+                        # User wallet sent money
+                        if account == user.wallet_address and pre > post:
                             sent = pre - post
+                            print(f"     💸 User sent: {sent / 1_000_000_000} SOL")
                             
-                            # Check if amount matches (with tolerance for fees)
-                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.02):  # +2% for fees
-                                print(f"✅ Payment detected from user wallet!")
+                            # Check amount
+                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
+                                print(f"✅ PAYMENT FOUND!")
                                 print(f"   Signature: {sig_info.signature}")
-                                print(f"   Amount sent: {sent / 1_000_000_000} SOL")
-                                print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
+                                print(f"   Amount: {sent / 1_000_000_000} SOL")
                                 
                                 # Update database
                                 user.commission_paid = True
@@ -357,23 +377,25 @@ async def verify_payment_auto(
                                 return {
                                     "success": True,
                                     "payment_found": True,
-                                    "message": "Payment detected and confirmed!",
+                                    "message": "Payment confirmed!",
                                     "transaction_hash": str(sig_info.signature),
                                     "amount": sent / 1_000_000_000
                                 }
+                            else:
+                                print(f"     ⚠️ Amount mismatch: {sent / 1_000_000_000} vs {expected_lamports / 1_000_000_000}")
 
                 except Exception as e:
-                    print(f"⚠️ Error checking transaction {sig_info.signature}: {e}")
+                    print(f"     ❌ Error: {str(e)[:100]}")
                     continue
 
             await client.close()
 
-            print(f"⚠️ No matching payment found in recent transactions")
+            print(f"⚠️ No matching payment found")
 
             return {
                 "success": True,
                 "payment_found": False,
-                "message": "No matching payment found. Please wait 30-60 seconds after payment."
+                "message": "Payment not detected. Please wait and try again."
             }
 
         except Exception as e:
@@ -384,7 +406,7 @@ async def verify_payment_auto(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Auto-verify error: {e}")
+        print(f"❌ Verification error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
