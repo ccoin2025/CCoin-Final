@@ -433,3 +433,23 @@ async def verify_commission_manual(
     except Exception as e:
         print(f"Manual verification error: {e}")
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+
+@router.get("/success", response_class=HTMLResponse)
+async def commission_success(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """صفحه موفقیت پرداخت"""
+    print(f"✅ Commission success page for: {telegram_id}")
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return templates.TemplateResponse("commission_success.html", {
+        "request": request,
+        "telegram_id": telegram_id,
+        "bot_username": BOT_USERNAME
+    })
+
