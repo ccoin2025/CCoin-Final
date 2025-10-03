@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Successful</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
+    <title>Payment Successful - CCoin</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -35,12 +37,8 @@
         }
 
         @keyframes scaleIn {
-            from {
-                transform: scale(0);
-            }
-            to {
-                transform: scale(1);
-            }
+            from { transform: scale(0); }
+            to { transform: scale(1); }
         }
 
         h1 {
@@ -52,6 +50,7 @@
             font-size: 16px;
             opacity: 0.9;
             margin-bottom: 30px;
+            line-height: 1.6;
         }
 
         .btn {
@@ -66,11 +65,18 @@
             text-decoration: none;
             display: inline-block;
             transition: all 0.3s ease;
+            width: 100%;
         }
 
         .btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .countdown {
+            font-size: 14px;
+            opacity: 0.7;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -78,17 +84,31 @@
     <div class="container">
         <div class="success-icon">✅</div>
         <h1>Payment Successful!</h1>
-        <p>Your commission has been paid successfully. You can now proceed with the airdrop.</p>
-        <a href="https://t.me/{{ bot_username }}" class="btn">
+        <p>Your commission has been paid successfully. You are now eligible for the CCoin airdrop!</p>
+        <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">
             Return to Bot
         </a>
+        <p class="countdown">Redirecting in <span id="countdown">3</span> seconds...</p>
     </div>
 
     <script>
-        // Auto-redirect after 3 seconds
-        setTimeout(() => {
-            window.location.href = 'https://t.me/{{ bot_username }}';
-        }, 3000);
+        let seconds = 3;
+        const countdownEl = document.getElementById('countdown');
+        
+        const interval = setInterval(() => {
+            seconds--;
+            countdownEl.textContent = seconds;
+            
+            if (seconds <= 0) {
+                clearInterval(interval);
+                window.location.href = 'https://t.me/{{ bot_username }}';
+            }
+        }, 1000);
+
+        // همچنین اجازه بده کاربر خودش کلیک کنه
+        document.getElementById('return-btn').addEventListener('click', (e) => {
+            clearInterval(interval);
+        });
     </script>
 </body>
 </html>
