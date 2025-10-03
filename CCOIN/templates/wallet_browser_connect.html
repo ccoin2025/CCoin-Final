@@ -2,398 +2,434 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
-    <title>Pay Commission</title>
-    
-    <!-- bs58 library برای ساخت reference -->
+    <title>Connect Phantom Wallet</title>
+    <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
     <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
-    
     <style>
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
             text-align: center;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            max-width: 450px;
-            width: 100%;
+            padding: 50px 20px;
+            min-height: 100vh;
         }
-
-        .logo {
-            font-size: 48px;
-            margin-bottom: 20px;
-        }
-
-        h1 {
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .commission-info {
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
             background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
+            padding: 40px;
+            border-radius: 20px;
         }
-
-        .amount {
-            font-size: 32px;
-            font-weight: bold;
-            color: #ffd700;
-            margin-bottom: 10px;
-        }
-
-        .fee-warning {
-            background: rgba(255, 152, 0, 0.2);
-            border: 2px solid #ff9800;
-            border-radius: 12px;
-            padding: 15px;
-            margin: 20px 0;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .fee-warning-title {
-            font-weight: bold;
-            color: #ffa726;
-            margin-bottom: 8px;
-            font-size: 15px;
-        }
-
         .btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #000;
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 20px 30px;
             border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 18px;
             cursor: pointer;
             width: 100%;
+            margin: 15px 0;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+            font-weight: 600;
             transition: all 0.3s ease;
-            margin: 10px 0;
         }
-
         .btn:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
         }
-
         .btn:disabled {
-            opacity: 0.5;
+            opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
-
-        .return-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-        }
-
-        .status {
-            margin: 20px 0;
-            padding: 10px;
-            border-radius: 10px;
-            display: none;
-            font-size: 14px;
-        }
-
-        .status.success {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4caf50;
-            display: block;
-        }
-
-        .status.error {
-            background: rgba(244, 67, 54, 0.2);
-            color: #f44336;
-            display: block;
-        }
-
-        .status.info {
-            background: rgba(33, 150, 243, 0.2);
-            color: #2196f3;
-            display: block;
-        }
-
-        .debug-info {
-            margin-top: 20px;
-            padding: 10px;
+        .debug {
             background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
             border-radius: 10px;
-            font-size: 11px;
+            margin: 20px 0;
+            font-size: 12px;
             text-align: left;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
-            display: block;
+            font-family: monospace;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success-message {
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid #4CAF50;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">💰</div>
-        <h1>Commission Payment</h1>
+        <h1>🦄 Connect Phantom Wallet</h1>
+        <p>Connect your Phantom wallet to CCoin to participate in the airdrop</p>
 
-        <div class="commission-info">
-            <div class="amount">{{ commission_amount }} SOL</div>
-            <div>Commission Amount</div>
+        <button class="btn" id="connectBtn" onclick="handlePhantomConnect()">
+            🦄 Open in Phantom App
+        </button>
+
+        <div id="successMessage" class="success-message" style="display: none;">
+            <h3>✅ Wallet Connected Successfully!</h3>
+            <p>Redirecting you back to CCoin app...</p>
         </div>
 
-        <div id="status" class="status"></div>
-
-        <button class="btn" id="pay-btn" onclick="startPayment()">
-            💳 Pay Now
-        </button>
-
-        <button class="btn return-btn" onclick="returnToApp()">
-            Cancel & Return
-        </button>
-
-        <div id="debug-info" class="debug-info">🔍 Debug Log:<br></div>
+        <div id="debug" class="debug"></div>
     </div>
 
     <script>
-        const telegramId = '{{ telegram_id }}';
-        const commissionAmount = {{ commission_amount }};
-        const adminWallet = '{{ admin_wallet }}';
-        const botUsername = '{{ bot_username }}';
+        let dappKeyPair = null;
+        let dappPublicKey = '';
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const telegramId = urlParams.get('telegram_id');
 
-        let pollingInterval = null;
-
-        function addDebugLog(message) {
-            const debugDiv = document.getElementById('debug-info');
-            const time = new Date().toLocaleTimeString();
-            const logMessage = `[${time}] ${message}`;
-            debugDiv.innerHTML += logMessage + '<br>';
-            debugDiv.scrollTop = debugDiv.scrollHeight;
-            console.log(logMessage);
-        }
-
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-            addDebugLog(`📌 ${message}`);
-        }
-
-        function disablePayButton(disabled) {
-            document.getElementById('pay-btn').disabled = disabled;
-        }
-
-        // ✅ تولید reference معتبر (base58-encoded 32-byte)
-        function generateReference() {
-            const array = new Uint8Array(32);
-            crypto.getRandomValues(array);
-            return bs58.encode(array);
-        }
-
-        // ✅ شروع پرداخت
-        async function startPayment() {
-            disablePayButton(true);
-            addDebugLog('═══ Payment Started ═══');
-            addDebugLog(`👤 Telegram ID: ${telegramId}`);
-            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
-
-            try {
-                // تولید reference
-                const reference = generateReference();
-                addDebugLog(`🔑 Reference: ${reference.substring(0, 16)}...`);
-
-                // ذخیره reference
-                sessionStorage.setItem('commission_reference', reference);
-                sessionStorage.setItem('payment_start_time', Date.now().toString());
-
-                // ساخت Solana Pay URL
-                const memo = `CCoin-${telegramId}`;
-                const solanaPayUrl = 
-                    `solana:${adminWallet}?` +
-                    `amount=${commissionAmount}&` +
-                    `reference=${reference}&` +
-                    `memo=${encodeURIComponent(memo)}&` +
-                    `label=${encodeURIComponent('CCoin Commission')}&` +
-                    `message=${encodeURIComponent('Airdrop Eligibility Fee')}`;
-
-                addDebugLog(`🔗 Solana Pay URL created`);
-                addDebugLog(`📍 Recipient: ${adminWallet.substring(0, 16)}...`);
-
-                showStatus('Opening wallet...', 'info');
-                
-                // Redirect به wallet
-                window.location.href = solanaPayUrl;
-
-                // شروع polling بعد از 3 ثانیه
-                setTimeout(() => {
-                    checkPayment(reference);
-                }, 3000);
-
-            } catch (error) {
-                addDebugLog(`❌ Error: ${error.message}`);
-                showStatus('Failed to create payment link', 'error');
-                disablePayButton(false);
+        function log(msg) {
+            console.log(msg);
+            const debug = document.getElementById('debug');
+            if (debug) {
+                debug.style.display = 'block';
+                debug.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
+                debug.scrollTop = debug.scrollHeight;
             }
         }
 
-        // ✅ چک کردن وضعیت پرداخت
-        async function checkPayment(reference) {
-            addDebugLog('🔄 Starting payment verification...');
-            showStatus('Waiting for payment...', 'info');
-
-            let attempts = 0;
-            const maxAttempts = 60; // 5 دقیقه (60 × 5 ثانیه)
-
-            pollingInterval = setInterval(async () => {
-                attempts++;
-                addDebugLog(`🔍 Checking... (${attempts}/${maxAttempts})`);
-
-                try {
-                    const response = await fetch(
-                        `/commission/check_payment?telegram_id=${telegramId}&reference=${reference}`,
-                        { method: 'GET' }
-                    );
-
-                    const data = await response.json();
-
-                    if (data.status === 'confirmed' && data.signature) {
-                        // ✅ پرداخت تأیید شد
-                        clearInterval(pollingInterval);
-                        addDebugLog(`✅ Payment confirmed!`);
-                        addDebugLog(`📝 Signature: ${data.signature.substring(0, 16)}...`);
-                        
-                        showStatus('Payment confirmed! ✅', 'success');
-
-                        // ذخیره در دیتابیس
-                        await confirmWithBackend(data.signature);
-
-                    } else if (data.status === 'pending') {
-                        // در حال بررسی
-                        addDebugLog(`⏳ Still pending...`);
-                        
-                    } else if (attempts >= maxAttempts) {
-                        // timeout
-                        clearInterval(pollingInterval);
-                        addDebugLog('⏰ Timeout - please check manually');
-                        showStatus('Verification timeout. Please contact support.', 'error');
-                        disablePayButton(false);
-                    }
-
-                } catch (error) {
-                    addDebugLog(`⚠️ Check error: ${error.message}`);
-                }
-
-            }, 5000); // هر 5 ثانیه
+        function simpleBase58Encode(bytes) {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let result = '';
+            let num = 0n;
+            
+            for (let i = 0; i < bytes.length; i++) {
+                num = num * 256n + BigInt(bytes[i]);
+            }
+            
+            while (num > 0n) {
+                result = alphabet[Number(num % 58n)] + result;
+                num = num / 58n;
+            }
+            
+            for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
+                result = '1' + result;
+            }
+            
+            return result;
         }
 
-        // ✅ تأیید نهایی با backend
-        async function confirmWithBackend(signature) {
-            try {
-                addDebugLog('📤 Confirming with backend...');
+        function simpleBase58Decode(str) {
+            const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let num = 0n;
+            
+            for (let char of str) {
+                const index = alphabet.indexOf(char);
+                if (index === -1) throw new Error('Invalid base58 character');
+                num = num * 58n + BigInt(index);
+            }
+            
+            const bytes = [];
+            while (num > 0n) {
+                bytes.unshift(Number(num % 256n));
+                num = num / 256n;
+            }
+            
+            for (let i = 0; i < str.length && str[i] === '1'; i++) {
+                bytes.unshift(0);
+            }
+            
+            return new Uint8Array(bytes);
+        }
 
-                const response = await fetch('/airdrop/confirm_commission', {
+        function checkLibraries() {
+            log('🔍 Checking cryptographic libraries...');
+            
+            if (typeof nacl === 'undefined') {
+                log('❌ TweetNaCl library not loaded');
+                return false;
+            }
+            log('✅ TweetNaCl library loaded');
+
+            if (typeof bs58 === 'undefined') {
+                log('⚠️ BS58 library not loaded, using fallback implementation');
+                window.bs58 = {
+                    encode: simpleBase58Encode,
+                    decode: simpleBase58Decode
+                };
+            }
+            log('✅ BS58 functions available');
+
+            return true;
+        }
+
+        function initializeCrypto() {
+            try {
+                log('🔑 Generating encryption keypair...');
+                
+                if (!checkLibraries()) {
+                    throw new Error('Required cryptographic libraries not available');
+                }
+
+                dappKeyPair = nacl.box.keyPair();
+                dappPublicKey = bs58.encode(dappKeyPair.publicKey);
+                
+                log('✅ Keypair generated successfully');
+                
+                return true;
+            } catch (error) {
+                log('❌ Failed to generate keypair: ' + error.message);
+                return false;
+            }
+        }
+
+        async function handlePhantomConnect() {
+            const connectBtn = document.getElementById('connectBtn');
+            
+            try {
+                connectBtn.disabled = true;
+                connectBtn.innerHTML = '<span class="loading-spinner"></span>Initializing...';
+
+                if (!telegramId) {
+                    log('❌ Error: Missing telegram_id parameter');
+                    alert('Error: Missing telegram_id parameter');
+                    return;
+                }
+
+                log('👤 Telegram ID: ' + telegramId);
+
+                if (window.solana && window.solana.isPhantom) {
+                    log('✅ Already in Phantom browser, connecting directly');
+                    await connectDirectly();
+                    return;
+                }
+
+                const cryptoReady = initializeCrypto();
+                if (!cryptoReady) {
+                    throw new Error('Failed to initialize cryptographic functions');
+                }
+
+                connectBtn.innerHTML = '<span class="loading-spinner"></span>Opening Phantom...';
+                log('🚀 Creating Phantom deeplink...');
+
+                // تنظیم redirect URL به همین صفحه
+                const currentUrl = new URL(window.location.href);
+                const redirectUrl = currentUrl.origin + currentUrl.pathname + '?telegram_id=' + telegramId;
+                
+                const params = new URLSearchParams({
+                    dapp_encryption_public_key: dappPublicKey,
+                    cluster: "devnet",
+                    app_url: window.location.origin,
+                    redirect_link: redirectUrl
+                });
+
+                const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
+                
+                log('🔗 Redirect URL: ' + redirectUrl);
+                
+                localStorage.setItem('dapp_keypair_public', dappPublicKey);
+                localStorage.setItem('dapp_keypair_secret', bs58.encode(dappKeyPair.secretKey));
+                localStorage.setItem('telegram_id', telegramId);
+
+                log('💾 Data saved, opening Phantom...');
+
+                setTimeout(() => {
+                    window.location.href = phantomDeeplink;
+                }, 500);
+
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+                
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '🦄 Open in Phantom App';
+                alert('Failed to initialize connection.\n\nError: ' + error.message);
+            }
+        }
+
+        async function connectDirectly() {
+            try {
+                log('🔌 Inside Phantom browser, connecting wallet...');
+
+                const response = await window.solana.connect();
+                const walletAddress = response.publicKey.toString();
+
+                log('✅ Wallet connected: ' + walletAddress);
+
+                await saveWalletToServer(telegramId, walletAddress);
+
+            } catch (error) {
+                log('❌ Error in connectDirectly: ' + error.message);
+                alert('Failed to connect wallet: ' + error.message);
+            }
+        }
+
+        async function saveWalletToServer(telegramId, walletAddress, session = null) {
+            try {
+                log('📤 Saving wallet to server...');
+
+                const response = await fetch('/wallet/connect', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                         telegram_id: telegramId,
-                        signature: signature,
-                        amount: commissionAmount,
-                        recipient: adminWallet
+                        wallet_address: walletAddress,
+                        session: session
                     })
                 });
 
-                const result = await response.json();
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Server error');
+                }
 
-                if (result.success) {
-                    addDebugLog('🎉 Backend confirmed!');
-                    showStatus('Payment successful! Redirecting...', 'success');
-                    
-                    // پاک کردن session
-                    sessionStorage.removeItem('commission_reference');
-                    sessionStorage.removeItem('payment_start_time');
+                const data = await response.json();
 
-                    // بازگشت به اپ
-                    setTimeout(() => returnToApp(), 2000);
+                if (data.success) {
+                    log('✅ Wallet saved successfully!');
+                    showSuccessAndRedirect(walletAddress);
                 } else {
-                    addDebugLog(`❌ Backend error: ${result.message}`);
-                    showStatus('Verification failed', 'error');
+                    throw new Error(data.message || 'Failed to save wallet');
                 }
 
             } catch (error) {
-                addDebugLog(`❌ Confirm error: ${error.message}`);
-                showStatus('Confirmation failed', 'error');
+                log('❌ Error saving wallet: ' + error.message);
+                alert('Failed to save wallet: ' + error.message);
             }
         }
 
-        function returnToApp() {
-            // پاک کردن polling
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
-            }
+        function showSuccessAndRedirect(walletAddress) {
+            // نمایش پیام موفقیت
+            document.getElementById('connectBtn').style.display = 'none';
+            const successMsg = document.getElementById('successMessage');
+            successMsg.style.display = 'block';
+            
+            log('🎉 Success! Redirecting to Telegram...');
 
-            addDebugLog('🔙 Returning to Telegram...');
-
-            const deepLink = `https://t.me/${botUsername}/app`;
-            const webAppLink = `tg://resolve?domain=${botUsername}&appname=app`;
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-            if (isMobile) {
-                window.location.href = webAppLink;
-                setTimeout(() => window.location.href = deepLink, 2000);
-            } else {
-                window.open(deepLink, '_blank');
-                showStatus('Please return to Telegram manually', 'info');
-            }
+            // بازگشت به Telegram بعد از 3 ثانیه
+            setTimeout(() => {
+                returnToTelegram(walletAddress);
+            }, 3000);
         }
 
-        // ✅ On load - ادامه polling اگر reference داریم
-        window.addEventListener('load', () => {
-            addDebugLog('═══ Page Loaded ═══');
-            addDebugLog(`👤 Telegram ID: ${telegramId}`);
-            addDebugLog(`💰 Amount: ${commissionAmount} SOL`);
-            addDebugLog(`🤖 Bot: ${botUsername}`);
-
-            // چک کنید اگر قبلاً payment شروع شده
-            const savedReference = sessionStorage.getItem('commission_reference');
-            const startTime = sessionStorage.getItem('payment_start_time');
-
-            if (savedReference && startTime) {
-                const elapsed = Date.now() - parseInt(startTime);
-                const minutes = Math.floor(elapsed / 60000);
-                
-                addDebugLog(`🔄 Found pending payment (${minutes} min ago)`);
-                addDebugLog(`🔑 Reference: ${savedReference.substring(0, 16)}...`);
-
-                // ادامه polling
-                if (minutes < 10) {
-                    checkPayment(savedReference);
-                } else {
-                    addDebugLog('⏰ Payment expired, please try again');
-                    sessionStorage.removeItem('commission_reference');
-                    sessionStorage.removeItem('payment_start_time');
+        function returnToTelegram(walletAddress = null) {
+            try {
+                // روش 1: Telegram WebApp API
+                if (window.Telegram && window.Telegram.WebApp) {
+                    log('🔄 Using Telegram WebApp API to close');
+                    window.Telegram.WebApp.close();
+                    return;
                 }
+
+                // روش 2: هدایت به لینک bot با نتیجه
+                const botUsername = 'CTG_COIN_BOT'; // نام bot شما را اینجا وارد کنید
+                const startParam = walletAddress ? 'wallet_connected' : 'wallet_failed';
+                const telegramUrl = `https://t.me/${botUsername}/app?startapp=${startParam}`;
+                
+                log('🔄 Redirecting to Telegram: ' + telegramUrl);
+                window.location.href = telegramUrl;
+
+            } catch (error) {
+                log('❌ Error returning to Telegram: ' + error.message);
+                
+                // fallback: نمایش دستورالعمل
+                alert('✅ Wallet connected successfully!\n\nPlease manually return to the CCoin app in Telegram.');
+            }
+        }
+
+        // بررسی محیط هنگام لود
+        window.addEventListener('load', function() {
+            log('🔍 Page loaded, checking environment...');
+            
+            if (window.solana && window.solana.isPhantom) {
+                log('✅ Phantom browser detected');
+                document.querySelector('h1').textContent = '🦄 Phantom Wallet Detected';
+                document.querySelector('p').textContent = 'You are in Phantom browser. Click to connect your wallet.';
+                document.querySelector('.btn').textContent = '🔗 Connect Wallet';
+                return;
+            }
+
+            // چک کردن response از Phantom
+            const phantomEncryptionPublicKey = urlParams.get('phantom_encryption_public_key');
+            const data = urlParams.get('data');
+            const nonce = urlParams.get('nonce');
+
+            if (phantomEncryptionPublicKey && data && nonce) {
+                log('🎉 Received Phantom response, processing...');
+                handlePhantomResponse(phantomEncryptionPublicKey, data, nonce);
+            } else {
+                log('📱 Regular browser, ready for connection');
             }
         });
 
-        // ✅ پاک کردن polling وقتی صفحه بسته میشه
-        window.addEventListener('beforeunload', () => {
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
+        function handlePhantomResponse(phantomPublicKey, encryptedData, nonce) {
+            try {
+                log('🔓 Processing Phantom response...');
+
+                if (!checkLibraries()) {
+                    throw new Error('Cryptographic libraries not available');
+                }
+
+                const dappSecretKey = localStorage.getItem('dapp_keypair_secret');
+                const storedTelegramId = localStorage.getItem('telegram_id');
+
+                if (!dappSecretKey || !storedTelegramId) {
+                    throw new Error('Missing stored keys - please try connecting again');
+                }
+
+                log('🔐 Decrypting response...');
+
+                const decryptedBytes = nacl.box.open(
+                    bs58.decode(encryptedData),
+                    bs58.decode(nonce),
+                    bs58.decode(phantomPublicKey),
+                    bs58.decode(dappSecretKey)
+                );
+
+                if (!decryptedBytes) {
+                    throw new Error('Failed to decrypt response');
+                }
+
+                const decryptedData = JSON.parse(new TextDecoder().decode(decryptedBytes));
+                const walletAddress = decryptedData.public_key;
+
+                log('✅ Wallet address: ' + walletAddress);
+
+                // پاک کردن localStorage
+                localStorage.removeItem('dapp_keypair_public');
+                localStorage.removeItem('dapp_keypair_secret');
+                localStorage.removeItem('telegram_id');
+
+                // ذخیره wallet و نمایش موفقیت
+                saveWalletToServer(storedTelegramId, walletAddress, decryptedData.session);
+
+            } catch (error) {
+                log('❌ Error processing response: ' + error.message);
+                alert('Failed to process wallet connection.\n\nError: ' + error.message + '\n\nPlease try connecting again.');
+                
+                // بازگشت به حالت اولیه
+                window.location.href = window.location.pathname + '?telegram_id=' + telegramId;
             }
-        });
+        }
     </script>
 </body>
 </html>
