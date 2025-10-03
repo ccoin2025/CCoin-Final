@@ -259,7 +259,7 @@ async def verify_payment_auto(
 
             signatures_response = await client.get_signatures_for_address(
                 user_pubkey,
-                limit=10
+                limit=3  # فقط 3 تا برای debug
             )
 
             if not signatures_response.value:
@@ -271,7 +271,6 @@ async def verify_payment_auto(
                 }
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
-            tolerance = int(0.015 * 1_000_000_000)
 
             print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
 
@@ -281,7 +280,7 @@ async def verify_payment_auto(
                         await asyncio.sleep(0.5)
                     
                     sig = str(sig_info.signature)
-                    print(f"   TX {idx+1}: {sig[:20]}...")
+                    print(f"\n   📝 TX {idx+1}: {sig}")
                     
                     tx_response = await client.get_transaction(
                         sig_info.signature,
@@ -290,90 +289,40 @@ async def verify_payment_auto(
                     )
 
                     if not tx_response or not tx_response.value:
+                        print(f"      No response")
                         continue
 
                     tx_obj = tx_response.value
                     
-                    # Convert to JSON then parse
+                    # Convert to JSON
                     import json
                     tx_json_str = tx_obj.to_json()
                     tx = json.loads(tx_json_str)
                     
-                    print(f"      Parsed JSON structure")
+                    # PRINT FULL JSON (first 500 chars)
+                    print(f"      JSON: {tx_json_str[:500]}")
+                    print(f"      Keys: {list(tx.keys())}")
                     
-                    # Access transaction data
-                    if 'transaction' not in tx:
-                        print(f"      No transaction key")
-                        continue
-                    
-                    transaction = tx['transaction']
-                    
-                    # Get meta
-                    meta = transaction.get('meta')
-                    if not meta:
-                        print(f"      No meta")
-                        continue
-                    
-                    # Check error
-                    if meta.get('err'):
-                        print(f"      TX failed")
-                        continue
-                    
-                    # Get balances
-                    pre_balances = meta.get('preBalances', [])
-                    post_balances = meta.get('postBalances', [])
-                    
-                    if not pre_balances or not post_balances:
-                        print(f"      No balances")
-                        continue
-                    
-                    # Get account keys
-                    message = transaction.get('message', {})
-                    account_keys = message.get('accountKeys', [])
-                    
-                    if not account_keys:
-                        print(f"      No account keys")
-                        continue
-                    
-                    # Check admin wallet
-                    admin_found = ADMIN_WALLET in account_keys
-                    
-                    if not admin_found:
-                        print(f"      Admin not in TX")
-                        continue
-                    
-                    print(f"      ✅ Admin found!")
-                    
-                    # Check balance changes
-                    for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
-                        account = account_keys[acc_idx]
-                        pre = pre_balances[acc_idx]
-                        post = post_balances[acc_idx]
+                    # Check different possible structures
+                    if 'transaction' in tx:
+                        print(f"      Has 'transaction' key")
+                        trans = tx['transaction']
+                        print(f"      Transaction keys: {list(trans.keys())}")
                         
-                        if account == user.wallet_address and pre > post:
-                            sent = pre - post
-                            print(f"      💸 Sent: {sent / 1_000_000_000} SOL")
-                            
-                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
-                                print(f"      ✅ MATCH!")
-                                
-                                user.commission_paid = True
-                                user.commission_transaction_hash = sig
-                                user.commission_payment_date = datetime.utcnow()
-                                db.commit()
-
-                                await client.close()
-
-                                return {
-                                    "success": True,
-                                    "payment_found": True,
-                                    "message": "Payment confirmed!",
-                                    "transaction_hash": sig,
-                                    "amount": sent / 1_000_000_000
-                                }
+                        if 'meta' in trans:
+                            print(f"      Meta in transaction!")
+                        else:
+                            print(f"      No meta in transaction")
+                    
+                    if 'meta' in tx:
+                        print(f"      Has 'meta' at root level!")
+                        meta = tx['meta']
+                        print(f"      Meta keys: {list(meta.keys())[:10]}")
 
                 except Exception as e:
-                    print(f"      Error: {str(e)[:80]}")
+                    print(f"      Error: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     continue
 
             await client.close()
@@ -381,7 +330,7 @@ async def verify_payment_auto(
             return {
                 "success": True,
                 "payment_found": False,
-                "message": "Payment not detected"
+                "message": "Debug mode - check logs"
             }
 
         except Exception as e:
