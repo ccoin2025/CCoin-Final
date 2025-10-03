@@ -198,6 +198,14 @@
         <h1>Commission Payment</h1>
         <p class="subtitle">Complete your payment to unlock the airdrop</p>
 
+        <div class="commission-info">
+            <div class="amount">{{ commission_amount }} SOL</div>
+            <p style="font-size: 14px; opacity: 0.9;">Commission Amount</p>
+            <div class="fee-info">
+                ⚡ Network fee: ~0.000005 SOL
+            </div>
+        </div>
+
         <div id="status" class="status"></div>
 
         <button class="btn" id="pay-btn" onclick="handlePayment()">
@@ -211,8 +219,6 @@
 
     <!-- Solana Web3.js -->
     <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script>
 
     <script>
         // 🔧 Configuration
@@ -251,14 +257,42 @@
             }
         }
 
+        // 🔧 Helper: Uint8Array to Base64 (بدون Buffer)
+        function uint8ArrayToBase64(uint8Array) {
+            let binary = '';
+            const len = uint8Array.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(uint8Array[i]);
+            }
+            return btoa(binary);
+        }
+
+        // 🔧 Helper: Base64 to Uint8Array
+        function base64ToUint8Array(base64) {
+            const binary = atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+        }
+
         // 🎬 بررسی اولیه
         window.addEventListener('load', async function() {
             // بررسی اگر از Phantom redirect شده
             const urlParams = new URLSearchParams(window.location.search);
             
-            if (urlParams.has('phantom_encryption_public_key')) {
-                // ✅ بازگشت از Phantom بعد از پرداخت
+            // ✅ دریافت signature از Phantom callback
+            if (urlParams.has('signature')) {
                 await handlePhantomCallback(urlParams);
+                return;
+            }
+
+            if (urlParams.has('errorCode')) {
+                const errorMsg = urlParams.get('errorMessage') || urlParams.get('errorCode');
+                showStatus(`❌ Payment failed: ${errorMsg}`, 'error');
+                setButtonLoading(false);
                 return;
             }
 
@@ -347,7 +381,7 @@
                 await confirmOnServer(signature);
 
             } catch (error) {
-                if (error.message.includes('User rejected')) {
+                if (error.message && error.message.includes('User rejected')) {
                     throw new Error('Payment cancelled by user');
                 }
                 throw error;
@@ -385,31 +419,43 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = dummyPubkey;
 
-                // Serialize transaction
+                // ✅ Serialize transaction (بدون Buffer)
                 const serialized = transaction.serialize({
                     requireAllSignatures: false,
                     verifySignatures: false
                 });
-                const base64Transaction = btoa(String.fromCharCode(...serialized));
+                
+                // تبدیل به base64 بدون استفاده از Buffer
+                const base64Transaction = uint8ArrayToBase64(serialized);
+
+                console.log('📦 Transaction serialized:', base64Transaction.substring(0, 50) + '...');
 
                 // ✅ ساخت redirect URL
                 const currentUrl = window.location.href.split('?')[0];
                 const redirectUrl = encodeURIComponent(currentUrl + `?telegram_id=${CONFIG.telegramId}`);
 
-                // ✅ ساخت Phantom Deeplink
+                // ✅ ساخت Phantom Deeplink طبق مستندات
                 const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?` +
-                    `dapp_encryption_public_key=temporary&` +
-                    `nonce=temporary&` +
+                    `dapp_encryption_public_key=${CONFIG.telegramId}&` +
+                    `nonce=${Date.now()}&` +
                     `redirect_link=${redirectUrl}&` +
-                    `payload=${base64Transaction}`;
+                    `payload=${encodeURIComponent(base64Transaction)}`;
 
-                console.log('🔗 Opening Phantom:', deeplink);
+                console.log('🔗 Phantom Deeplink:', deeplink.substring(0, 100) + '...');
+
+                // ✅ ذخیره در localStorage برای بعد از بازگشت
+                localStorage.setItem('ccoin_payment_pending', JSON.stringify({
+                    telegram_id: CONFIG.telegramId,
+                    amount: CONFIG.commissionAmount,
+                    timestamp: Date.now()
+                }));
 
                 // هدایت به Phantom
                 window.location.href = deeplink;
 
             } catch (error) {
-                throw new Error(`Deeplink error: ${error.message}`);
+                console.error('Deeplink error:', error);
+                throw new Error(`Deeplink preparation failed: ${error.message}`);
             }
         }
 
@@ -420,26 +466,18 @@
                 setButtonLoading(true);
 
                 // ✅ دریافت signature از URL
-                const errorCode = urlParams.get('errorCode');
-                const errorMessage = urlParams.get('errorMessage');
+                const signature = urlParams.get('signature');
 
-                if (errorCode) {
-                    throw new Error(`Payment failed: ${errorMessage || errorCode}`);
+                if (!signature) {
+                    // اگر signature نیست، شاید encrypted باشه
+                    await pollPaymentStatus();
+                    return;
                 }
 
-                // دریافت nonce و data (اگر encrypted باشه)
-                const nonce = urlParams.get('nonce');
-                const encryptedData = urlParams.get('data');
+                console.log('✅ Received signature:', signature);
 
-                if (!encryptedData) {
-                    throw new Error('No transaction data received');
-                }
-
-                // TODO: اگر data encrypted هست، باید decrypt بشه
-                // فعلاً فرض می‌کنیم signature در data هست
-                
-                // ⏳ polling برای بررسی وضعیت
-                await pollPaymentStatus();
+                // ✅ ارسال به سرور
+                await confirmOnServer(signature);
 
             } catch (error) {
                 console.error('Callback error:', error);
@@ -453,22 +491,30 @@
             const maxAttempts = 30;
             let attempt = 0;
 
+            showStatus('⏳ Waiting for payment confirmation...', 'info');
+
             const checkStatus = async () => {
                 try {
+                    attempt++;
+
                     const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                     const data = await response.json();
 
                     if (data.commission_paid) {
+                        // پاک کردن localStorage
+                        localStorage.removeItem('ccoin_payment_pending');
+                        
                         showStatus('✅ Payment confirmed!', 'success');
                         setTimeout(() => {
                             window.location.href = `https://t.me/${CONFIG.botUsername}`;
                         }, 2000);
-                        return true;
+                        return;
                     }
 
-                    attempt++;
                     if (attempt >= maxAttempts) {
-                        throw new Error('Payment verification timeout. Please check manually.');
+                        showStatus('⚠️ Payment verification timeout. Please check manually or contact support.', 'error');
+                        setButtonLoading(false);
+                        return;
                     }
 
                     showStatus(`⏳ Verifying payment... (${attempt}/${maxAttempts})`, 'info');
@@ -476,8 +522,12 @@
 
                 } catch (error) {
                     console.error('Status check error:', error);
-                    showStatus(`❌ ${error.message}`, 'error');
-                    setButtonLoading(false);
+                    if (attempt >= maxAttempts) {
+                        showStatus(`❌ Verification failed: ${error.message}`, 'error');
+                        setButtonLoading(false);
+                    } else {
+                        setTimeout(checkStatus, 3000);
+                    }
                 }
             };
 
@@ -500,9 +550,17 @@
                     })
                 });
 
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Server confirmation failed');
+                }
+
                 const data = await response.json();
 
                 if (data.success) {
+                    // پاک کردن localStorage
+                    localStorage.removeItem('ccoin_payment_pending');
+                    
                     showStatus('✅ Payment successful!', 'success');
                     setTimeout(() => {
                         window.location.href = `https://t.me/${CONFIG.botUsername}`;
@@ -512,6 +570,7 @@
                 }
 
             } catch (error) {
+                console.error('Server confirmation error:', error);
                 throw new Error(`Server error: ${error.message}`);
             }
         }
