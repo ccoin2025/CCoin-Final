@@ -248,12 +248,26 @@ async def verify_payment_auto(
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="No wallet connected")
 
+        # ✅ محدودیت 5 درخواست - چک کردن تعداد تلاش‌ها
+        attempt_count = request.session.get(f'payment_check_attempts_{telegram_id}', 0)
+        
+        if attempt_count >= 5:
+            return {
+                "success": True,
+                "payment_found": False,
+                "message": "Maximum verification attempts reached. Please wait 2 minutes and refresh the page.",
+                "max_attempts_reached": True
+            }
+
+        # افزایش تعداد تلاش‌ها
+        request.session[f'payment_check_attempts_{telegram_id}'] = attempt_count + 1
+
         client = AsyncClient(SOLANA_RPC)
         
         try:
             user_pubkey = Pubkey.from_string(user.wallet_address)
 
-            print(f"🔍 Checking payments from user: {telegram_id}")
+            print(f"🔍 Payment check attempt {attempt_count + 1}/5 for user: {telegram_id}")
 
             signatures_response = await client.get_signatures_for_address(
                 user_pubkey,
@@ -265,13 +279,12 @@ async def verify_payment_auto(
                 return {
                     "success": True,
                     "payment_found": False,
-                    "message": "No transactions found"
+                    "message": "No transactions found",
+                    "attempts_remaining": 5 - (attempt_count + 1)
                 }
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             tolerance = int(0.015 * 1_000_000_000)
-
-            print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
 
             for idx, sig_info in enumerate(signatures_response.value):
                 try:
@@ -291,57 +304,41 @@ async def verify_payment_auto(
 
                     tx_obj = tx_response.value
                     
-                    # Convert to JSON
                     import json
                     tx_json_str = tx_obj.to_json()
                     tx = json.loads(tx_json_str)
                     
-                    # Get meta from ROOT level
                     meta = tx.get('meta')
-                    if not meta:
+                    if not meta or meta.get('err'):
                         continue
                     
-                    # Check error
-                    if meta.get('err'):
-                        continue
-                    
-                    # Get balances
                     pre_balances = meta.get('preBalances', [])
                     post_balances = meta.get('postBalances', [])
                     
                     if not pre_balances or not post_balances:
                         continue
                     
-                    # Get account keys from transaction.message
                     transaction = tx.get('transaction', {})
                     message = transaction.get('message', {})
                     account_keys = message.get('accountKeys', [])
                     
-                    if not account_keys:
+                    if not account_keys or ADMIN_WALLET not in account_keys:
                         continue
                     
-                    # Check admin wallet
-                    if ADMIN_WALLET not in account_keys:
-                        continue
-                    
-                    print(f"   ✅ Admin wallet found in TX: {sig[:20]}...")
-                    
-                    # Check balance changes
                     for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
                         account = account_keys[acc_idx]
                         pre = pre_balances[acc_idx]
                         post = post_balances[acc_idx]
                         
-                        # User sent money
                         if account == user.wallet_address and pre > post:
                             sent = pre - post
-                            print(f"   💸 User sent: {sent / 1_000_000_000} SOL")
                             
-                            # Check amount with tolerance
                             if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
-                                print(f"   ✅ PAYMENT CONFIRMED!")
+                                print(f"✅ Payment confirmed!")
                                 
-                                # Update database
+                                # پاک کردن شمارنده تلاش‌ها
+                                request.session.pop(f'payment_check_attempts_{telegram_id}', None)
+                                
                                 user.commission_paid = True
                                 user.commission_transaction_hash = sig
                                 user.commission_payment_date = datetime.utcnow()
@@ -356,21 +353,17 @@ async def verify_payment_auto(
                                     "transaction_hash": sig,
                                     "amount": sent / 1_000_000_000
                                 }
-                            else:
-                                print(f"   ⚠️ Amount mismatch: sent={sent/1e9} expected={expected_lamports/1e9}")
 
                 except Exception as e:
-                    print(f"   ❌ Error: {str(e)[:100]}")
                     continue
 
             await client.close()
 
-            print(f"   ⚠️ No matching payment found")
-
             return {
                 "success": True,
                 "payment_found": False,
-                "message": "Payment not detected. Please wait and try again."
+                "message": f"Payment not detected. {5 - (attempt_count + 1)} attempts remaining.",
+                "attempts_remaining": 5 - (attempt_count + 1)
             }
 
         except Exception as e:
@@ -382,6 +375,4 @@ async def verify_payment_auto(
     except Exception as e:
         db.rollback()
         print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
