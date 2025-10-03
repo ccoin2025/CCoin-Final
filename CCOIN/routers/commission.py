@@ -12,6 +12,7 @@ from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNA
 from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
+from solders.pubkey import Pubkey
 import time
 
 router = APIRouter()
@@ -107,7 +108,7 @@ async def confirm_commission(
         # Validation
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
-        
+
         if not signature:
             raise HTTPException(status_code=400, detail="Missing transaction signature")
 
@@ -137,11 +138,11 @@ async def confirm_commission(
         retry_delay = 2
 
         transaction_confirmed = False
-        
+
         for attempt in range(max_retries):
             try:
                 print(f"🔍 Verifying transaction (attempt {attempt + 1}/{max_retries}): {signature}")
-                
+
                 tx = client.get_transaction(
                     signature,
                     encoding="json",
@@ -160,7 +161,7 @@ async def confirm_commission(
                     break
                 else:
                     print(f"⚠️ Transaction not found yet (attempt {attempt + 1})")
-                    
+
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay)
                         retry_delay *= 1.5  # Exponential backoff
@@ -207,6 +208,150 @@ async def confirm_commission(
         raise HTTPException(status_code=500, detail=f"Confirmation failed: {str(e)}")
 
 
+@router.post("/verify_payment_auto", response_class=JSONResponse)
+@limiter.limit("10/minute")
+async def verify_payment_auto(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """🔍 Auto-detect payment by checking recent transactions to admin wallet"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            return {
+                "success": True,
+                "payment_found": True,
+                "message": "Commission already paid",
+                "transaction_hash": user.commission_transaction_hash
+            }
+
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="No wallet connected")
+
+        # بررسی تراکنش‌های اخیر به admin wallet
+        client = AsyncClient(SOLANA_RPC)
+        
+        try:
+            admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
+            user_pubkey = Pubkey.from_string(user.wallet_address)
+
+            print(f"🔍 Checking payments to admin wallet from user: {telegram_id}")
+            print(f"   User wallet: {user.wallet_address}")
+            print(f"   Admin wallet: {ADMIN_WALLET}")
+
+            # دریافت تراکنش‌های اخیر admin wallet
+            signatures_response = await client.get_signatures_for_address(
+                admin_pubkey,
+                limit=30  # آخرین 30 تراکنش
+            )
+
+            if not signatures_response.value:
+                await client.close()
+                print(f"⚠️ No recent transactions found for admin wallet")
+                return {
+                    "success": True,
+                    "payment_found": False,
+                    "message": "No recent transactions found"
+                }
+
+            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+            tolerance = int(0.005 * 1_000_000_000)  # 0.005 SOL tolerance
+
+            print(f"   Expected amount: {expected_lamports / 1_000_000_000} SOL")
+            print(f"   Checking {len(signatures_response.value)} recent transactions...")
+
+            # بررسی هر تراکنش
+            for idx, sig_info in enumerate(signatures_response.value):
+                try:
+                    tx = await client.get_transaction(
+                        sig_info.signature,
+                        encoding="json",
+                        max_supported_transaction_version=0
+                    )
+
+                    if not tx.value or not tx.value.meta or tx.value.meta.err:
+                        continue
+
+                    meta = tx.value.meta
+                    transaction = tx.value.transaction
+
+                    # بررسی balance changes
+                    if hasattr(meta, 'pre_balances') and hasattr(meta, 'post_balances'):
+                        # Get account keys
+                        account_keys = []
+                        if hasattr(transaction.value, 'message'):
+                            if hasattr(transaction.value.message, 'account_keys'):
+                                account_keys = transaction.value.message.account_keys
+
+                        # بررسی هر account
+                        for acc_idx, (pre, post) in enumerate(zip(meta.pre_balances, meta.post_balances)):
+                            # اگر این account پول دریافت کرده
+                            if post > pre:
+                                received = post - pre
+                                
+                                # بررسی مقدار (با tolerance)
+                                if abs(received - expected_lamports) <= tolerance:
+                                    # بررسی اینکه این account، admin wallet هست
+                                    if acc_idx < len(account_keys):
+                                        if str(account_keys[acc_idx]) == ADMIN_WALLET:
+                                            print(f"✅ Payment detected!")
+                                            print(f"   Signature: {sig_info.signature}")
+                                            print(f"   Amount received: {received / 1_000_000_000} SOL")
+                                            print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
+                                            
+                                            # آپدیت دیتابیس
+                                            user.commission_paid = True
+                                            user.commission_transaction_hash = str(sig_info.signature)
+                                            user.commission_payment_date = datetime.utcnow()
+                                            db.commit()
+
+                                            await client.close()
+
+                                            return {
+                                                "success": True,
+                                                "payment_found": True,
+                                                "message": "Payment detected and confirmed!",
+                                                "transaction_hash": str(sig_info.signature),
+                                                "amount": received / 1_000_000_000
+                                            }
+
+                except Exception as e:
+                    print(f"⚠️ Error checking transaction {sig_info.signature}: {e}")
+                    continue
+
+            await client.close()
+
+            print(f"⚠️ No matching payment found in {len(signatures_response.value)} recent transactions")
+
+            return {
+                "success": True,
+                "payment_found": False,
+                "message": "No matching payment found in recent transactions"
+            }
+
+        except Exception as e:
+            await client.close()
+            raise e
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Auto-verify error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+
+
 @router.post("/verify_manual", response_class=JSONResponse)
 @limiter.limit("3/minute")
 async def verify_commission_manual(
@@ -236,8 +381,6 @@ async def verify_commission_manual(
             }
 
         # بررسی تراکنش‌های اخیر
-        from solders.pubkey import Pubkey
-        
         client = AsyncClient(SOLANA_RPC)
         user_pubkey = Pubkey.from_string(user.wallet_address)
         admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
@@ -259,9 +402,9 @@ async def verify_commission_manual(
                     # بررسی transfer به admin wallet
                     post_balances = tx.value.meta.post_balances
                     pre_balances = tx.value.meta.pre_balances
-                    
+
                     # TODO: بررسی دقیق‌تر مقدار transfer
-                    
+
                     # اگر تراکنش معتبر بود
                     user.commission_paid = True
                     user.commission_transaction_hash = str(sig_info.signature)
