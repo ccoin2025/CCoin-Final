@@ -117,6 +117,23 @@
             line-height: 1.6;
             display: none;
         }
+        .payment-guide {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.4);
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+            line-height: 1.8;
+            text-align: left;
+        }
+        .payment-guide ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        .payment-guide li {
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -124,11 +141,17 @@
         <div class="logo">💰</div>
         <h1>Commission Payment</h1>
         <p class="subtitle">Complete your payment to unlock the airdrop</p>
-        
+
         <div id="status" class="status"></div>
 
-        <div id="instruction" class="instruction">
-            📱 After paying in Phantom, return here and click "Check Payment Status"
+        <div id="payment-guide" class="payment-guide" style="display: none;">
+            <strong>📱 پس از پرداخت:</strong>
+            <ol>
+                <li>پرداخت را در Phantom تکمیل کنید</li>
+                <li>صفحه Phantom را ببندید (دکمه بازگشت یا X)</li>
+                <li>به این صفحه برگردید</li>
+                <li>دکمه "بررسی وضعیت پرداخت" را بزنید</li>
+            </ol>
         </div>
 
         <button class="btn" id="pay-btn" onclick="handlePayment()">
@@ -136,7 +159,7 @@
         </button>
 
         <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
-            ✅ Check Payment Status
+            ✅ بررسی وضعیت پرداخت
         </button>
 
         <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
@@ -164,38 +187,57 @@
             const btn = document.getElementById('pay-btn');
             const btnText = document.getElementById('btn-text');
             const verifyBtn = document.getElementById('verify-btn');
-            const instruction = document.getElementById('instruction');
+            const guide = document.getElementById('payment-guide');
             
             if (loading) {
                 btn.disabled = true;
-                btnText.innerHTML = '<span class="spinner"></span> Processing...';
+                btnText.innerHTML = '<span class="spinner"></span> در حال پردازش...';
             } else {
                 btn.disabled = false;
                 btnText.innerHTML = '💳 Pay with Phantom';
                 verifyBtn.style.display = 'block';
-                instruction.style.display = 'block';
+                guide.style.display = 'block';
             }
         }
 
-        // بررسی اولیه وضعیت
+        // بررسی اگر از Phantom برگشته
         window.addEventListener('load', async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // اگر پرداخت شروع شده بود
+            if (localStorage.getItem('ccoin_payment_initiated')) {
+                const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
+                const now = Date.now();
+                
+                // اگر کمتر از 5 دقیقه گذشته
+                if (now - paymentTime < 300000) {
+                    showStatus('⏳ در حال بررسی پرداخت...', 'info');
+                    setButtonLoading(false);
+                    
+                    // شروع auto-check
+                    await autoCheckPayment();
+                    return;
+                }
+            }
+
+            // بررسی وضعیت پرداخت قبلی
             try {
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
 
                 if (data.commission_paid) {
-                    showStatus('✅ Payment already completed!', 'success');
+                    showStatus('✅ پرداخت قبلاً انجام شده است!', 'success');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                 }
             } catch (error) {
-                console.error('Status check error:', error);
+                console.error('خطا در بررسی وضعیت:', error);
             }
         });
 
         async function handlePayment() {
             try {
                 setButtonLoading(true);
-                showStatus('🔄 Preparing payment...', 'info');
+                showStatus('🔄 آماده‌سازی پرداخت...', 'info');
 
                 if (isPhantomExtension()) {
                     await payWithExtension();
@@ -203,8 +245,8 @@
                     await payWithSolanaPay();
                 }
             } catch (error) {
-                console.error('Payment error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
+                console.error('خطای پرداخت:', error);
+                showStatus(`❌ خطا: ${error.message}`, 'error');
                 setButtonLoading(false);
             }
         }
@@ -212,13 +254,13 @@
         // پرداخت با Extension (Desktop)
         async function payWithExtension() {
             try {
-                showStatus('🔗 Connecting to Phantom...', 'info');
+                showStatus('🔗 اتصال به Phantom...', 'info');
                 
                 const provider = window.solana;
                 await provider.connect();
                 const userPublicKey = provider.publicKey;
 
-                showStatus('📝 Creating transaction...', 'info');
+                showStatus('📝 ساخت تراکنش...', 'info');
 
                 const connection = new solanaWeb3.Connection(CONFIG.rpcUrl, 'confirmed');
                 const transaction = new solanaWeb3.Transaction();
@@ -237,56 +279,100 @@
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
-                showStatus('✍️ Please approve in Phantom...', 'info');
+                showStatus('✍️ لطفاً در Phantom تایید کنید...', 'info');
 
                 const signed = await provider.signAndSendTransaction(transaction);
                 const signature = signed.signature;
 
-                showStatus('⏳ Confirming transaction...', 'info');
+                showStatus('⏳ در حال تایید تراکنش...', 'info');
 
                 await connection.confirmTransaction(signature, 'confirmed');
                 await confirmOnServer(signature);
 
             } catch (error) {
                 if (error.message && error.message.includes('User rejected')) {
-                    throw new Error('Payment cancelled by user');
+                    throw new Error('پرداخت توسط کاربر لغو شد');
                 }
                 throw error;
             }
         }
 
-        // پرداخت با Solana Pay (Mobile) - طبق استاندارد
+        // پرداخت با Solana Pay (Mobile)
         async function payWithSolanaPay() {
-            showStatus('📱 Opening Phantom app...', 'info');
+            showStatus('📱 باز کردن Phantom...', 'info');
 
             const recipient = CONFIG.adminWallet;
             const amount = CONFIG.commissionAmount;
             const label = encodeURIComponent('CCoin Commission');
             const message = encodeURIComponent('Airdrop Commission Payment');
-            const memo = encodeURIComponent(`User:${CONFIG.telegramId}`);
 
             // ساخت Solana Pay URL
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=${memo}`;
+            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
             
             console.log('🔗 Solana Pay URL:', solanaPayUrl);
 
-            // ذخیره timestamp پرداخت
+            // ذخیره زمان شروع
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
             // باز کردن Phantom
             window.location.href = solanaPayUrl;
 
-            // بعد از 2 ثانیه UI رو آماده کن
+            // بعد از 3 ثانیه نمایش دستورالعمل
             setTimeout(() => {
-                showStatus('📱 Waiting for payment... Click "Check Payment Status" after completing the payment.', 'info');
+                showStatus('📱 پس از تکمیل پرداخت در Phantom، به این صفحه برگردید و دکمه "بررسی وضعیت" را بزنید.', 'info');
                 setButtonLoading(false);
-            }, 2000);
+            }, 3000);
         }
 
-        // بررسی وضعیت پرداخت
+        // Auto-check هر 3 ثانیه
+        async function autoCheckPayment() {
+            let attempts = 0;
+            const maxAttempts = 20; // 20 * 3 = 60 ثانیه
+
+            const checkInterval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch('/commission/verify_payment_auto', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.payment_found) {
+                        clearInterval(checkInterval);
+                        localStorage.removeItem('ccoin_payment_initiated');
+                        showStatus('✅ پرداخت تایید شد!', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                        }, 1500);
+                        return;
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        showStatus('⏳ پرداخت هنوز شناسایی نشد. لطفاً دکمه "بررسی وضعیت" را بزنید.', 'info');
+                        setButtonLoading(false);
+                    } else {
+                        showStatus(`⏳ در حال بررسی... (${attempts}/${maxAttempts})`, 'info');
+                    }
+
+                } catch (error) {
+                    console.error('خطا در auto-check:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        setButtonLoading(false);
+                    }
+                }
+            }, 3000);
+        }
+
+        // بررسی دستی
         async function checkPayment() {
             try {
-                showStatus('🔍 Checking payment...', 'info');
+                showStatus('🔍 در حال بررسی پرداخت...', 'info');
                 document.getElementById('verify-btn').disabled = true;
 
                 const response = await fetch('/commission/verify_payment_auto', {
@@ -298,27 +384,28 @@
                 const data = await response.json();
 
                 if (data.success && data.payment_found) {
-                    showStatus('✅ Payment verified successfully!', 'success');
+                    localStorage.removeItem('ccoin_payment_initiated');
+                    showStatus('✅ پرداخت تایید شد!', 'success');
                     setTimeout(() => {
                         window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
                     }, 1500);
                 } else {
-                    showStatus('⏳ Payment not detected yet. Please wait 10-30 seconds after payment and try again.', 'info');
+                    showStatus('⏳ پرداخت هنوز شناسایی نشده. لطفاً 10-30 ثانیه بعد از پرداخت صبر کنید و دوباره تلاش کنید.', 'info');
                     setTimeout(() => {
                         document.getElementById('verify-btn').disabled = false;
                     }, 3000);
                 }
 
             } catch (error) {
-                showStatus(`❌ Error: ${error.message}`, 'error');
+                showStatus(`❌ خطا: ${error.message}`, 'error');
                 document.getElementById('verify-btn').disabled = false;
             }
         }
 
-        // تایید در سرور (برای Extension)
+        // تایید در سرور (Extension)
         async function confirmOnServer(signature) {
             try {
-                showStatus('📤 Confirming with server...', 'info');
+                showStatus('📤 تایید با سرور...', 'info');
 
                 const response = await fetch('/commission/confirm_commission', {
                     method: 'POST',
@@ -333,22 +420,23 @@
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Server confirmation failed');
+                    throw new Error(errorData.detail || 'تایید سرور ناموفق بود');
                 }
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showStatus('✅ Payment successful!', 'success');
+                    localStorage.removeItem('ccoin_payment_initiated');
+                    showStatus('✅ پرداخت موفق!', 'success');
                     setTimeout(() => {
                         window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
                     }, 1500);
                 } else {
-                    throw new Error(data.message || 'Confirmation failed');
+                    throw new Error(data.message || 'تایید ناموفق بود');
                 }
 
             } catch (error) {
-                throw new Error(`Server error: ${error.message}`);
+                throw new Error(`خطای سرور: ${error.message}`);
             }
         }
     </script>
