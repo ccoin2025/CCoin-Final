@@ -254,13 +254,12 @@ async def verify_payment_auto(
             user_pubkey = Pubkey.from_string(user.wallet_address)
 
             print(f"🔍 Checking payments from user wallet: {telegram_id}")
-            print(f"   User wallet: {user.wallet_address}")
-            print(f"   Admin wallet: {ADMIN_WALLET}")
+            print(f"   User: {user.wallet_address}")
+            print(f"   Admin: {ADMIN_WALLET}")
 
-            # Get recent transactions
             signatures_response = await client.get_signatures_for_address(
                 user_pubkey,
-                limit=5  # فقط 5 تا برای debug
+                limit=10
             )
 
             if not signatures_response.value:
@@ -268,13 +267,13 @@ async def verify_payment_auto(
                 return {
                     "success": True,
                     "payment_found": False,
-                    "message": "No recent transactions found"
+                    "message": "No transactions found"
                 }
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+            tolerance = int(0.015 * 1_000_000_000)
 
             print(f"   Expected: {expected_lamports / 1_000_000_000} SOL")
-            print(f"   Checking {len(signatures_response.value)} transactions...")
 
             for idx, sig_info in enumerate(signatures_response.value):
                 try:
@@ -282,7 +281,7 @@ async def verify_payment_auto(
                         await asyncio.sleep(0.5)
                     
                     sig = str(sig_info.signature)
-                    print(f"\n   📝 TX {idx+1}: {sig}")
+                    print(f"   TX {idx+1}: {sig[:20]}...")
                     
                     tx_response = await client.get_transaction(
                         sig_info.signature,
@@ -291,152 +290,90 @@ async def verify_payment_auto(
                     )
 
                     if not tx_response or not tx_response.value:
-                        print(f"      ❌ No response")
                         continue
 
-                    tx = tx_response.value
+                    tx_obj = tx_response.value
                     
-                    # DEBUG: Print full structure
-                    print(f"      Type: {type(tx)}")
-                    print(f"      Dir: {dir(tx)}")
+                    # Convert to JSON then parse
+                    import json
+                    tx_json_str = tx_obj.to_json()
+                    tx = json.loads(tx_json_str)
                     
-                    # Try different ways to access meta
-                    meta = None
+                    print(f"      Parsed JSON structure")
                     
-                    # Method 1: Direct attribute
-                    if hasattr(tx, 'meta'):
-                        meta = tx.meta
-                        print(f"      ✅ Found meta via attribute")
+                    # Access transaction data
+                    if 'transaction' not in tx:
+                        print(f"      No transaction key")
+                        continue
                     
-                    # Method 2: Dictionary access
-                    elif isinstance(tx, dict) and 'meta' in tx:
-                        meta = tx['meta']
-                        print(f"      ✅ Found meta via dict")
+                    transaction = tx['transaction']
                     
-                    # Method 3: __dict__
-                    elif hasattr(tx, '__dict__') and 'meta' in tx.__dict__:
-                        meta = tx.__dict__['meta']
-                        print(f"      ✅ Found meta via __dict__")
+                    # Get meta
+                    meta = transaction.get('meta')
+                    if not meta:
+                        print(f"      No meta")
+                        continue
                     
-                    if meta:
-                        print(f"      Meta type: {type(meta)}")
-                        print(f"      Meta dir: {dir(meta)[:10]}...")  # First 10 attributes
+                    # Check error
+                    if meta.get('err'):
+                        print(f"      TX failed")
+                        continue
+                    
+                    # Get balances
+                    pre_balances = meta.get('preBalances', [])
+                    post_balances = meta.get('postBalances', [])
+                    
+                    if not pre_balances or not post_balances:
+                        print(f"      No balances")
+                        continue
+                    
+                    # Get account keys
+                    message = transaction.get('message', {})
+                    account_keys = message.get('accountKeys', [])
+                    
+                    if not account_keys:
+                        print(f"      No account keys")
+                        continue
+                    
+                    # Check admin wallet
+                    admin_found = ADMIN_WALLET in account_keys
+                    
+                    if not admin_found:
+                        print(f"      Admin not in TX")
+                        continue
+                    
+                    print(f"      ✅ Admin found!")
+                    
+                    # Check balance changes
+                    for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
+                        account = account_keys[acc_idx]
+                        pre = pre_balances[acc_idx]
+                        post = post_balances[acc_idx]
                         
-                        # Check error
-                        has_error = False
-                        if hasattr(meta, 'err'):
-                            has_error = meta.err is not None
-                        elif isinstance(meta, dict) and 'err' in meta:
-                            has_error = meta['err'] is not None
-                        
-                        if has_error:
-                            print(f"      ⚠️ Transaction has error")
-                            continue
-                        
-                        # Get balances
-                        pre_balances = None
-                        post_balances = None
-                        
-                        if hasattr(meta, 'pre_balances'):
-                            pre_balances = meta.pre_balances
-                        elif isinstance(meta, dict) and 'preBalances' in meta:
-                            pre_balances = meta['preBalances']
-                        elif isinstance(meta, dict) and 'pre_balances' in meta:
-                            pre_balances = meta['pre_balances']
-                        
-                        if hasattr(meta, 'post_balances'):
-                            post_balances = meta.post_balances
-                        elif isinstance(meta, dict) and 'postBalances' in meta:
-                            post_balances = meta['postBalances']
-                        elif isinstance(meta, dict) and 'post_balances' in meta:
-                            post_balances = meta['post_balances']
-                        
-                        if pre_balances and post_balances:
-                            print(f"      ✅ Found balances: {len(pre_balances)} accounts")
+                        if account == user.wallet_address and pre > post:
+                            sent = pre - post
+                            print(f"      💸 Sent: {sent / 1_000_000_000} SOL")
                             
-                            # Get account keys
-                            account_keys = []
-                            transaction = None
-                            
-                            if hasattr(tx, 'transaction'):
-                                transaction = tx.transaction
-                            elif isinstance(tx, dict) and 'transaction' in tx:
-                                transaction = tx['transaction']
-                            
-                            if transaction:
-                                message = None
-                                if hasattr(transaction, 'message'):
-                                    message = transaction.message
-                                elif isinstance(transaction, dict) and 'message' in transaction:
-                                    message = transaction['message']
+                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
+                                print(f"      ✅ MATCH!")
                                 
-                                if message:
-                                    if hasattr(message, 'account_keys'):
-                                        account_keys = message.account_keys
-                                    elif isinstance(message, dict) and 'accountKeys' in message:
-                                        account_keys = message['accountKeys']
-                                    elif isinstance(message, dict) and 'account_keys' in message:
-                                        account_keys = message['account_keys']
-                            
-                            if account_keys:
-                                print(f"      ✅ Found {len(account_keys)} account keys")
-                                
-                                # Check for admin wallet
-                                admin_found = False
-                                for key in account_keys:
-                                    key_str = str(key)
-                                    if key_str == ADMIN_WALLET:
-                                        admin_found = True
-                                        break
-                                
-                                if admin_found:
-                                    print(f"      ✅ Admin wallet found!")
-                                    
-                                    # Check balance changes
-                                    for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
-                                        account = str(account_keys[acc_idx])
-                                        pre = pre_balances[acc_idx]
-                                        post = post_balances[acc_idx]
-                                        
-                                        if account == user.wallet_address and pre > post:
-                                            sent = pre - post
-                                            print(f"      💸 User sent: {sent / 1_000_000_000} SOL")
-                                            
-                                            # Check amount with tolerance
-                                            tolerance = int(0.015 * 1_000_000_000)
-                                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
-                                                print(f"      ✅ PAYMENT MATCHED!")
-                                                
-                                                # Update database
-                                                user.commission_paid = True
-                                                user.commission_transaction_hash = sig
-                                                user.commission_payment_date = datetime.utcnow()
-                                                db.commit()
+                                user.commission_paid = True
+                                user.commission_transaction_hash = sig
+                                user.commission_payment_date = datetime.utcnow()
+                                db.commit()
 
-                                                await client.close()
+                                await client.close()
 
-                                                return {
-                                                    "success": True,
-                                                    "payment_found": True,
-                                                    "message": "Payment confirmed!",
-                                                    "transaction_hash": sig,
-                                                    "amount": sent / 1_000_000_000
-                                                }
-                                            else:
-                                                print(f"      ⚠️ Amount mismatch")
-                                else:
-                                    print(f"      ⚠️ Admin wallet NOT in transaction")
-                            else:
-                                print(f"      ⚠️ No account keys found")
-                        else:
-                            print(f"      ⚠️ No balances found")
-                    else:
-                        print(f"      ❌ Could not find meta in any way")
+                                return {
+                                    "success": True,
+                                    "payment_found": True,
+                                    "message": "Payment confirmed!",
+                                    "transaction_hash": sig,
+                                    "amount": sent / 1_000_000_000
+                                }
 
                 except Exception as e:
-                    print(f"      ❌ Error: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
+                    print(f"      Error: {str(e)[:80]}")
                     continue
 
             await client.close()
