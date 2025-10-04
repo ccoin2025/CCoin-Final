@@ -32,7 +32,7 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 20px 10px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
+margin: 20px 5px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
 height: 50px;
 box-sizing: border-box;
 }
@@ -111,7 +111,7 @@ font-weight: bold;
 }
 
 .top-leaders {
-margin: 20px 10px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
+margin: 20px 5px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
 }
 
 .leader-title {
