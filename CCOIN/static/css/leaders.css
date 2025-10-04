@@ -31,7 +31,7 @@ border-radius: 12px;
 padding: 15px;
 display: flex;
 align-items: center;
-margin: 20px 10px; /* تغییر: margin از 10px به 5px کاهش یافت */
+margin: 20px 5px;
 height: 50px;
 box-sizing: border-box;
 }
@@ -47,7 +47,7 @@ display: flex;
 align-items: center;
 justify-content: center;
 flex-shrink: 0;
-margin-right: 20px; /* تغییر: از 15px به 20px افزایش یافت */
+margin-right: 20px;
 }
 
 .user-info {
@@ -55,6 +55,7 @@ display: flex;
 align-items: center;
 flex: 1;
 margin-right: 10px;
+min-width: 0; /* مهم: اجازه می‌ده flex item کوچکتر از محتوا بشه */
 }
 
 .user-info span:nth-child(1) {
@@ -65,6 +66,8 @@ margin-right: 15px;
 overflow: hidden;
 text-overflow: ellipsis;
 white-space: nowrap;
+min-width: 0; /* مهم: برای عملکرد صحیح ellipsis */
+max-width: 150px; /* تغییر: حداکثر عرض اسم 150 پیکسل */
 }
 
 .user-info span:nth-child(2) {
@@ -104,7 +107,7 @@ display: flex;
 align-items: center;
 justify-content: center;
 flex-shrink: 0;
-margin-right: 16px; /* تغییر: از 15px به 20px افزایش یافت */
+margin-right: 20px;
 }
 
 .leader-info {
@@ -112,6 +115,7 @@ display: flex;
 align-items: center;
 flex: 1;
 margin-right: 10px;
+min-width: 0; /* مهم: اجازه می‌ده flex item کوچکتر از محتوا بشه */
 }
 
 .leader-info span:nth-child(1) {
@@ -122,6 +126,8 @@ margin-right: 15px;
 overflow: hidden;
 text-overflow: ellipsis;
 white-space: nowrap;
+min-width: 0; /* مهم: برای عملکرد صحیح ellipsis */
+max-width: 150px; /* تغییر: حداکثر عرض اسم 150 پیکسل */
 }
 
 .leader-info span:nth-child(2) {
