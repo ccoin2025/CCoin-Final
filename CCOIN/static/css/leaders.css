@@ -32,7 +32,9 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 20px 5px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
+margin: 20px auto;
+width: calc(100% - 20px); /* تغییر: عرض مشخص با فاصله کمتر */
+max-width: 100%;
 height: 50px;
 box-sizing: border-box;
 }
@@ -70,7 +72,9 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 5px; /* تغییر: margin از 20px به 10px کاهش یافت - باکس‌ها کشیده‌تر می‌شوند */
+margin: 10px auto;
+width: calc(100% - 20px); /* تغییر: عرض مشخص با فاصله کمتر */
+max-width: 100%;
 height: 50px;
 box-sizing: border-box;
 }
@@ -111,7 +115,8 @@ font-weight: bold;
 }
 
 .top-leaders {
-margin: 20px 5px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
+margin: 20px 0;
+padding: 0 10px; /* تغییر: padding به جای margin */
 }
 
 .leader-title {
