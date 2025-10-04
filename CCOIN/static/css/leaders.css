@@ -31,10 +31,7 @@ border-radius: 12px;
 padding: 15px;
 display: flex;
 align-items: center;
-justify-content: space-between;
-margin: 20px auto;
-width: calc(100% - 20px); /* تغییر: عرض مشخص با فاصله کمتر */
-max-width: 100%;
+margin: 20px 10px;
 height: 50px;
 box-sizing: border-box;
 }
@@ -49,19 +46,39 @@ border-radius: 50%;
 display: flex;
 align-items: center;
 justify-content: center;
-margin-right: 15px;
+flex-shrink: 0;
 }
 
 .user-info {
 display: flex;
-justify-content: space-between;
 align-items: center;
 flex: 1;
+margin-right: 10px;
 }
 
-.user-info span {
-margin-left: 20px;
+.user-info span:nth-child(1) {
+flex: 1;
+text-align: left;
 font-weight: bold;
+margin-right: 15px;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+
+.user-info span:nth-child(2) {
+width: 100px;
+text-align: right;
+font-weight: bold;
+flex-shrink: 0;
+}
+
+.user-info span:nth-child(3) {
+width: 40px;
+text-align: right;
+font-weight: bold;
+flex-shrink: 0;
+margin-right: 10px;
 }
 
 .leader-box {
@@ -71,10 +88,7 @@ border-radius: 12px;
 padding: 15px;
 display: flex;
 align-items: center;
-justify-content: space-between;
-margin: 10px auto;
-width: calc(100% - 20px); /* تغییر: عرض مشخص با فاصله کمتر */
-max-width: 100%;
+margin: 10px;
 height: 50px;
 box-sizing: border-box;
 }
@@ -88,7 +102,39 @@ border-radius: 50%;
 display: flex;
 align-items: center;
 justify-content: center;
+flex-shrink: 0;
+}
+
+.leader-info {
+display: flex;
+align-items: center;
+flex: 1;
+margin-right: 10px;
+}
+
+.leader-info span:nth-child(1) {
+flex: 1;
+text-align: left;
+font-weight: bold;
 margin-right: 15px;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+
+.leader-info span:nth-child(2) {
+width: 100px;
+text-align: right;
+font-weight: bold;
+flex-shrink: 0;
+}
+
+.leader-info span:nth-child(3) {
+width: 40px;
+text-align: right;
+font-weight: bold;
+flex-shrink: 0;
+margin-right: 10px;
 }
 
 .color-0 { background-color: #FF5757; }
@@ -102,21 +148,8 @@ margin-right: 15px;
 .color-8 { background-color: #DC143C; }
 .color-9 { background-color: #20B2AA; }
 
-.leader-info {
-display: flex;
-justify-content: space-between;
-align-items: center;
-flex: 1;
-}
-
-.leader-info span {
-margin-left: 20px;
-font-weight: bold;
-}
-
 .top-leaders {
-margin: 20px 0;
-padding: 0 10px; /* تغییر: padding به جای margin */
+margin: 20px 10px;
 }
 
 .leader-title {
