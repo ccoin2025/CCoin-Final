@@ -31,7 +31,7 @@ border-radius: 12px;
 padding: 15px;
 display: flex;
 align-items: center;
-margin: 20px 5px; /* تغییر: margin از 10px به 5px کاهش یافت */
+margin: 20px 10px; /* تغییر: margin از 10px به 5px کاهش یافت */
 height: 50px;
 box-sizing: border-box;
 }
@@ -104,7 +104,7 @@ display: flex;
 align-items: center;
 justify-content: center;
 flex-shrink: 0;
-margin-right: 20px; /* تغییر: از 15px به 20px افزایش یافت */
+margin-right: 16px; /* تغییر: از 15px به 20px افزایش یافت */
 }
 
 .leader-info {
