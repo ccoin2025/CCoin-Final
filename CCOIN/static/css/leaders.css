@@ -70,7 +70,7 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 10px; /* تغییر: margin از 20px به 10px کاهش یافت - باکس‌ها کشیده‌تر می‌شوند */
+margin: 5px; /* تغییر: margin از 20px به 10px کاهش یافت - باکس‌ها کشیده‌تر می‌شوند */
 height: 50px;
 box-sizing: border-box;
 }
