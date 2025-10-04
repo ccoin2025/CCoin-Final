@@ -32,7 +32,7 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 20px;
+margin: 20px 10px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
 height: 50px;
 box-sizing: border-box;
 }
@@ -70,10 +70,9 @@ padding: 15px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-margin: 20px; /* همان margin باکس کاربر */
-height: 50px; /* همان height باکس کاربر */
+margin: 10px; /* تغییر: margin از 20px به 10px کاهش یافت - باکس‌ها کشیده‌تر می‌شوند */
+height: 50px;
 box-sizing: border-box;
-/* حذف کردم: width: calc(100% - 40px) زیرا margin: 20px خودش فضا ایجاد می‌کند */
 }
 
 .leader-circle {
@@ -112,7 +111,7 @@ font-weight: bold;
 }
 
 .top-leaders {
-margin: 20px;
+margin: 20px 10px; /* تغییر: margin چپ و راست از 20px به 10px کاهش یافت */
 }
 
 .leader-title {
