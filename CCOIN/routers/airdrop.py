@@ -10,9 +10,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from CCOIN.database import get_db
 from CCOIN.models.user import User
+from CCOIN.utils.telegram_security import get_current_user
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL
 from solders.pubkey import Pubkey
+from solders.system_program import TransferParams, transfer
 from datetime import datetime, timezone
+import base58
+import base64
 import time
 import structlog
 from typing import Optional
@@ -26,7 +30,7 @@ solana_client = Client(SOLANA_RPC)
 
 # Initialize Redis client with error handling
 try:
-    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
+    redis_client = redis.Redis.from_url(REDIS_URL) if REDIS_URL else None
     if redis_client:
         logger.info("Redis connected successfully for airdrop module")
 except Exception as e:
@@ -34,16 +38,14 @@ except Exception as e:
     redis_client = None
 
 @router.get("/", response_class=HTMLResponse)
-@limiter.limit("20/minute")
+@limiter.limit("10/minute")
 async def get_airdrop(request: Request, db: Session = Depends(get_db)):
-    """
-    صفحه Airdrop با بررسی شرایط eligibility
-    """
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         logger.warning("Unauthorized access to airdrop")
         raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
 
+    # Sanitize input
     telegram_id = str(telegram_id).strip()
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -51,25 +53,26 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
         logger.error("User not found", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
 
-    # محاسبه countdown
     end_date = datetime(2025, 12, 31, tzinfo=timezone.utc)
     countdown = end_date - datetime.now(timezone.utc)
 
-    # بررسی دقیق وضعیت tasks
+    # بررسی دقیق‌تر وضعیت tasks
     tasks_completed = False
     if user.tasks:
         completed_tasks = [t for t in user.tasks if t.completed]
         tasks_completed = len(completed_tasks) > 0
 
-    # بررسی دقیق وضعیت referrals
+    # بررسی دقیق‌تر وضعیت referrals - اصلاح شده
     invited = False
-    referral_count = db.query(User).filter(User.referred_by == user.id).count()
-    invited = referral_count > 0
+    if hasattr(user, 'referrals') and user.referrals:
+        # Check if user has actually invited someone (referrals list is not empty)
+        invited = len(user.referrals) > 0
+    else:
+        # Alternative check: count users who were referred by this user
+        referral_count = db.query(User).filter(User.referred_by == user.id).count()
+        invited = referral_count > 0
 
-    # بررسی wallet connection
     wallet_connected = bool(user.wallet_address)
-    
-    # بررسی commission payment
     commission_paid = user.commission_paid
 
     # بررسی eligibility برای airdrop
@@ -78,6 +81,7 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
             user.airdrop.eligible = True
             db.commit()
 
+    # اضافه کردن config به context
     from CCOIN import config
 
     logger.info("Airdrop page accessed", extra={
@@ -102,63 +106,60 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/connect_wallet")
 @limiter.limit("5/minute")
-async def connect_wallet(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """
-    اتصال wallet با validation کامل و امنیت بالا
-    """
+async def connect_wallet(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         logger.warning("Unauthorized wallet connection attempt")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=401, detail="Unauthorized: Access only from Telegram")
 
+    # Sanitize input
     telegram_id = str(telegram_id).strip()
 
-    try:
-        body = await request.json()
-        wallet = body.get("wallet")
+    body = await request.json()
+    wallet = body.get("wallet")
 
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            logger.error("User not found for wallet connection", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=404, detail="User not found")
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        logger.error("User not found for wallet connection", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=404, detail="User not found")
 
-        # Handle disconnect
-        if not wallet or wallet == "":
-            user.wallet_address = None
+    # اگر wallet خالی است، یعنی disconnect
+    if not wallet or wallet == "":
+        user.wallet_address = None
+        if hasattr(user, 'wallet_connected'):
             user.wallet_connected = False
+        if hasattr(user, 'updated_at'):
             user.updated_at = datetime.now(timezone.utc)
-            db.commit()
+        db.commit()
 
-            # Clear cache
-            if redis_client:
-                cache_key = f"wallet:{telegram_id}"
-                try:
-                    redis_client.delete(cache_key)
-                except Exception as e:
-                    logger.warning("Cache clear failed", extra={"error": str(e)})
+        # Clear cache
+        if redis_client:
+            cache_key = f"wallet:{telegram_id}"
+            try:
+                redis_client.delete(cache_key)
+            except Exception as e:
+                logger.warning("Cache clear failed", extra={"error": str(e)})
 
-            logger.info("Wallet disconnected", extra={"telegram_id": telegram_id})
-            return {"success": True, "message": "Wallet disconnected successfully"}
+        logger.info("Wallet disconnected", extra={"telegram_id": telegram_id})
+        return {"success": True, "message": "Wallet disconnected successfully"}
 
-        # Validate wallet format
-        wallet = wallet.strip()
+    # Validate wallet address format
+    wallet = wallet.strip()
+    
+    if not isinstance(wallet, str) or len(wallet) < 32:
+        logger.warning("Invalid wallet format", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+
+    try:
+        # Validate با base58 decode
+        decoded = base58.b58decode(wallet)
+        if len(decoded) != 32:
+            raise ValueError("Invalid key length")
         
-        if not isinstance(wallet, str) or len(wallet) < 32 or len(wallet) > 44:
-            logger.warning("Invalid wallet format", extra={"telegram_id": telegram_id, "wallet_length": len(wallet)})
-            raise HTTPException(status_code=400, detail="Invalid wallet address format")
+        # Validate Solana public key format
+        Pubkey.from_string(wallet)
 
-        # Validate Solana public key
-        try:
-            Pubkey.from_string(wallet)
-        except Exception as e:
-            logger.warning("Invalid Solana address", extra={"telegram_id": telegram_id, "error": str(e)})
-            raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
-
-        # Check for duplicate wallet
+        # Check if wallet already exists for another user
         existing_user = db.query(User).filter(
             User.wallet_address == wallet,
             User.id != user.id
@@ -167,22 +168,23 @@ async def connect_wallet(
         if existing_user:
             logger.warning("Duplicate wallet attempt", extra={
                 "telegram_id": telegram_id,
-                "wallet": wallet,
-                "existing_user": existing_user.telegram_id
+                "wallet": wallet
             })
             raise HTTPException(status_code=400, detail="Wallet already connected to another account")
 
-        # Update user wallet
         user.wallet_address = wallet
-        user.wallet_connected = True
-        user.wallet_connection_date = datetime.now(timezone.utc)
-        user.updated_at = datetime.now(timezone.utc)
+        if hasattr(user, 'wallet_connected'):
+            user.wallet_connected = True
+        if hasattr(user, 'wallet_connection_date'):
+            user.wallet_connection_date = datetime.now(timezone.utc)
+        if hasattr(user, 'updated_at'):
+            user.updated_at = datetime.now(timezone.utc)
         db.commit()
 
         # Cache wallet address
         if redis_client:
+            cache_key = f"wallet:{telegram_id}"
             try:
-                cache_key = f"wallet:{telegram_id}"
                 redis_client.setex(cache_key, 3600, wallet)
             except Exception as e:
                 logger.warning("Cache set failed", extra={"error": str(e)})
@@ -194,6 +196,12 @@ async def connect_wallet(
 
         return {"success": True, "message": "Wallet connected successfully"}
 
+    except ValueError as e:
+        logger.warning("Invalid Solana address", extra={
+            "telegram_id": telegram_id,
+            "error": str(e)
+        })
+        raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
     except HTTPException:
         raise
     except Exception as e:
@@ -202,96 +210,87 @@ async def connect_wallet(
             "telegram_id": telegram_id,
             "error": str(e)
         }, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to connect wallet")
+        raise HTTPException(status_code=500, detail=f"Failed to connect wallet: {str(e)}")
 
 @router.post("/confirm_commission")
 @limiter.limit("3/minute")
-async def confirm_commission(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """
-    تایید پرداخت commission با retry logic و caching
-    """
+async def confirm_commission(request: Request, db: Session = Depends(get_db)):
+    """✅ اصلاح شده: گرفتن telegram_id از body به جای session"""
+
+    body = await request.json()
+    telegram_id = body.get("telegram_id")
+    tx_signature = body.get("signature")
+    amount = body.get("amount", COMMISSION_AMOUNT)
+    recipient = body.get("recipient", ADMIN_WALLET)
+    reference = body.get("reference")
+
+    print(f"📥 Commission confirmation request: telegram_id={telegram_id}, signature={tx_signature}")
+    logger.info("Commission confirmation request", extra={
+        "telegram_id": telegram_id,
+        "signature": tx_signature
+    })
+
+    if not telegram_id:
+        raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+    if not tx_signature:
+        raise HTTPException(status_code=400, detail="Missing transaction signature")
+
+    # Sanitize inputs
+    telegram_id = str(telegram_id).strip()
+    tx_signature = tx_signature.strip()
+
+    # Validate transaction signature format
     try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        tx_signature = body.get("signature")
-        amount = body.get("amount", COMMISSION_AMOUNT)
-        recipient = body.get("recipient", ADMIN_WALLET)
-        reference = body.get("reference")
+        base58.b58decode(tx_signature)
+    except Exception:
+        logger.warning("Invalid transaction signature format", extra={"signature": tx_signature})
+        raise HTTPException(status_code=400, detail="Invalid transaction signature format")
 
-        logger.info("Commission confirmation request", extra={
-            "telegram_id": telegram_id,
-            "signature": tx_signature,
-            "amount": amount
-        })
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        print(f"❌ User not found: {telegram_id}")
+        logger.error("User not found", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=404, detail="User not found")
 
-        # Input validation
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Missing telegram_id")
+    if user.commission_paid:
+        print(f"✅ Commission already paid for user: {telegram_id}")
+        logger.info("Commission already paid", extra={"telegram_id": telegram_id})
+        return {"success": True, "message": "Commission already paid"}
 
-        if not tx_signature or not isinstance(tx_signature, str):
-            raise HTTPException(status_code=400, detail="Missing or invalid transaction signature")
+    if not user.wallet_address:
+        print(f"❌ No wallet connected for user: {telegram_id}")
+        logger.warning("No wallet connected", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=400, detail="No wallet connected")
 
-        # Sanitize inputs
-        telegram_id = str(telegram_id).strip()
-        tx_signature = tx_signature.strip()
-
-        # Find user
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            logger.error("User not found for commission", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # Check if already paid
-        if user.commission_paid:
-            logger.info("Commission already paid", extra={"telegram_id": telegram_id})
-            return {
-                "success": True,
-                "message": "Commission already paid",
-                "redirect_url": f"/airdrop?telegram_id={telegram_id}"
-            }
-
-        # Check wallet connection
-        if not user.wallet_address:
-            logger.warning("No wallet connected for commission", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=400, detail="No wallet connected")
-
-        # Check cache first
+    try:
+        # بررسی cache ابتدا
         cache_key = f"tx:{tx_signature}"
         if redis_client:
             try:
                 cached_result = redis_client.get(cache_key)
                 if cached_result:
+                    print(f"✅ Transaction found in cache: {tx_signature}")
                     logger.info("Transaction found in cache", extra={"signature": tx_signature})
                     user.commission_paid = True
-                    user.commission_transaction_hash = tx_signature
-                    user.commission_payment_date = datetime.now(timezone.utc)
-                    user.updated_at = datetime.now(timezone.utc)
+                    if hasattr(user, 'updated_at'):
+                        user.updated_at = datetime.now(timezone.utc)
                     db.commit()
-                    return {
-                        "success": True,
-                        "message": "Commission already confirmed",
-                        "redirect_url": f"/airdrop?telegram_id={telegram_id}"
-                    }
+                    return {"success": True, "message": "Commission already confirmed"}
             except Exception as e:
                 logger.warning("Cache check failed", extra={"error": str(e)})
 
-        # Retry logic with exponential backoff
+        # Retry logic for Solana RPC (exponential backoff)
         retries = 5
         delay = 1
-
         for attempt in range(retries):
             try:
+                print(f"🔍 Verifying transaction (attempt {attempt + 1}/{retries}): {tx_signature}")
                 logger.debug("Verifying transaction", extra={
                     "attempt": attempt + 1,
-                    "retries": retries,
                     "signature": tx_signature
                 })
 
-                # Get transaction info from Solana
                 tx_info = solana_client.get_transaction(
                     tx_signature,
                     encoding="json",
@@ -300,99 +299,99 @@ async def confirm_commission(
                 )
 
                 if tx_info.value and tx_info.value.meta and not tx_info.value.meta.err:
-                    # Transaction confirmed successfully
+                    # ✅ Transaction تایید شد
                     user.commission_paid = True
                     user.commission_transaction_hash = tx_signature
                     user.commission_payment_date = datetime.now(timezone.utc)
-                    user.updated_at = datetime.now(timezone.utc)
+                    if hasattr(user, 'updated_at'):
+                        user.updated_at = datetime.now(timezone.utc)
                     db.commit()
 
+                    print(f"✅ Commission confirmed successfully for user: {telegram_id}")
+                    print(f"   Transaction: {tx_signature}")
                     logger.info("Commission confirmed successfully", extra={
                         "telegram_id": telegram_id,
-                        "signature": tx_signature,
-                        "attempt": attempt + 1
+                        "signature": tx_signature
                     })
 
-                    # Cache the successful result
+                    # Cache کردن نتیجه
                     if redis_client:
                         try:
                             redis_client.setex(cache_key, 3600, "confirmed")
                         except Exception as e:
                             logger.warning("Cache set failed", extra={"error": str(e)})
 
+                    # ✅ Return با redirect URL
                     return {
-                        "success": True,
+                        "success": True, 
                         "message": "Commission confirmed successfully!",
                         "redirect_url": f"/airdrop?telegram_id={telegram_id}"
                     }
                 else:
                     error_msg = "Transaction failed or not found on blockchain"
-                    logger.warning(error_msg, extra={
-                        "signature": tx_signature,
-                        "attempt": attempt + 1
-                    })
-                    
-                    if attempt == retries - 1:
-                        raise HTTPException(status_code=400, detail=error_msg)
+                    print(f"❌ {error_msg}: {tx_signature}")
+                    logger.warning(error_msg, extra={"signature": tx_signature})
+                    raise HTTPException(status_code=400, detail=error_msg)
 
             except HTTPException:
                 raise
             except Exception as e:
                 if attempt < retries - 1:
+                    print(f"⚠️ Retry {attempt + 1}/{retries} failed: {e}")
                     logger.warning("Retry attempt failed", extra={
                         "attempt": attempt + 1,
-                        "retries": retries,
                         "error": str(e)
                     })
                     time.sleep(delay)
                     delay *= 2  # Exponential backoff
                 else:
-                    logger.error("Verification failed after all retries", extra={
+                    print(f"❌ Verification failed after {retries} retries: {e}")
+                    logger.error("Verification failed after retries", extra={
                         "telegram_id": telegram_id,
                         "signature": tx_signature,
-                        "retries": retries,
                         "error": str(e)
                     }, exc_info=True)
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Transaction verification failed. Please try again later."
-                    )
+                    raise HTTPException(status_code=500, detail=f"Confirmation failed after retries: {str(e)}")
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
+        print(f"❌ Commission confirmation error: {e}")
         logger.error("Commission confirmation error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal error occurred")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Transaction confirmation failed: {str(e)}")
 
 @router.get("/commission_status")
-@limiter.limit("20/minute")
+@limiter.limit("10/minute")
 async def get_commission_status(
     request: Request,
-    telegram_id: Optional[str] = Query(None, min_length=1, max_length=50),
+    telegram_id: str = Query(None),
     db: Session = Depends(get_db)
 ):
-    """
-    دریافت وضعیت پرداخت commission
-    """
-    # Get telegram_id from query or session
+    """✅ اصلاح شده: گرفتن telegram_id از query parameter یا session"""
+    
+    # اول از query parameter بگیر
     if not telegram_id:
         telegram_id = request.session.get("telegram_id")
-
+    
     if not telegram_id:
         raise HTTPException(status_code=400, detail="Missing telegram_id")
 
+    # Sanitize input
     telegram_id = str(telegram_id).strip()
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        logger.error("User not found for status", extra={"telegram_id": telegram_id})
+        print(f"❌ User not found for status check: {telegram_id}")
+        logger.error("User not found for status check", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
 
+    print(f"📊 Commission status for {telegram_id}: paid={user.commission_paid}, wallet={bool(user.wallet_address)}")
     logger.debug("Commission status check", extra={
         "telegram_id": telegram_id,
-        "commission_paid": user.commission_paid,
-        "wallet_connected": bool(user.wallet_address)
+        "commission_paid": user.commission_paid
     })
 
     return {
@@ -400,59 +399,71 @@ async def get_commission_status(
         "wallet_connected": bool(user.wallet_address),
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET,
-        "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None,
-        "transaction_hash": user.commission_transaction_hash
+        "admin_wallet": ADMIN_WALLET
     }
 
 @router.get("/referral_status")
-@limiter.limit("20/minute")
+@limiter.limit("10/minute")
 async def get_referral_status(request: Request, db: Session = Depends(get_db)):
-    """
-    بررسی وضعیت دعوت دوستان (referrals)
-    """
+    """Check if user has successfully invited friends"""
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    # Sanitize input
     telegram_id = str(telegram_id).strip()
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # شمارش referrals
+    # روش اول: شمارش کاربرانی که توسط این کاربر دعوت شده‌اند
     referral_count = db.query(User).filter(User.referred_by == user.id).count()
-    has_referrals = referral_count > 0
 
+    # روش دوم: چک کردن relationship اگر درست کار کند
+    relationship_count = 0
+    try:
+        if hasattr(user, 'referrals') and user.referrals:
+            relationship_count = len(user.referrals)
+    except:
+        pass
+
+    # انتخاب بهترین روش
+    final_count = max(referral_count, relationship_count)
+    has_referrals = final_count > 0
+
+    print(f"Referral check for user {telegram_id}: referral_count={referral_count}, relationship_count={relationship_count}, final={final_count}")
     logger.debug("Referral status check", extra={
         "telegram_id": telegram_id,
-        "referral_count": referral_count
+        "referral_count": final_count
     })
 
     return {
         "has_referrals": has_referrals,
-        "referral_count": referral_count,
-        "referral_code": user.referral_code
+        "referral_count": final_count,
+        "referral_code": user.referral_code,
+        "debug_info": {
+            "direct_count": referral_count,
+            "relationship_count": relationship_count
+        }
     }
 
 @router.get("/tasks_status")
-@limiter.limit("20/minute")
+@limiter.limit("10/minute")
 async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
-    """
-    بررسی وضعیت انجام tasks
-    """
+    """Check if user has completed tasks"""
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    # Sanitize input
     telegram_id = str(telegram_id).strip()
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # بررسی tasks
+    # Check completed tasks
     tasks_completed = False
     total_tasks = 0
     completed_count = 0
@@ -463,9 +474,9 @@ async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
         completed_count = len(completed_tasks)
         tasks_completed = completed_count > 0
 
+    print(f"Tasks check for user {telegram_id}: total={total_tasks}, completed={completed_count}, status={tasks_completed}")
     logger.debug("Tasks status check", extra={
         "telegram_id": telegram_id,
-        "total_tasks": total_tasks,
         "completed_count": completed_count
     })
 
@@ -475,37 +486,24 @@ async def get_tasks_status(request: Request, db: Session = Depends(get_db)):
         "completed_count": completed_count
     }
 
+# Deprecated endpoint - kept for backward compatibility
+@router.get("/pay/commission")
+async def pay_commission_get(request: Request):
+    raise HTTPException(status_code=405, detail="This endpoint only supports POST requests.")
+
 @router.get("/check_wallet_status")
-@limiter.limit("20/minute")
 async def check_wallet_status(request: Request, db: Session = Depends(get_db)):
-    """
-    بررسی وضعیت اتصال wallet
-    """
-    telegram_id = request.session.get("telegram_id")
-    if not telegram_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    telegram_id = str(telegram_id).strip()
-
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    user = await get_current_user(request, db)
     return JSONResponse({
         "connected": user.wallet_address is not None,
-        "wallet_address": user.wallet_address,
-        "connection_date": user.wallet_connection_date.isoformat() if user.wallet_connection_date else None
+        "wallet_address": user.wallet_address
     })
 
 @router.post("/verify_commission_manual")
 @limiter.limit("3/minute")
-async def verify_commission_manual(
-    request: Request, 
-    db: Session = Depends(get_db)
-):
+async def verify_commission_manual(request: Request, db: Session = Depends(get_db)):
     """
     بررسی manual تراکنش‌های اخیر از wallet کاربر به admin wallet
-    برای debug و troubleshooting
     """
     try:
         body = await request.json()
@@ -514,6 +512,7 @@ async def verify_commission_manual(
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
 
+        # Sanitize input
         telegram_id = str(telegram_id).strip()
 
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -523,14 +522,13 @@ async def verify_commission_manual(
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="No wallet connected")
 
-        # Get recent transactions from user's wallet
+        # Get recent transactions
         try:
             from solders.signature import Signature
             
             user_pubkey = Pubkey.from_string(user.wallet_address)
             admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
             
-            # Get signatures for address
             signatures = solana_client.get_signatures_for_address(
                 user_pubkey,
                 limit=10
@@ -543,12 +541,10 @@ async def verify_commission_manual(
                     "transactions": []
                 }
 
-            # Check each transaction
             verified_transactions = []
             for sig_info in signatures.value:
                 tx_sig = str(sig_info.signature)
                 
-                # Get transaction details
                 tx_info = solana_client.get_transaction(
                     tx_sig,
                     encoding="json",
@@ -588,9 +584,3 @@ async def verify_commission_manual(
     except Exception as e:
         logger.error("Manual verification error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
-
-# Deprecated endpoints - kept for backward compatibility
-@router.get("/pay/commission")
-async def pay_commission_get(request: Request):
-    """Deprecated - use POST method"""
-    raise HTTPException(status_code=405, detail="This endpoint only supports POST requests")
