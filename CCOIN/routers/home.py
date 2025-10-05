@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from slowapi import Limiter
@@ -8,18 +8,7 @@ from CCOIN.models.user import User
 from fastapi.templating import Jinja2Templates
 import os
 import structlog
-
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.add_log_level,
-        structlog.processors.JSONRenderer(),
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
+from typing import Optional
 
 logger = structlog.get_logger()
 
@@ -29,34 +18,49 @@ limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 @router.get("/", response_class=HTMLResponse)
-@limiter.limit("10/minute")
-async def get_home(request: Request, db: Session = Depends(get_db)):
-    # telegram_id را از query parameter یا session بگیرید
-    telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
-    
+@limiter.limit("20/minute")
+async def get_home(
+    request: Request, 
+    telegram_id: Optional[str] = Query(None, min_length=1, max_length=50),
+    db: Session = Depends(get_db)
+):
+    """
+    Home page با امنیت بهبود یافته
+    """
+    # دریافت telegram_id از query یا session
     if not telegram_id:
-        logger.info("No telegram_id found for home, redirecting to bot")
+        telegram_id = request.session.get("telegram_id")
+
+    if not telegram_id:
+        logger.warning("No telegram_id found for home")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
+
+    # Sanitize input
+    telegram_id = str(telegram_id).strip()
     
-    # telegram_id را در session تنظیم کنید
+    # ذخیره در session
     request.session["telegram_id"] = telegram_id
-    
+
+    # Query user
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        logger.info(f"User not found for telegram_id: {telegram_id}")
+        logger.error("User not found", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # اگر هنوز first_login=True است، به load هدایت کنید
+
+    # بررسی first_login
     if user.first_login:
-        logger.info(f"User {telegram_id} still has first_login=True, redirecting to load")
+        logger.info("User first login, redirecting", extra={"telegram_id": telegram_id})
         return RedirectResponse(url=f"/load?telegram_id={telegram_id}")
-    
+
     reward = user.tokens
-    
-    logger.info(f"Rendering home.html for user {telegram_id}, tokens: {reward}")
-    
+
+    logger.info("Rendering home", extra={
+        "telegram_id": telegram_id,
+        "tokens": reward
+    })
+
     return templates.TemplateResponse("home.html", {
-        "request": request, 
+        "request": request,
         "reward": reward,
         "user": user
     })
