@@ -135,22 +135,25 @@ if ENV == "production":
 # Security Headers Middleware (جدید)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
     response = await call_next(request)
     
     # Security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     
-    if ENV == "production":
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://telegram.org; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' https://api.telegram.org;"
-        )
+    # ✅ اصلاح CSP برای اجازه دادن به CDN آیکون‌ها
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com; "
+        "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com https://unpkg.com; "
+        "img-src 'self' data: https: blob:; "
+        "connect-src 'self' https://api.telegram.org https:; "
+        "frame-src 'self' https://telegram.org;"
+    )
     
     return response
 
