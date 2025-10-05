@@ -32,6 +32,11 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     logger.warning("SECRET_KEY is not set in environment variables")
 
+# CSRF Secret Key (جدید)
+CSRF_SECRET_KEY = os.getenv("CSRF_SECRET_KEY", SECRET_KEY)
+
+# ⚠️ هشدار: این کلیدها نباید در environment variables باشند
+# از Key Management Service استفاده کنید
 DAPP_PRIVATE_KEY = os.getenv("DAPP_PRIVATE_KEY")
 if not DAPP_PRIVATE_KEY:
     logger.warning("DAPP_PRIVATE_KEY is not set in environment variables")
@@ -53,3 +58,15 @@ APP_DOMAIN = os.getenv("APP_DOMAIN", "https://ccoin-final.onrender.com")
 WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN")
 if not WEBHOOK_TOKEN:
     logger.warning("WEBHOOK_TOKEN is not set in environment variables")
+
+# Cache Settings (جدید)
+CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 دقیقه
+
+# Rate Limiting Settings (جدید)
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+GLOBAL_RATE_LIMIT = os.getenv("GLOBAL_RATE_LIMIT", "100/minute")
+
+# Environment
+ENV = os.getenv("ENV", "production")
+DEBUG = ENV == "development"
