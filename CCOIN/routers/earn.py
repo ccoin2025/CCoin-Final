@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 
 class TaskRequest(BaseModel):
     platform: str
-    
+
     @validator('platform')
     def validate_platform(cls, v):
         allowed_platforms = ['telegram', 'instagram', 'x', 'youtube']
@@ -77,7 +77,7 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
     # بررسی cache برای tasks
     cache_key = f"tasks:{telegram_id}"
     cached_tasks = get_from_cache(cache_key)
-    
+
     if not cached_tasks:
         # بررسی و به‌روزرسانی وضعیت همه تسک‌ها
         try:
@@ -88,37 +88,47 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
                 "error": str(e)
             })
 
+        # دریافت تسک‌های کاربر از دیتابیس
+        user_tasks = db.query(UserTask).filter(UserTask.user_id == user.id).all()
+        
+        # ایجاد دیکشنری برای دسترسی سریع
+        task_dict = {task.platform: task for task in user_tasks}
+
         tasks = [
             {
                 "label": "Join Telegram",
                 "reward": PLATFORM_REWARD["telegram"],
                 "platform": "telegram",
                 "icon": "Telegram.png",
-                "completed": any(t.platform == "telegram" and t.completed for t in user.tasks)
+                "completed": task_dict.get("telegram").completed if task_dict.get("telegram") else False,
+                "attempt_count": task_dict.get("telegram").attempt_count if task_dict.get("telegram") else 0
             },
             {
                 "label": "Follow Instagram",
                 "reward": PLATFORM_REWARD.get("instagram", 500),
                 "platform": "instagram",
                 "icon": "Instagram.png",
-                "completed": any(t.platform == "instagram" and t.completed for t in user.tasks)
+                "completed": task_dict.get("instagram").completed if task_dict.get("instagram") else False,
+                "attempt_count": task_dict.get("instagram").attempt_count if task_dict.get("instagram") else 0
             },
             {
                 "label": "Follow X",
                 "reward": PLATFORM_REWARD.get("x", 500),
                 "platform": "x",
                 "icon": "X.png",
-                "completed": any(t.platform == "x" and t.completed for t in user.tasks)
+                "completed": task_dict.get("x").completed if task_dict.get("x") else False,
+                "attempt_count": task_dict.get("x").attempt_count if task_dict.get("x") else 0
             },
             {
                 "label": "Subscribe YouTube",
                 "reward": PLATFORM_REWARD.get("youtube", 500),
                 "platform": "youtube",
                 "icon": "YouTube.png",
-                "completed": any(t.platform == "youtube" and t.completed for t in user.tasks)
+                "completed": task_dict.get("youtube").completed if task_dict.get("youtube") else False,
+                "attempt_count": task_dict.get("youtube").attempt_count if task_dict.get("youtube") else 0
             },
         ]
-        
+
         # Cache tasks
         set_in_cache(cache_key, tasks, ttl=60)  # 1 دقیقه
     else:
@@ -134,12 +144,12 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
 @router.post("/verify-task")
 @limiter.limit("10/minute")
 async def verify_task(
-    task_data: TaskRequest, 
-    request: Request, 
+    task_data: TaskRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
-    تایید انجام task با validation بهتر
+    تایید انجام task با سیستم 3 بار کلیک برای شبکه‌های اجتماعی غیر Telegram
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -156,30 +166,91 @@ async def verify_task(
 
     platform = task_data.platform
 
-    # بررسی follow status بدون cache
-    try:
+    # یافتن یا ایجاد task
+    task = db.query(UserTask).filter(
+        UserTask.user_id == user.id,
+        UserTask.platform == platform
+    ).first()
+
+    if not task:
+        task = UserTask(user_id=user.id, platform=platform, completed=False, attempt_count=0)
+        db.add(task)
+        db.flush()
+
+    # ✅ اگر task قبلاً complete شده، دوباره verify نکن
+    if task.completed:
+        logger.info("Task already completed", extra={
+            "telegram_id": telegram_id,
+            "platform": platform
+        })
+        return {"success": True, "already_completed": True}
+
+    # 🔄 افزایش تعداد attempt
+    task.attempt_count += 1
+    task.last_attempt_at = datetime.now(timezone.utc)
+    db.commit()
+
+    logger.info(f"Task attempt #{task.attempt_count}", extra={
+        "telegram_id": telegram_id,
+        "platform": platform,
+        "attempt_count": task.attempt_count
+    })
+
+    # 🎯 منطق سه بار کلیک برای Instagram, X, YouTube
+    if platform in ['instagram', 'x', 'youtube']:
+        # فقط در بار سوم واقعاً verify کن
+        if task.attempt_count < 3:
+            logger.info(f"Fake verification - attempt {task.attempt_count}/3", extra={
+                "telegram_id": telegram_id,
+                "platform": platform
+            })
+            # Fake verification - برگردان false تا کاربر فکر کنه داره چک میکنه
+            return {
+                "success": False,
+                "attempt_count": task.attempt_count,
+                "message": "Verification in progress. Please try again."
+            }
+        else:
+            # در بار سوم، واقعاً verify کن (که همیشه true برمی‌گردونه چون API نداریم)
+            logger.info(f"Real verification on attempt 3", extra={
+                "telegram_id": telegram_id,
+                "platform": platform
+            })
+            result = check_social_follow(telegram_id, platform, force_refresh=True)
+            
+            logger.info("Task verification result", extra={
+                "telegram_id": telegram_id,
+                "platform": platform,
+                "result": result,
+                "attempt_count": task.attempt_count
+            })
+            
+            return {
+                "success": result,
+                "attempt_count": task.attempt_count
+            }
+    
+    # 📱 برای Telegram همیشه verify واقعی
+    elif platform == 'telegram':
         result = check_social_follow(telegram_id, platform, force_refresh=True)
         
-        logger.info("Task verification", extra={
+        logger.info("Telegram task verification", extra={
             "telegram_id": telegram_id,
             "platform": platform,
             "result": result
         })
         
-        return {"success": result}
-
-    except Exception as e:
-        logger.error("Verification error", extra={
-            "telegram_id": telegram_id,
-            "platform": platform,
-            "error": str(e)
-        }, exc_info=True)
-        return {"success": False, "error": "Verification failed"}
+        return {
+            "success": result,
+            "attempt_count": task.attempt_count
+        }
+    
+    return {"success": False, "error": "Unknown platform"}
 
 @router.post("/claim-reward")
 @limiter.limit("5/minute")
 async def claim_reward(
-    task_data: TaskRequest, 
+    task_data: TaskRequest,
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -238,7 +309,8 @@ async def claim_reward(
                 "telegram_id": telegram_id,
                 "platform": platform,
                 "reward": reward,
-                "total_tokens": user.tokens
+                "total_tokens": user.tokens,
+                "attempt_count": task.attempt_count
             })
 
             return {
@@ -309,7 +381,7 @@ async def refresh_task_status(
     try:
         # بررسی و به‌روزرسانی
         update_result = check_and_update_all_user_tasks(telegram_id, db)
-        
+
         # پاک کردن cache در background
         background_tasks.add_task(clear_user_cache, telegram_id)
 
