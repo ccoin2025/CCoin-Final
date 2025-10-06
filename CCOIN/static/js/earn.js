@@ -109,31 +109,47 @@ function handleAction(button, platform) {
                     window.Telegram.WebApp.showAlert(claimData.error || "Failed to claim reward. Please try again.");
                 }
             } else {
-                // ✅ اگر verification ناموفق بود (دفعات 1 و 2 برای Instagram, X, YouTube)
+                // ✅ اگر verification ناموفق بود
                 const attemptCount = verifyData.attempt_count || 0;
                 
+                // 📱 برای Telegram - پیام واقعی نمایش بده
                 if (platform === 'telegram') {
-                    // برای تلگرام پیام واقعی نمایش بده
                     statusElement.textContent = "Please join our channel first!";
                     statusElement.style.color = "#ff4444";
                     window.Telegram.WebApp.showAlert("❌ Please join our Telegram channel first, then try again.");
-                } else {
-                    // برای Instagram, X, YouTube در دفعات 1 و 2 پیام "در حال بررسی" نمایش بده
+                    
+                    button.disabled = false;
+                    button.style.cursor = "pointer";
+                    button.style.opacity = "1";
+                } 
+                // 🎭 برای Instagram, X, YouTube - سیستم 3 بار کلیک
+                else {
                     if (attemptCount < 3) {
-                        statusElement.textContent = `Checking... (Attempt ${attemptCount}/3)`;
+                        statusElement.textContent = `Checking... (${attemptCount}/3)`;
                         statusElement.style.color = "#ffa500";
-                        window.Telegram.WebApp.showAlert("⏳ We're verifying your follow status. Please make sure you've followed us and try again.");
+                        
+                        // پیام‌های مختلف برای هر attempt
+                        if (attemptCount === 1) {
+                            window.Telegram.WebApp.showAlert("⏳ We're verifying your follow status. Please make sure you've followed us and try again.");
+                        } else if (attemptCount === 2) {
+                            window.Telegram.WebApp.showAlert("🔍 Still checking... Please ensure you've followed our page and try one more time.");
+                        }
                     } else {
-                        // در دفعه سوم اگر باز هم verify نشد
+                        // در دفعه سوم اگر باز هم verify نشد (نباید اتفاق بیفته چون mock API داریم)
                         statusElement.textContent = "Verification failed!";
                         statusElement.style.color = "#ff4444";
-                        window.Telegram.WebApp.showAlert(`❌ Please make sure you have followed our ${platform.toUpperCase()} account, then try again.`);
+                        
+                        const platformName = platform === 'instagram' ? 'Instagram page' :
+                                           platform === 'x' ? 'X (Twitter) account' :
+                                           'YouTube channel';
+                        
+                        window.Telegram.WebApp.showAlert(`❌ Please make sure you have followed our ${platformName}, then try again.`);
                     }
+                    
+                    button.disabled = false;
+                    button.style.cursor = "pointer";
+                    button.style.opacity = "1";
                 }
-                
-                button.disabled = false;
-                button.style.cursor = "pointer";
-                button.style.opacity = "1";
             }
         } catch (err) {
             console.error("Error verifying task:", err);
