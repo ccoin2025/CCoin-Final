@@ -59,9 +59,15 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     # بررسی دقیق‌تر وضعیت tasks
     tasks_completed = False
     if user.tasks:
-        completed_tasks = [t for t in user.tasks if t.completed]
-        tasks_completed = len(completed_tasks) > 0
 
+        required_platforms = ['telegram', 'instagram', 'x', 'youtube']
+        completed_platforms = [t.platform for t in user.tasks if t.completed]
+        tasks_completed = all(platform in completed_platforms for platform in required_platforms)
+        logger.info("Tasks completion check", extra={
+        "telegram_id": telegram_id,
+        "completed_platforms": completed_platforms,
+        "all_completed": tasks_completed
+    })
     # بررسی دقیق‌تر وضعیت referrals - اصلاح شده
     invited = False
     if hasattr(user, 'referrals') and user.referrals:
