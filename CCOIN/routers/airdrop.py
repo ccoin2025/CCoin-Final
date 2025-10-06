@@ -56,18 +56,23 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     end_date = datetime(2025, 12, 31, tzinfo=timezone.utc)
     countdown = end_date - datetime.now(timezone.utc)
 
-    # بررسی دقیق‌تر وضعیت tasks
+    # ✅ بررسی دقیق‌تر وضعیت tasks - همه 4 تسک باید کامل شده باشند
     tasks_completed = False
     if user.tasks:
-
+        # فقط وقتی هر 4 تسک (telegram, instagram, x, youtube) کامل شده باشند
         required_platforms = ['telegram', 'instagram', 'x', 'youtube']
         completed_platforms = [t.platform for t in user.tasks if t.completed]
+        
+        # بررسی اینکه همه 4 پلتفرم در لیست completed باشند
         tasks_completed = all(platform in completed_platforms for platform in required_platforms)
+        
         logger.info("Tasks completion check", extra={
-        "telegram_id": telegram_id,
-        "completed_platforms": completed_platforms,
-        "all_completed": tasks_completed
-    })
+            "telegram_id": telegram_id,
+            "required_platforms": required_platforms,
+            "completed_platforms": completed_platforms,
+            "all_completed": tasks_completed
+        })
+
     # بررسی دقیق‌تر وضعیت referrals - اصلاح شده
     invited = False
     if hasattr(user, 'referrals') and user.referrals:
