@@ -35,7 +35,7 @@ function handleAction(button, platform) {
     }
 
     const statusElement = button.querySelector(".status");
-    const originalText = statusElement.textContent;
+    const originalText = statusElement.textContent; // ذخیره متن اصلی (مثلاً "+500 ccoin")
     
     statusElement.textContent = "Verifying...";
     button.disabled = true;
@@ -125,7 +125,8 @@ function handleAction(button, platform) {
                 // 🎭 برای Instagram, X, YouTube - سیستم 3 بار کلیک
                 else {
                     if (attemptCount < 3) {
-                        statusElement.textContent = "Checking..."; // ✅ بدون نمایش عدد
+                        // ✅ نمایش "Checking..." برای 5 ثانیه
+                        statusElement.textContent = "Checking...";
                         statusElement.style.color = "#ffa500";
                         
                         // پیام‌های مختلف برای هر attempt
@@ -134,6 +135,18 @@ function handleAction(button, platform) {
                         } else if (attemptCount === 2) {
                             window.Telegram.WebApp.showAlert("🔍 Still checking... Please ensure you've followed our page and try one more time.");
                         }
+                        
+                        // ✅ بعد از 5 ثانیه برگشت به حالت اولیه
+                        setTimeout(() => {
+                            statusElement.textContent = originalText; // برگشت به "+500 ccoin"
+                            statusElement.style.color = ""; // رنگ پیش‌فرض
+                            button.disabled = false;
+                            button.style.cursor = "pointer";
+                            button.style.opacity = "1";
+                            
+                            console.log(`Button reset to original state after attempt ${attemptCount}`);
+                        }, 5000); // 5 ثانیه
+                        
                     } else {
                         // در دفعه سوم اگر باز هم verify نشد (نباید اتفاق بیفته چون mock API داریم)
                         statusElement.textContent = "Verification failed!";
@@ -144,11 +157,11 @@ function handleAction(button, platform) {
                                            'YouTube channel';
                         
                         window.Telegram.WebApp.showAlert(`❌ Please make sure you have followed our ${platformName}, then try again.`);
+                        
+                        button.disabled = false;
+                        button.style.cursor = "pointer";
+                        button.style.opacity = "1";
                     }
-                    
-                    button.disabled = false;
-                    button.style.cursor = "pointer";
-                    button.style.opacity = "1";
                 }
             }
         } catch (err) {
