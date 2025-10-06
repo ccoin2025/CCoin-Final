@@ -196,7 +196,7 @@ async def verify_task(
         "attempt_count": task.attempt_count
     })
 
-    # 🎯 منطق سه بار کلیک برای Instagram, X, YouTube
+    # 🎯 منطق سه بار کلیک فقط برای Instagram, X, YouTube
     if platform in ['instagram', 'x', 'youtube']:
         # فقط در بار سوم واقعاً verify کن
         if task.attempt_count < 3:
@@ -230,7 +230,7 @@ async def verify_task(
                 "attempt_count": task.attempt_count
             }
     
-    # 📱 برای Telegram همیشه verify واقعی
+    # 📱 برای Telegram همیشه verify واقعی (بدون تغییر)
     elif platform == 'telegram':
         result = check_social_follow(telegram_id, platform, force_refresh=True)
         
