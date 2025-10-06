@@ -125,7 +125,7 @@ function handleAction(button, platform) {
                 // 🎭 برای Instagram, X, YouTube - سیستم 3 بار کلیک
                 else {
                     if (attemptCount < 3) {
-                        statusElement.textContent = `Checking... (${attemptCount}/3)`;
+                        statusElement.textContent = "Checking..."; // ✅ بدون نمایش عدد
                         statusElement.style.color = "#ffa500";
                         
                         // پیام‌های مختلف برای هر attempt
