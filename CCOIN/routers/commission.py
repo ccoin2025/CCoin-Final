@@ -58,7 +58,8 @@ async def commission_browser_pay(
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME,
-        "config": config  # ✅ اضافه شده
+        "solana_rpc": SOLANA_RPC,  # ✅ اضافه شد
+        "config": config
     })
 
 
