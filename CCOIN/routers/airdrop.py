@@ -21,6 +21,11 @@ import time
 import structlog
 from typing import Optional
 
+# ✅ اضافه کردن imports جدید برای امنیت
+from fastapi_csrf_protect import CsrfProtect
+from CCOIN.utils.anti_sybil import check_wallet_age, check_wallet_activity, check_duplicate_pattern
+from CCOIN.utils.captcha import verify_recaptcha
+
 logger = structlog.get_logger()
 
 router = APIRouter()
@@ -38,7 +43,7 @@ except Exception as e:
     redis_client = None
 
 @router.get("/", response_class=HTMLResponse)
-@limiter.limit("10/minute")
+@limiter.limit("30/hour")  # ✅ تغییر از 10/minute
 async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
@@ -116,8 +121,16 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     })
 
 @router.post("/connect_wallet")
-@limiter.limit("5/minute")
-async def connect_wallet(request: Request, db: Session = Depends(get_db)):
+@limiter.limit("10/day")  # ✅ تغییر از 5/minute
+@limiter.limit("3/hour")  # ✅ اضافه کردن محدودیت ساعتی
+async def connect_wallet(
+    request: Request,
+    csrf_protect: CsrfProtect = Depends(),  # ✅ CSRF Protection
+    db: Session = Depends(get_db)
+):
+    # ✅ تأیید CSRF
+    await csrf_protect.validate_csrf(request)
+    
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         logger.warning("Unauthorized wallet connection attempt")
@@ -183,7 +196,42 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
             })
             raise HTTPException(status_code=400, detail="Wallet already connected to another account")
 
+        # ✅ Anti-Sybil Check 1: بررسی سن کیف پول
+        if not check_wallet_age(wallet):
+            logger.warning("Wallet too new", extra={"telegram_id": telegram_id, "wallet": wallet})
+            raise HTTPException(
+                status_code=400,
+                detail="Wallet is too new. Please use a wallet with at least 7 days of activity."
+            )
+
+        # ✅ Anti-Sybil Check 2: بررسی فعالیت کیف پول
+        activity = check_wallet_activity(wallet)
+        if activity["risk_score"] > 70:
+            logger.warning("High risk wallet", extra={
+                "telegram_id": telegram_id,
+                "wallet": wallet,
+                "risk_score": activity["risk_score"]
+            })
+            raise HTTPException(
+                status_code=400,
+                detail="Wallet has insufficient activity. Please use an active wallet."
+            )
+
+        # ✅ Anti-Sybil Check 3: بررسی الگوهای مشکوک (IP)
+        client_ip = request.client.host
+        if not check_duplicate_pattern(db, telegram_id, client_ip):
+            logger.warning("Suspicious pattern detected", extra={
+                "telegram_id": telegram_id,
+                "ip": client_ip
+            })
+            raise HTTPException(
+                status_code=429,
+                detail="Suspicious activity detected. Please try again later."
+            )
+
         user.wallet_address = wallet
+        user.last_ip = client_ip  # ✅ ذخیره IP
+        user.last_active = datetime.now(timezone.utc)  # ✅ ذخیره زمان
         if hasattr(user, 'wallet_connected'):
             user.wallet_connected = True
         if hasattr(user, 'wallet_connection_date'):
@@ -202,7 +250,8 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
 
         logger.info("Wallet connected successfully", extra={
             "telegram_id": telegram_id,
-            "wallet": wallet
+            "wallet": wallet,
+            "risk_score": activity["risk_score"]
         })
 
         return {"success": True, "message": "Wallet connected successfully"}
@@ -224,9 +273,17 @@ async def connect_wallet(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to connect wallet: {str(e)}")
 
 @router.post("/confirm_commission")
-@limiter.limit("3/minute")
-async def confirm_commission(request: Request, db: Session = Depends(get_db)):
+@limiter.limit("3/hour")  # ✅ تغییر از 3/minute
+@limiter.limit("5/day")   # ✅ اضافه کردن محدودیت روزانه
+async def confirm_commission(
+    request: Request,
+    csrf_protect: CsrfProtect = Depends(),  # ✅ CSRF Protection
+    db: Session = Depends(get_db)
+):
     """✅ اصلاح شده: گرفتن telegram_id از body به جای session"""
+
+    # ✅ تأیید CSRF
+    await csrf_protect.validate_csrf(request)
 
     body = await request.json()
     telegram_id = body.get("telegram_id")
@@ -234,6 +291,7 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
     amount = body.get("amount", COMMISSION_AMOUNT)
     recipient = body.get("recipient", ADMIN_WALLET)
     reference = body.get("reference")
+    captcha_token = body.get("captcha_token")  # ✅ دریافت captcha
 
     print(f"📥 Commission confirmation request: telegram_id={telegram_id}, signature={tx_signature}")
     logger.info("Commission confirmation request", extra={
@@ -246,6 +304,11 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
 
     if not tx_signature:
         raise HTTPException(status_code=400, detail="Missing transaction signature")
+
+    # ✅ تأیید Captcha
+    if not await verify_recaptcha(captcha_token, request.client.host):
+        logger.warning("Captcha verification failed", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=400, detail="Captcha verification failed")
 
     # Sanitize inputs
     telegram_id = str(telegram_id).strip()
@@ -314,6 +377,7 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
                     user.commission_paid = True
                     user.commission_transaction_hash = tx_signature
                     user.commission_payment_date = datetime.now(timezone.utc)
+                    user.last_active = datetime.now(timezone.utc)  # ✅ به‌روزرسانی فعالیت
                     if hasattr(user, 'updated_at'):
                         user.updated_at = datetime.now(timezone.utc)
                     db.commit()
@@ -334,7 +398,7 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
 
                     # ✅ Return با redirect URL
                     return {
-                        "success": True, 
+                        "success": True,
                         "message": "Commission confirmed successfully!",
                         "redirect_url": f"/airdrop?telegram_id={telegram_id}"
                     }
@@ -359,59 +423,22 @@ async def confirm_commission(request: Request, db: Session = Depends(get_db)):
                     print(f"❌ Verification failed after {retries} retries: {e}")
                     logger.error("Verification failed after retries", extra={
                         "telegram_id": telegram_id,
-                        "signature": tx_signature,
                         "error": str(e)
                     }, exc_info=True)
-                    raise HTTPException(status_code=500, detail=f"Confirmation failed after retries: {str(e)}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to verify transaction. Please try again later."
+                    )
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Commission confirmation error: {e}")
-        logger.error("Commission confirmation error", extra={"error": str(e)}, exc_info=True)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Transaction confirmation failed: {str(e)}")
-
-@router.get("/commission_status")
-@limiter.limit("10/minute")
-async def get_commission_status(
-    request: Request,
-    telegram_id: str = Query(None),
-    db: Session = Depends(get_db)
-):
-    """✅ اصلاح شده: گرفتن telegram_id از query parameter یا session"""
-    
-    # اول از query parameter بگیر
-    if not telegram_id:
-        telegram_id = request.session.get("telegram_id")
-    
-    if not telegram_id:
-        raise HTTPException(status_code=400, detail="Missing telegram_id")
-
-    # Sanitize input
-    telegram_id = str(telegram_id).strip()
-
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        print(f"❌ User not found for status check: {telegram_id}")
-        logger.error("User not found for status check", extra={"telegram_id": telegram_id})
-        raise HTTPException(status_code=404, detail="User not found")
-
-    print(f"📊 Commission status for {telegram_id}: paid={user.commission_paid}, wallet={bool(user.wallet_address)}")
-    logger.debug("Commission status check", extra={
-        "telegram_id": telegram_id,
-        "commission_paid": user.commission_paid
-    })
-
-    return {
-        "commission_paid": user.commission_paid,
-        "wallet_connected": bool(user.wallet_address),
-        "wallet_address": user.wallet_address,
-        "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET
-    }
+        logger.error("Commission confirmation error", extra={
+            "telegram_id": telegram_id,
+            "error": str(e)
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/referral_status")
 @limiter.limit("10/minute")
