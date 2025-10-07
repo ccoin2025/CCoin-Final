@@ -35,6 +35,9 @@ import hashlib
 from dotenv import load_dotenv
 from typing import Optional
 import time
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -97,6 +100,22 @@ app = FastAPI(
     redoc_url="/redoc" if ENV == "development" else None,
 )
 
+class CsrfSettings(BaseModel):
+    secret_key: str = SECRET_KEY
+    cookie_samesite: str = 'lax'
+    cookie_secure: bool = ENV == "production"
+@CsrfProtect.load_config
+def get_csrf_config():
+    return CsrfSettings()
+
+@app.exception_handler(CsrfProtectError)
+async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    logger.warning("CSRF validation failed", extra={"ip": request.client.host})
+    return JSONResponse(
+        status_code=403,
+        content={"detail": "CSRF validation failed"}
+    )
+    
 # فقط اگر Rate Limiting فعال باشد
 if RATE_LIMITING_ENABLED and limiter:
     app.state.limiter = limiter
