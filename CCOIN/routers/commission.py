@@ -49,12 +49,16 @@ async def commission_browser_pay(
         print(f"⚠️ No wallet connected for user: {telegram_id}")
         raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
 
+    # ✅ Import config
+    from CCOIN import config
+    
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET,
-        "bot_username": BOT_USERNAME
+        "bot_username": BOT_USERNAME,
+        "config": config  # ✅ اضافه شده
     })
 
 
@@ -326,46 +330,44 @@ async def verify_payment_auto(
                         continue
                     
                     for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
-                        account = account_keys[acc_idx]
-                        pre = pre_balances[acc_idx]
-                        post = post_balances[acc_idx]
+                        acc_key = account_keys[acc_idx]
                         
-                        if account == user.wallet_address and pre > post:
-                            sent = pre - post
+                        if acc_key == ADMIN_WALLET:
+                            balance_change = post_balances[acc_idx] - pre_balances[acc_idx]
                             
-                            if abs(sent - expected_lamports) <= tolerance + int(sent * 0.03):
-                                print(f"✅ Payment confirmed!")
-                                
-                                # پاک کردن شمارنده تلاش‌ها
-                                request.session.pop(f'payment_check_attempts_{telegram_id}', None)
+                            if expected_lamports - tolerance <= balance_change <= expected_lamports + tolerance:
+                                print(f"✅ Payment found! Transaction: {sig}")
+                                print(f"   Expected: {expected_lamports} lamports")
+                                print(f"   Found: {balance_change} lamports")
                                 
                                 user.commission_paid = True
                                 user.commission_transaction_hash = sig
                                 user.commission_payment_date = datetime.utcnow()
                                 db.commit()
-
+                                
                                 await client.close()
-
+                                
                                 return {
                                     "success": True,
                                     "payment_found": True,
-                                    "message": "Payment confirmed!",
+                                    "message": "Payment verified successfully!",
                                     "transaction_hash": sig,
-                                    "amount": sent / 1_000_000_000
+                                    "redirect_url": f"https://t.me/{BOT_USERNAME}"
                                 }
-
-                except Exception as e:
+                
+                except Exception as tx_error:
+                    print(f"⚠️ Error processing transaction: {tx_error}")
                     continue
-
+            
             await client.close()
-
+            
             return {
                 "success": True,
                 "payment_found": False,
-                "message": f"Payment not detected. {5 - (attempt_count + 1)} attempts remaining.",
+                "message": "No matching payment found in recent transactions",
                 "attempts_remaining": 5 - (attempt_count + 1)
             }
-
+        
         except Exception as e:
             await client.close()
             raise e
@@ -374,5 +376,7 @@ async def verify_payment_auto(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Payment verification error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
