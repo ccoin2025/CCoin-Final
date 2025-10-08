@@ -7,8 +7,10 @@
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Pay Commission - CCoin</title>
     
-    <!-- ✅ reCAPTCHA -->
+    <!-- ✅ reCAPTCHA - فقط اگر کلید موجود باشد -->
+    {% if config.RECAPTCHA_SITE_KEY %}
     <script src="https://www.google.com/recaptcha/api.js?render={{ config.RECAPTCHA_SITE_KEY }}"></script>
+    {% endif %}
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -197,13 +199,16 @@
             commissionAmount: parseFloat('{{ commission_amount }}'),
             adminWallet: '{{ admin_wallet }}',
             botUsername: '{{ bot_username }}',
-            rpcUrl: '{{ solana_rpc }}',
-            recaptchaSiteKey: '{{ config.RECAPTCHA_SITE_KEY }}'  // ✅ اضافه شد
+            rpcUrl: '{{ solana_rpc if solana_rpc else "https://api.mainnet-beta.solana.com" }}',
+            recaptchaSiteKey: '{{ config.RECAPTCHA_SITE_KEY if config.RECAPTCHA_SITE_KEY else "" }}'
         };
+
+        console.log('CONFIG loaded:', CONFIG);
 
         const isPhantomExtension = () => window.solana && window.solana.isPhantom;
 
         function showPhantomButton() {
+            console.log('showPhantomButton called');
             document.getElementById('instructionsSection').style.display = 'none';
             document.getElementById('phantomSection').style.display = 'block';
         }
@@ -349,13 +354,21 @@
             }, 3000);
         }
 
-        // ✅ تابع confirmOnServer با reCAPTCHA و CSRF
+        // ✅ تابع confirmOnServer با reCAPTCHA و CSRF (اصلاح شده)
         async function confirmOnServer(signature) {
             try {
                 showStatus('✅ Confirming on server...', 'info');
 
-                // ✅ دریافت reCAPTCHA token
-                const captchaToken = await grecaptcha.execute(CONFIG.recaptchaSiteKey, {action: 'confirm_commission'});
+                let captchaToken = 'no_captcha';
+                
+                // ✅ فقط اگر reCAPTCHA موجود باشد، token بگیر
+                if (CONFIG.recaptchaSiteKey && typeof grecaptcha !== 'undefined') {
+                    try {
+                        captchaToken = await grecaptcha.execute(CONFIG.recaptchaSiteKey, {action: 'confirm_commission'});
+                    } catch (e) {
+                        console.warn('reCAPTCHA execution failed:', e);
+                    }
+                }
 
                 // ✅ دریافت CSRF token
                 const csrfToken = await getCsrfToken();
@@ -364,14 +377,14 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-Token': csrfToken  // ✅ CSRF header
+                        'X-CSRF-Token': csrfToken || ''
                     },
                     body: JSON.stringify({
                         telegram_id: CONFIG.telegramId,
                         signature: signature,
                         amount: CONFIG.commissionAmount,
                         recipient: CONFIG.adminWallet,
-                        captcha_token: captchaToken  // ✅ reCAPTCHA token
+                        captcha_token: captchaToken
                     })
                 });
 
