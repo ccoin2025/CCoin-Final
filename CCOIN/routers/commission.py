@@ -49,20 +49,15 @@ async def commission_browser_pay(
         print(f"⚠️ No wallet connected for user: {telegram_id}")
         raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
 
-    # ✅ Import config
-    from CCOIN import config
-    
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME,
-        "solana_rpc": SOLANA_RPC,  # ✅ اضافه شد
-        "config": config
+        "solana_rpc": SOLANA_RPC  # ✅ فقط این را اضافه کنید
     })
-
-
+    
 @router.get("/success", response_class=HTMLResponse)
 async def commission_success(
     request: Request,
