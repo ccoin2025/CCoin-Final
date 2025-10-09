@@ -422,6 +422,42 @@ async function connectWallet() {
     }
 }
 
+// **تابع ارسال wallet به سرور (بدون CSRF)**
+async function sendWalletToServer(walletAddress) {
+    try {
+        log(`📤 Sending wallet to server: ${walletAddress || 'disconnect'}`);
+
+        const response = await fetch('/airdrop/connect_wallet', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+                // ✅ بدون CSRF token
+            },
+            body: JSON.stringify({
+                wallet: walletAddress || ""
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Server error');
+        }
+
+        const data = await response.json();
+        
+        if (data.success) {
+            log('✅ Wallet saved to server successfully');
+            return true;
+        } else {
+            throw new Error(data.message || 'Failed to save wallet');
+        }
+
+    } catch (error) {
+        log('❌ Error sending wallet to server: ' + error.message);
+        throw error;
+    }
+}
+
 // **تابع disconnect کردن کیف پول**
 async function disconnectWallet() {
     try {
@@ -438,21 +474,8 @@ async function disconnectWallet() {
             await phantomProvider.disconnect();
         }
 
-        // ارسال درخواست disconnect به سرور (بدون CSRF)
-        const response = await fetch('/airdrop/connect_wallet', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                wallet: ""  // خالی = disconnect
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to disconnect');
-        }
+        // ارسال درخواست disconnect به سرور
+        await sendWalletToServer('');
 
         // reset وضعیت
         connectedWallet = '';
@@ -467,35 +490,34 @@ async function disconnectWallet() {
 
     } catch (error) {
         log('❌ Wallet disconnect failed: ' + error.message);
-        showToast('Failed to disconnect wallet: ' + error.message, 'error');
+        showToast('Failed to disconnect: ' + error.message, 'error');
     }
 }
-// **تابع ارسال آدرس کیف پول به سرور**
-async function sendWalletToServer(walletAddress) {
-    try {
-        const response = await fetch('/airdrop/connect_wallet', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ wallet: walletAddress })
-        });
 
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.detail || 'Failed to update wallet');
+// **تابع change کردن کیف پول**
+async function changeWallet() {
+    try {
+        // بستن dropdown
+        const dropdown = document.getElementById('wallet-dropdown-content');
+        if (dropdown) {
+            dropdown.classList.remove('show');
         }
 
-        log('✅ Wallet updated on server: ' + (walletAddress || 'disconnected'));
-        return true;
+        log('🔄 Changing wallet...');
+
+        // disconnect از wallet فعلی
+        if (phantomProvider && phantomProvider.disconnect) {
+            await phantomProvider.disconnect();
+        }
+
+        // connect به wallet جدید
+        await connectWallet();
 
     } catch (error) {
-        log('❌ Server update failed: ' + error.message);
-        throw error;
+        log('❌ Change wallet failed: ' + error.message);
+        showToast('Failed to change wallet: ' + error.message, 'error');
     }
 }
-
 // **تابع نمایش modal برای Phantom**
 function showPhantomModal() {
     const modal = document.getElementById('phantom-modal');
