@@ -20,6 +20,8 @@ import base64
 import time
 import structlog
 from typing import Optional
+from fastapi_csrf_protect import CsrfProtect
+
 
 # ✅ اضافه کردن imports جدید برای امنیت
 from fastapi_csrf_protect import CsrfProtect
