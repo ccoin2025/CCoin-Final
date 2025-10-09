@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@4.0.1/index.min.js"></script>
     <title>Connect Phantom Wallet</title>
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png" sizes="512x512">
     <link rel="apple-touch-icon" href="/static/images/icon-512x512.png">
- 
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -109,6 +108,48 @@
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
 
+        // ✅ استفاده از base58 داخل Solana Web3.js
+        const base58 = {
+            encode: (buffer) => {
+                const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let result = '';
+                let num = BigInt('0x' + Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(''));
+                
+                while (num > 0n) {
+                    result = alphabet[Number(num % 58n)] + result;
+                    num = num / 58n;
+                }
+                
+                for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
+                    result = '1' + result;
+                }
+                
+                return result;
+            },
+            decode: (str) => {
+                const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let num = 0n;
+                
+                for (let char of str) {
+                    const index = alphabet.indexOf(char);
+                    if (index === -1) throw new Error('Invalid base58 character');
+                    num = num * 58n + BigInt(index);
+                }
+                
+                const bytes = [];
+                while (num > 0n) {
+                    bytes.unshift(Number(num % 256n));
+                    num = num / 256n;
+                }
+                
+                for (let i = 0; i < str.length && str[i] === '1'; i++) {
+                    bytes.unshift(0);
+                }
+                
+                return new Uint8Array(bytes);
+            }
+        };
+
         function log(msg) {
             console.log(msg);
             const debug = document.getElementById('debug');
@@ -128,11 +169,13 @@
             }
             log('✅ TweetNaCl library loaded');
 
-            if (typeof bs58 === 'undefined') {
-                log('❌ BS58 library not loaded');
+            if (typeof solanaWeb3 === 'undefined') {
+                log('❌ Solana Web3.js not loaded');
                 return false;
             }
-            log('✅ BS58 library loaded');
+            log('✅ Solana Web3.js loaded');
+
+            log('✅ Base58 encoder/decoder ready');
 
             return true;
         }
@@ -146,7 +189,7 @@
                 }
 
                 dappKeyPair = nacl.box.keyPair();
-                dappPublicKey = bs58.encode(dappKeyPair.publicKey);
+                dappPublicKey = base58.encode(dappKeyPair.publicKey);
                 
                 log('✅ Keypair generated successfully');
                 log('🔑 Public key: ' + dappPublicKey.substring(0, 20) + '...');
@@ -209,7 +252,7 @@
                 
                 // ذخیره در localStorage
                 localStorage.setItem('dapp_keypair_public', dappPublicKey);
-                localStorage.setItem('dapp_keypair_secret', bs58.encode(dappKeyPair.secretKey));
+                localStorage.setItem('dapp_keypair_secret', base58.encode(dappKeyPair.secretKey));
                 localStorage.setItem('telegram_id', telegramId);
 
                 log('💾 Data saved, opening Phantom...');
@@ -354,13 +397,13 @@
 
                 // Decrypt data
                 const sharedSecret = nacl.box.before(
-                    bs58.decode(phantomPublicKey),
-                    bs58.decode(savedSecretKey)
+                    base58.decode(phantomPublicKey),
+                    base58.decode(savedSecretKey)
                 );
 
                 const decryptedData = nacl.box.open.after(
-                    bs58.decode(data),
-                    bs58.decode(nonce),
+                    base58.decode(data),
+                    base58.decode(nonce),
                     sharedSecret
                 );
 
