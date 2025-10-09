@@ -1,6 +1,7 @@
 import uuid
 import os
 from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from telegram import Update, Bot
@@ -423,3 +424,8 @@ if __name__ == "__main__":
         log_level="info" if ENV == "production" else "debug",
         access_log=ENV == "development"
     )
+
+
+@app.get("/metadata.html")
+async def serve_metadata():
+    return FileResponse("templates/metadata.html")
