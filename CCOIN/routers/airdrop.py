@@ -123,16 +123,13 @@ async def get_airdrop(request: Request, db: Session = Depends(get_db)):
     })
 
 @router.post("/connect_wallet")
-@limiter.limit("10/day")  # ✅ تغییر از 5/minute
-@limiter.limit("3/hour")  # ✅ اضافه کردن محدودیت ساعتی
+@limiter.limit("10/day")  
+@limiter.limit("3/hour") 
 async def connect_wallet(
     request: Request,
-    csrf_protect: CsrfProtect = Depends(),  # ✅ CSRF Protection
+    csrf_protect: CsrfProtect = Depends(), 
     db: Session = Depends(get_db)
 ):
-    # ✅ تأیید CSRF
-    await csrf_protect.validate_csrf(request)
-    
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         logger.warning("Unauthorized wallet connection attempt")
@@ -143,6 +140,11 @@ async def connect_wallet(
 
     body = await request.json()
     wallet = body.get("wallet")
+
+    # ✅ فقط برای connect از CSRF استفاده می‌کنیم، disconnect بدون CSRF
+    if wallet and wallet != "":
+        # برای connect: CSRF اجباری است
+        await csrf_protect.validate_csrf(request)
 
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
