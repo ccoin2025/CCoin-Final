@@ -774,6 +774,8 @@
         async function disconnectWallet() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             dropdown.classList.remove('show');
+
+            console.log('🔓 Disconnecting wallet...');
             
             try {
                 const response = await fetch('/airdrop/connect_wallet', {
@@ -784,7 +786,12 @@
                     body: JSON.stringify({
                         wallet: ""
                     })
+                    credentials: 'include'
                 });
+
+                console.log('📡 Response status:', response.status);
+                const data = await response.json();
+                console.log('📦 Response data:', data);
 
                 if (response.ok) {
                     // Reset wallet UI
@@ -810,7 +817,7 @@
                 }
             } catch (error) {
                 console.error('Error disconnecting wallet:', error);
-                showToast('Error disconnecting wallet', 'error');
+                showToast('Error: ' + error.message, 'error');
             }
         }
 
