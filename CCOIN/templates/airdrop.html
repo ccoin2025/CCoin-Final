@@ -771,10 +771,18 @@
             dropdown.classList.remove('show');
 
             try {
-                // ✅ گرفتن CSRF token از meta tag
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                // ✅ گرفتن CSRF token از cookie
+                function getCookie(name) {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                    return null;
+                }
+
+                const csrfToken = getCookie('fastapi-csrf-token');
 
                 if (!csrfToken) {
+                    console.error('CSRF token not found in cookies');
                     showToast('Security token missing. Please refresh the page.', 'error');
                     return;
                 }
@@ -815,7 +823,7 @@
                 }
             } catch (error) {
                 console.error('Error disconnecting wallet:', error);
-                showToast('Error disconnecting wallet: ' + error.message, 'error');
+                showToast('Error: ' + error.message, 'error');
             }
         }
         // Handle Commission Payment
