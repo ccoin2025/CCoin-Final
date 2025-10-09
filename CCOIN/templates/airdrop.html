@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="csrf-token" content="{{ request.session.csrf_token }}">
-    <title>Airdrop</title>
     <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png" sizes="512x512">
-    <link rel="apple-touch-icon" href="/static/images/icon-512x512.png">
+    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
+    <title>Airdrop</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -515,8 +514,14 @@
             <button class="claim-btn" id="claimBtn" disabled>
                 Complete All Tasks to Claim
             </button>
-        </div>
 
+            <!-- پیام تبریک برای تکمیل همه تسک‌ها -->
+            <div id="congratulationsMessage" class="congratulations-message" style="display: none;">
+                <h3>🎉 Congratulations!</h3>
+                <p>You have completed all tasks successfully! Your airdrop is ready to claim.</p>
+            </div>
+        </div>
+    </div>
 
     <!-- Navigation -->
     <div class="footer-icons">
@@ -705,7 +710,7 @@
             window.location.href = '/friends';
         }
 
-        // Handle Wallet Connection
+        // Handle Wallet Connection - اصلاح اصلی
         function handleWalletConnection() {
             if (userStatuses.wallet_connected && currentWalletAddress) {
                 // Toggle dropdown for connected wallet
@@ -729,7 +734,7 @@
             modal.classList.remove('show');
         }
 
-        // Open Phantom Wallet
+        // Open Phantom Wallet - اصلاح کلیدی
         function openPhantomWallet() {
             closePhantomModal();
             
@@ -769,29 +774,12 @@
         async function disconnectWallet() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             dropdown.classList.remove('show');
-
+            
             try {
-                // ✅ گرفتن CSRF token از cookie
-                function getCookie(name) {
-                    const value = `; ${document.cookie}`;
-                    const parts = value.split(`; ${name}=`);
-                    if (parts.length === 2) return parts.pop().split(';').shift();
-                    return null;
-                }
-
-                const csrfToken = getCookie('fastapi-csrf-token');
-
-                if (!csrfToken) {
-                    console.error('CSRF token not found in cookies');
-                    showToast('Security token missing. Please refresh the page.', 'error');
-                    return;
-                }
-
                 const response = await fetch('/airdrop/connect_wallet', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-Token': csrfToken  // ✅ اضافه کردن CSRF token
                     },
                     body: JSON.stringify({
                         wallet: ""
@@ -802,7 +790,7 @@
                     // Reset wallet UI
                     currentWalletAddress = '';
                     userStatuses.wallet_connected = false;
-
+                    
                     const taskBox = document.getElementById('connect-wallet');
                     const button = taskBox.querySelector('.task-button');
                     const icon = document.getElementById('wallet-icon');
@@ -814,18 +802,18 @@
                     icon.className = 'fas fa-chevron-right right-icon';
                     statusIndicator.classList.remove('connected');
                     buttonText.textContent = 'Connect Wallet';
-
-                    showToast('Wallet disconnected successfully!', 'success');
+                    
+                    showToast('Wallet disconnected', 'success');
                     checkAllTasksCompletion();
                 } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to disconnect wallet');
+                    throw new Error('Failed to disconnect wallet');
                 }
             } catch (error) {
                 console.error('Error disconnecting wallet:', error);
-                showToast('Error: ' + error.message, 'error');
+                showToast('Error disconnecting wallet', 'error');
             }
         }
+
         // Handle Commission Payment
         function handleCommissionPayment() {
             if (!userStatuses.wallet_connected) {
@@ -887,27 +875,23 @@
                                userStatuses.commission_paid;
 
             const claimBtn = document.getElementById('claimBtn');
+            const congratsMessage = document.getElementById('congratulationsMessage');
 
             if (allCompleted) {
-                // تغییر متن دکمه به پیام تبریک
-                claimBtn.innerHTML = '🎉 Congratulations! You have completed all tasks and are eligible to receive tokens!';
+                claimBtn.textContent = '🎉 Claim Your Airdrop';
                 claimBtn.disabled = false;
-                claimBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                claimBtn.style.color = 'white';
-                claimBtn.style.cursor = 'pointer';
                 claimBtn.onclick = claimAirdrop;
+                congratsMessage.style.display = 'block';
             } else {
-                claimBtn.innerHTML = 'Complete All Tasks to Claim';
+                claimBtn.textContent = 'Complete All Tasks to Claim';
                 claimBtn.disabled = true;
-                claimBtn.style.background = '#e0e7ff';
-                claimBtn.style.color = '#9ca3af';
-                claimBtn.style.cursor = 'not-allowed';
+                congratsMessage.style.display = 'none';
             }
         }
 
         // Claim Airdrop
         function claimAirdrop() {
-            showToast('🎉 Congratulations! Your airdrop claim has been registered!', 'success');
+            showToast('Congratulations! Your airdrop is ready to claim', 'success');
             // Add airdrop claim logic here
         }
 
@@ -920,41 +904,42 @@
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             toast.textContent = message;
-            
+
             document.body.appendChild(toast);
 
             // Show toast
-            setTimeout(() => {
-                toast.classList.add('show');
-            }, 100);
+            setTimeout(() => toast.classList.add('show'), 100);
 
-            // Hide and remove toast
+            // Hide toast after 3 seconds
             setTimeout(() => {
                 toast.classList.remove('show');
-                setTimeout(() => {
-                    toast.remove();
-                }, 300);
+                setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
 
-        // Check commission status periodically (when page is active)
-        setInterval(async function() {
-            if (!userStatuses.commission_paid && userStatuses.wallet_connected) {
-                try {
-                    const response = await fetch(`/commission/check_status?telegram_id=${telegramId}`);
+        // Listen for wallet connection updates from server
+        async function checkWalletStatus() {
+            if (!telegramId) return;
+            
+            try {
+                const response = await fetch(`/airdrop/commission_status`);
+                if (response.ok) {
                     const data = await response.json();
-                    
-                    if (data.commission_paid && !userStatuses.commission_paid) {
-                        userStatuses.commission_paid = true;
-                        markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
+                    if (data.wallet_connected && data.wallet_address && !userStatuses.wallet_connected) {
+                        currentWalletAddress = data.wallet_address;
+                        userStatuses.wallet_connected = true;
+                        markWalletAsConnected();
                         checkAllTasksCompletion();
-                        showToast('✅ Commission payment confirmed!', 'success');
+                        showToast('Wallet connected successfully!', 'success');
                     }
-                } catch (error) {
-                    console.error('Error checking commission status:', error);
                 }
+            } catch (error) {
+                console.error('Error checking wallet status:', error);
             }
-        }, 10000); // Check every 10 seconds
+        }
+
+        // Check status every 5 seconds
+        setInterval(checkWalletStatus, 5000);
     </script>
 </body>
 </html>
