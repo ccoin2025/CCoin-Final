@@ -769,12 +769,21 @@
         async function disconnectWallet() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             dropdown.classList.remove('show');
-            
+
             try {
+                // ✅ گرفتن CSRF token از meta tag
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                if (!csrfToken) {
+                    showToast('Security token missing. Please refresh the page.', 'error');
+                    return;
+                }
+
                 const response = await fetch('/airdrop/connect_wallet', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken  // ✅ اضافه کردن CSRF token
                     },
                     body: JSON.stringify({
                         wallet: ""
@@ -785,7 +794,7 @@
                     // Reset wallet UI
                     currentWalletAddress = '';
                     userStatuses.wallet_connected = false;
-                    
+
                     const taskBox = document.getElementById('connect-wallet');
                     const button = taskBox.querySelector('.task-button');
                     const icon = document.getElementById('wallet-icon');
@@ -797,18 +806,18 @@
                     icon.className = 'fas fa-chevron-right right-icon';
                     statusIndicator.classList.remove('connected');
                     buttonText.textContent = 'Connect Wallet';
-                    
-                    showToast('Wallet disconnected', 'success');
+
+                    showToast('Wallet disconnected successfully!', 'success');
                     checkAllTasksCompletion();
                 } else {
-                    throw new Error('Failed to disconnect wallet');
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to disconnect wallet');
                 }
             } catch (error) {
                 console.error('Error disconnecting wallet:', error);
-                showToast('Error disconnecting wallet', 'error');
+                showToast('Error disconnecting wallet: ' + error.message, 'error');
             }
         }
-
         // Handle Commission Payment
         function handleCommissionPayment() {
             if (!userStatuses.wallet_connected) {
