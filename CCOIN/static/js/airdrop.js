@@ -425,27 +425,51 @@ async function connectWallet() {
 // **تابع disconnect کردن کیف پول**
 async function disconnectWallet() {
     try {
+        // بستن dropdown اگر باز است
+        const dropdown = document.getElementById('wallet-dropdown-content');
+        if (dropdown) {
+            dropdown.classList.remove('show');
+        }
+
+        log('🔓 Disconnecting wallet...');
+
+        // disconnect از Phantom
         if (phantomProvider && phantomProvider.disconnect) {
             await phantomProvider.disconnect();
         }
-        
-        // ارسال درخواست disconnect به سرور
-        await sendWalletToServer('');
-        
+
+        // ارسال درخواست disconnect به سرور (بدون CSRF)
+        const response = await fetch('/airdrop/connect_wallet', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                wallet: ""  // خالی = disconnect
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to disconnect');
+        }
+
+        // reset وضعیت
         connectedWallet = '';
         tasksCompleted.wallet = false;
-        
+
+        // بروزرسانی UI
         updateWalletUI();
-        showToast('Wallet disconnected successfully!', 'info');
+        updateClaimButton();
         
-        log('🔌 Wallet disconnected');
+        showToast('Wallet disconnected successfully!', 'success');
+        log('✅ Wallet disconnected successfully');
 
     } catch (error) {
         log('❌ Wallet disconnect failed: ' + error.message);
         showToast('Failed to disconnect wallet: ' + error.message, 'error');
     }
 }
-
 // **تابع ارسال آدرس کیف پول به سرور**
 async function sendWalletToServer(walletAddress) {
     try {
