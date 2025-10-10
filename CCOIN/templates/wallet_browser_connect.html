@@ -92,7 +92,7 @@
         <button class="btn" id="connectBtn" onclick="handlePhantomConnect()">
             Open in Phantom App
         </button>
-        
+
         <div id="status" class="status"></div>
 
         <div id="successMessage" class="success-message" style="display: none;">
@@ -105,48 +105,47 @@
     <script>
         let dappKeyPair = null;
         let dappPublicKey = '';
-        
+
         const urlParams = new URLSearchParams(window.location.search);
         const telegramId = urlParams.get('telegram_id');
 
-        // ✅ استفاده از base58 داخل Solana Web3.js
         const base58 = {
             encode: (buffer) => {
                 const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
                 let result = '';
                 let num = BigInt('0x' + Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(''));
-                
+
                 while (num > 0n) {
                     result = alphabet[Number(num % 58n)] + result;
                     num = num / 58n;
                 }
-                
+
                 for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
                     result = '1' + result;
                 }
-                
+
                 return result;
             },
             decode: (str) => {
                 const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
                 let num = 0n;
-                
+
                 for (let char of str) {
                     const index = alphabet.indexOf(char);
                     if (index === -1) throw new Error('Invalid base58 character');
                     num = num * 58n + BigInt(index);
                 }
-                
+
                 const bytes = [];
                 while (num > 0n) {
                     bytes.unshift(Number(num % 256n));
                     num = num / 256n;
                 }
-                
+
                 for (let i = 0; i < str.length && str[i] === '1'; i++) {
                     bytes.unshift(0);
                 }
-                
+
                 return new Uint8Array(bytes);
             }
         };
@@ -163,7 +162,7 @@
 
         function checkLibraries() {
             log('🔍 Checking cryptographic libraries...');
-            
+
             if (typeof nacl === 'undefined') {
                 log('❌ TweetNaCl library not loaded');
                 return false;
@@ -184,17 +183,17 @@
         function initializeCrypto() {
             try {
                 log('🔑 Generating encryption keypair...');
-                
+
                 if (!checkLibraries()) {
                     throw new Error('Required cryptographic libraries not available');
                 }
 
                 dappKeyPair = nacl.box.keyPair();
                 dappPublicKey = base58.encode(dappKeyPair.publicKey);
-                
+
                 log('✅ Keypair generated successfully');
                 log('🔑 Public key: ' + dappPublicKey.substring(0, 20) + '...');
-                
+
                 return true;
             } catch (error) {
                 log('❌ Failed to generate keypair: ' + error.message);
@@ -205,7 +204,7 @@
 
         async function handlePhantomConnect() {
             const connectBtn = document.getElementById('connectBtn');
-            
+
             try {
                 connectBtn.disabled = true;
                 connectBtn.innerHTML = '<span class="loading-spinner"></span>Initializing...';
@@ -220,14 +219,12 @@
 
                 log('👤 Telegram ID: ' + telegramId);
 
-                // ✅ چک کردن اینکه آیا در Phantom browser هستیم
                 if (window.solana && window.solana.isPhantom) {
                     log('✅ Already in Phantom browser, connecting directly');
                     await connectDirectly();
                     return;
                 }
 
-                // ✅ initialize crypto
                 const cryptoReady = initializeCrypto();
                 if (!cryptoReady) {
                     throw new Error('Failed to initialize cryptographic functions. Please refresh the page and try again.');
@@ -236,22 +233,29 @@
                 connectBtn.innerHTML = '<span class="loading-spinner"></span>Opening Phantom...';
                 log('🚀 Creating Phantom deeplink...');
 
-                // تنظیم redirect URL به همین صفحه
                 const currentUrl = new URL(window.location.href);
                 const redirectUrl = currentUrl.origin + currentUrl.pathname + '?telegram_id=' + telegramId;
-                
+
                 const params = new URLSearchParams({
                     dapp_encryption_public_key: dappPublicKey,
                     cluster: "devnet",
-                    app_url: window.location.origin,
+                    app_url: "https://ccoin-final-tsv6.onrender.com",
                     redirect_link: redirectUrl
                 });
 
-                const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
-                
+                // ✅ اضافه کردن App Metadata برای نمایش آیکون در Phantom
+                const metadata = {
+                    name: "CCoin Airdrop",
+                    url: "https://ccoin-final-tsv6.onrender.com",
+                    iconUrl: "https://ccoin-final-tsv6.onrender.com/static/images/icon-512x512.png"
+                };
+
+                const encodedMetadata = encodeURIComponent(JSON.stringify(metadata));
+                const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}&metadata=${encodedMetadata}`;
+
                 log('🔗 Redirect URL: ' + redirectUrl);
-                
-                // ذخیره در localStorage
+                log('🎨 App metadata added with icon');
+
                 localStorage.setItem('dapp_keypair_public', dappPublicKey);
                 localStorage.setItem('dapp_keypair_secret', base58.encode(dappKeyPair.secretKey));
                 localStorage.setItem('telegram_id', telegramId);
@@ -265,7 +269,7 @@
             } catch (error) {
                 log('❌ Error: ' + error.message);
                 console.error('Connection error:', error);
-                
+
                 connectBtn.disabled = false;
                 connectBtn.innerHTML = '🦄 Open in Phantom App';
                 alert('Failed to initialize connection.\n\nError: ' + error.message);
@@ -329,7 +333,7 @@
             document.getElementById('connectBtn').style.display = 'none';
             const successMsg = document.getElementById('successMessage');
             successMsg.style.display = 'block';
-            
+
             log('🎉 Success! Redirecting to Telegram...');
 
             setTimeout(() => {
@@ -339,18 +343,16 @@
 
         function returnToTelegram(walletAddress = null) {
             try {
-                // روش 1: Telegram WebApp API
                 if (window.Telegram && window.Telegram.WebApp) {
                     log('🔄 Using Telegram WebApp API to close');
                     window.Telegram.WebApp.close();
                     return;
                 }
 
-                // روش 2: هدایت به لینک bot
                 const botUsername = 'CTG_COIN_BOT';
                 const startParam = walletAddress ? 'wallet_connected' : 'wallet_failed';
                 const telegramUrl = `https://t.me/${botUsername}/app?startapp=${startParam}`;
-                
+
                 log('🔄 Redirecting to Telegram: ' + telegramUrl);
                 window.location.href = telegramUrl;
 
@@ -360,10 +362,9 @@
             }
         }
 
-        // ✅ بررسی callback از Phantom پس از بازگشت
         window.addEventListener('load', function() {
             const urlParams = new URLSearchParams(window.location.search);
-            
+
             if (urlParams.has('phantom_encryption_public_key')) {
                 log('🔙 Returned from Phantom with response');
                 handlePhantomCallback();
@@ -373,19 +374,18 @@
         async function handlePhantomCallback() {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
-                
+
                 const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
                 const nonce = urlParams.get('nonce');
                 const data = urlParams.get('data');
-                
+
                 log('📥 Phantom response received');
                 log('🔑 Phantom public key: ' + (phantomPublicKey ? phantomPublicKey.substring(0, 20) + '...' : 'missing'));
-                
+
                 if (!phantomPublicKey || !nonce || !data) {
                     throw new Error('Missing required parameters from Phantom');
                 }
 
-                // بازیابی keypair از localStorage
                 const savedPublicKey = localStorage.getItem('dapp_keypair_public');
                 const savedSecretKey = localStorage.getItem('dapp_keypair_secret');
                 const savedTelegramId = localStorage.getItem('telegram_id');
@@ -396,7 +396,6 @@
 
                 log('🔓 Decrypting Phantom response...');
 
-                // Decrypt data
                 const sharedSecret = nacl.box.before(
                     base58.decode(phantomPublicKey),
                     base58.decode(savedSecretKey)
