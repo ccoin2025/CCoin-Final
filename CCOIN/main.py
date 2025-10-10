@@ -99,22 +99,25 @@ app = FastAPI(
     debug=ENV == "development",
     title="CCoin API",
     version="1.0.0",
-    docs_url="/docs" if ENV == "development" else None,  # غیرفعال در production
+    docs_url="/docs" if ENV == "development" else None,
     redoc_url="/redoc" if ENV == "development" else None,
 )
 
+# ✅ CORS برای دسترسی عمومی به static files
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
-)  
+)
 
+# ✅ CSRF Settings
 class CsrfSettings(BaseModel):
     secret_key: str = SECRET_KEY
     cookie_samesite: str = 'lax'
     cookie_secure: bool = ENV == "production"
+
 @CsrfProtect.load_config
 def get_csrf_config():
     return CsrfSettings()
