@@ -39,6 +39,8 @@ import time
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 
 load_dotenv()
 
@@ -100,6 +102,13 @@ app = FastAPI(
     docs_url="/docs" if ENV == "development" else None,  # غیرفعال در production
     redoc_url="/redoc" if ENV == "development" else None,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["*"],
 
 class CsrfSettings(BaseModel):
     secret_key: str = SECRET_KEY
@@ -425,7 +434,10 @@ if __name__ == "__main__":
         access_log=ENV == "development"
     )
 
-
-@app.get("/metadata.html")
-async def serve_metadata():
-    return FileResponse("templates/metadata.html")
+# ✅ Route عمومی برای metadata.html (دسترسی Phantom به icon)
+@app.get("/metadata.html", response_class=HTMLResponse)
+async def get_metadata(request: Request):
+    """
+    Public metadata برای Phantom wallet - دسترسی به icon بدون احراز هویت
+    """
+    return templates.TemplateResponse("metadata.html", {"request": request})
