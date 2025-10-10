@@ -9,6 +9,7 @@ from starlette.responses import RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db, get_db_health
@@ -26,20 +27,22 @@ from solana.transaction import Transaction
 from solders.system_program import TransferParams, transfer
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
-import structlog
-import pytz
-import ipaddress
-import secrets
 from urllib.parse import parse_qs
-import hmac
-import hashlib
-from dotenv import load_dotenv
-from typing import Optional
-import time
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from typing import Optional
+import structlog
+import pytz
+import ipaddress
+import secrets
+import hmac
+import hashlib
+import time
+import mimetypes
+
 
 
 load_dotenv()
@@ -117,6 +120,22 @@ class CsrfSettings(BaseModel):
     secret_key: str = SECRET_KEY
     cookie_samesite: str = 'lax'
     cookie_secure: bool = ENV == "production"
+
+# ✅ Middleware برای اضافه کردن CORS headers به static files
+class StaticFilesCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # اضافه کردن CORS headers برای static files و metadata
+        if request.url.path.startswith('/static/') or request.url.path == '/metadata.html':
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = '*'
+            response.headers['Cache-Control'] = 'public, max-age=31536000'
+        
+        return response
+
+app.add_middleware(StaticFilesCORSMiddleware)
 
 @CsrfProtect.load_config
 def get_csrf_config():
