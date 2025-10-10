@@ -236,6 +236,7 @@
                 const currentUrl = new URL(window.location.href);
                 const redirectUrl = currentUrl.origin + currentUrl.pathname + '?telegram_id=' + telegramId;
 
+                // ✅ ساخت URL parameters
                 const params = new URLSearchParams({
                     dapp_encryption_public_key: dappPublicKey,
                     cluster: "devnet",
@@ -243,18 +244,17 @@
                     redirect_link: redirectUrl
                 });
 
-                // ✅ استفاده از SVG Data URL برای آیکون (بدون مشکل CORS)
-                const metadata = {
-                    name: "CCoin Airdrop",
-                    url: "https://ccoin-final-tsv6.onrender.com",
-                    iconUrl: "https://imgur.com/a2pwd7M.png"
-                };
+                // ✅ اضافه کردن icon به صورت جداگانه (بدون JSON.stringify)
+                // شما باید این آیکون را در Imgur آپلود کنید و لینک را اینجا قرار دهید
+                const iconUrl = "https://i.imgur.com/a2pwd7M.png"; // ⚠️ این را با لینک Imgur خودتان جایگزین کنید
+                https://i.imgur.com/a2pwd7M.png
+                // روش جدید: اضافه کردن icon به عنوان parameter جداگانه
+                params.append('icon', iconUrl);
 
-                const encodedMetadata = encodeURIComponent(JSON.stringify(metadata));
-                const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}&metadata=${encodedMetadata}`;
+                const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
 
                 log('🔗 Redirect URL: ' + redirectUrl);
-                log('🎨 App metadata added with SVG icon');
+                log('🎨 Icon URL added: ' + iconUrl);
 
                 localStorage.setItem('dapp_keypair_public', dappPublicKey);
                 localStorage.setItem('dapp_keypair_secret', base58.encode(dappKeyPair.secretKey));
