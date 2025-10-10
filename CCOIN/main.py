@@ -438,9 +438,7 @@ if __name__ == "__main__":
         access_log=ENV == "development"
     )
 
+
 @app.get("/metadata.html")
-async def get_metadata(request: Request):
-    """
-    Public metadata برای Phantom wallet - دسترسی به icon بدون احراز هویت
-    """
-    return templates.TemplateResponse("metadata.html", {"request": request})
+async def serve_metadata():
+    return FileResponse("CCOIN/templates/metadata.html", media_type="text/html")
