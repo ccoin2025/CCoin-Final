@@ -1,7 +1,7 @@
 import uuid
 import os
 from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from telegram import Update, Bot
@@ -438,8 +438,7 @@ if __name__ == "__main__":
         access_log=ENV == "development"
     )
 
-# ✅ Route عمومی برای metadata.html (دسترسی Phantom به icon)
-@app.get("/metadata.html", response_class=HTMLResponse)
+@app.get("/metadata.html")
 async def get_metadata(request: Request):
     """
     Public metadata برای Phantom wallet - دسترسی به icon بدون احراز هویت
