@@ -109,6 +109,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
+)  
 
 class CsrfSettings(BaseModel):
     secret_key: str = SECRET_KEY
