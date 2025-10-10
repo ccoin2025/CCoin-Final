@@ -243,18 +243,18 @@
                     redirect_link: redirectUrl
                 });
 
-                // ✅ اضافه کردن App Metadata برای نمایش آیکون در Phantom
+                // ✅ استفاده از SVG Data URL برای آیکون (بدون مشکل CORS)
                 const metadata = {
                     name: "CCoin Airdrop",
                     url: "https://ccoin-final-tsv6.onrender.com",
-                    iconUrl: "https://ccoin-final-tsv6.onrender.com/static/images/icon-512x512.png"
+                    iconUrl: "https://imgur.com/a2pwd7M.png"
                 };
 
                 const encodedMetadata = encodeURIComponent(JSON.stringify(metadata));
                 const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}&metadata=${encodedMetadata}`;
 
                 log('🔗 Redirect URL: ' + redirectUrl);
-                log('🎨 App metadata added with icon');
+                log('🎨 App metadata added with SVG icon');
 
                 localStorage.setItem('dapp_keypair_public', dappPublicKey);
                 localStorage.setItem('dapp_keypair_secret', base58.encode(dappKeyPair.secretKey));
