@@ -22,7 +22,7 @@ YOUTUBE_CHANNEL_HANDLE = os.getenv("YOUTUBE_CHANNEL_HANDLE", "@CCOIN_OFFICIAL")
 # Solana Settings - CHANGED TO MAINNET
 SOLANA_RPC = os.getenv("SOLANA_RPC", "https://api.mainnet-beta.solana.com")
 ADMIN_WALLET = os.getenv("ADMIN_WALLET", "5YFFCvmi2f4ZWZYUWWBuMSmmjXrYA1QptaTaLG8vi15K")
-COMMISSION_AMOUNT = float(os.getenv("COMMISSION_AMOUNT", "0.001"))
+COMMISSION_AMOUNT = float(os.getenv("COMMISSION_AMOUNT", "0.01"))
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "TokenkegQfeZyiNwAJbNbGK7Qx6m")
 if not CONTRACT_ADDRESS:
     logger.warning("CONTRACT_ADDRESS is not set in environment variables")
