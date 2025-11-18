@@ -1,199 +1,190 @@
-/* عمومی */
 body {
-background-color: #000;
-color: #fff;
-font-family: 'Urbanist', sans-serif;
-margin: 0;
-padding: 0;
-padding-bottom: 100px;
-overflow-x: hidden;
+    background-color: #000;
+    color: #fff;
+    font-family: 'Urbanist', sans-serif;
+    margin: 0;
+    padding: 0;
+    padding-bottom: 100px;
+    overflow-x: hidden;
 }
 
-/* مرکز لوگو و نوشته‌ها */
 .center-content {
-display: flex;
-flex-direction: column;
-align-items: center;
-text-align: center;
-padding-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-top: 30px;
 }
 
 .logo {
-width: 100px;
-max-width: 100px; 
-height: auto;      
-margin-bottom: 20px;
-display: block;   
+    width: 100px !important;
+    max-width: 100px !important;
+    height: auto !important;
+    margin-bottom: 20px;
+    display: block;
+    object-fit: contain;
 }
 
 h1 {
-font-size: 36px;
-margin: 10px 0;
+    font-size: 36px;
+    margin: 10px 0;
 }
 
 .subheading {
-font-size: 16px;
-font-weight: 400;
-color: #7a9399;
-margin-top: 5px;
+    font-size: 16px;
+    font-weight: 400;
+    color: #7a9399;
+    margin-top: 5px;
 }
 
-/* لیست دعوت‌شده‌ها */
 .invite-list {
-padding: 20px;
-box-sizing: border-box;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .invite-list h2 {
-font-size: 20px;
-margin-bottom: 10px;
-font-weight: 600;
+    font-size: 20px;
+    margin-bottom: 10px;
+    font-weight: 600;
 }
 
-/* باکس اسکرول‌پذیر */
 .invite-box {
-background-color: #1f1f1f;
-border: 1px solid #2a2a2a;
-border-radius: 10px;
-padding: 15px;
-max-height: 300px;
-overflow-y: auto;
+    background-color: #1f1f1f;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 /* هر دوست */
 .friend-item {
-display: flex;
-align-items: center;
-justify-content: space-between;
-padding: 12px 10px;
-margin-bottom: 10px;
-border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #333;
 }
 
-/* دایره با حروف اول */
 .user-circle {
-background-color: #ff5757;
-color: #fff;
-border-radius: 50%;
-width: 40px;
-height: 40px;
-font-weight: bold;
-font-size: 18px;
-display: flex;
-align-items: center;
-justify-content: center;
+    background-color: #ff5757;
+    color: #fff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-weight: bold;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* آیدی تلگرام */
 .telegram-id {
-flex: 2;
-text-align: center;
-font-size: 14px;
-overflow: hidden;
-text-overflow: ellipsis;
-white-space: nowrap;
+    flex: 2;
+    text-align: center;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* توکن‌ها */
 .tokens {
-flex: 1;
-text-align: right;
-font-size: 14px;
-font-weight: bold;
+    flex: 1;
+    text-align: right;
+    font-size: 14px;
+    font-weight: bold;
 }
 
-/* دکمه‌ها */
 .buttons-container {
-position: fixed;
-bottom: 75px;
-left: 0;
-width: 100%;
-display: flex;
-justify-content: center;
-gap: 10px;
-padding: 0 15px;
-box-sizing: border-box;
-z-index: 20;
+    position: fixed;
+    bottom: 75px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 15px;
+    box-sizing: border-box;
+    z-index: 20;
 }
 
 .buttons-container button {
-background-color: #007bff;
-color: white;
-border: none;
-border-radius: 10px;
-padding: 15px 20px;
-font-size: 16px;
-cursor: pointer;
-transition: none; /* حذف transition */
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 15px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: none; 
 }
 
 #inviteButton {
-flex-grow: 3;
+    flex-grow: 3;
 }
 
 #copyButton {
-flex-grow: 1;
+    flex-grow: 1;
 }
 
-/* فوتر */
 .footer-icons {
-position: fixed;
-bottom: 0;
-width: 100%;
-background-color: #111;
-display: flex;
-justify-content: space-around;
-padding: 10px 0 5px;
-border-top: 1px solid #333;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background-color: #111;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 5px;
+    border-top: 1px solid #333;
 }
 
 .footer-btn {
-color: #aaa;
-text-align: center;
-text-decoration: none;
-font-size: 14px;
-display: flex;
-flex-direction: column;
-align-items: center;
-gap: 4px;
-transition: none; /* حذف transition */
+    color: #aaa;
+    text-align: center;
+    text-decoration: none;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: none; /* حذف transition */
 }
 
 .footer-btn.active {
-color: #ffffff;
+    color: #ffffff;
 }
 
 .footer-btn i {
-font-size: 20px;
-margin-bottom: 2px;
+    font-size: 20px;
+    margin-bottom: 2px;
 }
 
-/* واکنش‌گرا */
 @media (max-width: 640px) {
-.invite-box {
-max-height: 220px;
-}
+    .invite-box {
+        max-height: 220px;
+    }
 }
 
-/* حذف کامل همه افکت‌های hover و focus */
 *, *:before, *:after {
--webkit-tap-highlight-color: transparent !important;
-outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    outline: none !important;
 }
 
 button, .footer-btn, .friend-item, .buttons-container button {
-transition: none !important;
--webkit-tap-highlight-color: transparent !important;
-outline: none !important;
+    transition: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    outline: none !important;
 }
 
 button:hover, button:focus, button:active,
 .footer-btn:hover, .footer-btn:focus, .footer-btn:active,
 .friend-item:hover, .friend-item:focus, .friend-item:active,
 .buttons-container button:hover, .buttons-container button:focus, .buttons-container button:active {
-background-color: inherit !important;
-box-shadow: none !important;
-outline: none !important;
-border: inherit !important;
-color: inherit !important;
+    background-color: inherit !important;
+    box-shadow: none !important;
+    outline: none !important;
+    border: inherit !important;
+    color: inherit !important;
 }
