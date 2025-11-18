@@ -6,15 +6,20 @@ margin: 0;
 padding-bottom: 100px;
 }
 
-.logo {
-display: flex;
-justify-content: center;
-margin-top: 30px;
+div.logo {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
 }
-
+img.logo {
+    width: 200px;
+    max-width: 200px;
+    height: auto;
+    display: block;
+}
 .logo-img {
-width: 200px;
-height: auto;
+    width: 200px;
+    height: auto;
 }
 
 .leaderboard-title {
