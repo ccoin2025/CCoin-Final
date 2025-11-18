@@ -20,7 +20,10 @@ padding-top: 30px;
 
 .logo {
 width: 100px;
+max-width: 100px; 
+height: auto;      
 margin-bottom: 20px;
+display: block;   
 }
 
 h1 {
