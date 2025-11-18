@@ -8,12 +8,11 @@
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>CCoin Airdrop</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/airdrop.css') }}">
+    <link rel="stylesheet" href="/static/css/airdrop.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <script>
-        // Check if bs58 is loaded, if not create a fallback
         if (typeof bs58 === 'undefined') {
             window.bs58 = {
                 encode: function (data) {
@@ -27,7 +26,6 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
     <script>
-        // Ensure bs58 is available globally
         window.ensureBS58 = function () {
             if (typeof bs58 !== 'undefined') {
                 window.bs58 = bs58;
