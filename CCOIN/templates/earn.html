@@ -24,8 +24,8 @@
             <button class="task-button {% if task.completed %}completed{% endif %}"
                     onclick="handleAction(this, '{{ task.platform | lower }}')">
                 <div class="left">
-                    <img src="{{ url_for('static', path='images/icons/' ~ task.icon) }}" alt="{{ task.label }} icon"
-                         class="task-icon"/>
+                    <img src="/static/images/icons/{{ task.icon }}" 
+                         alt="{{ task.label }} icon" class="task-icon"/>
                     <span>{{ task.label }}</span>
                 </div>
                 <div class="right">
