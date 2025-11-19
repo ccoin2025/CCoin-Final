@@ -117,7 +117,7 @@ def check_instagram_follow(user_id: str) -> bool:
         return False
 
 def check_x_follow(user_id: str) -> bool:
-    """بررسی فالو کردن X CCOIN_OFFICIAL"""
+    """بررسی فالو کردن X OFFICIAL_CCOIN"""
     try:
         # TODO: اینجا باید API X (Twitter) پیاده‌سازی شود
         # فعلاً برای تست، فرض می‌کنیم همیشه true است
