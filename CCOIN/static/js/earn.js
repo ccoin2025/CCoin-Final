@@ -4,7 +4,6 @@ function handleAction(button, platform) {
     console.log("handleAction called with platform: " + platform);
     platform = platform.toLowerCase();
 
-    // جلوگیری از کلیک مجدد روی تسک‌های complete شده
     if (button.classList.contains('completed')) {
         console.log("Task already completed");
         return;
@@ -35,14 +34,13 @@ function handleAction(button, platform) {
     }
 
     const statusElement = button.querySelector(".status");
-    const originalText = statusElement.textContent; // ذخیره متن اصلی (مثلاً "+500 ccoin")
+    const originalText = statusElement.textContent; 
     
     statusElement.textContent = "Verifying...";
     button.disabled = true;
     button.style.cursor = "not-allowed";
     button.style.opacity = "0.6";
 
-    // تایمر 4 ثانیه برای شبیه‌سازی بررسی
     setTimeout(async () => {
         try {
             console.log("Verifying task for platform: " + platform);
@@ -59,7 +57,6 @@ function handleAction(button, platform) {
             const verifyData = await verifyRes.json();
             console.log("Verify response: ", verifyData);
 
-            // اگر تسک قبلاً complete شده
             if (verifyData.already_completed) {
                 statusElement.textContent = "Task Completed!";
                 statusElement.classList.add("done");
@@ -70,7 +67,6 @@ function handleAction(button, platform) {
             }
 
             if (verifyData.success) {
-                // درخواست کسب پاداش
                 const claimRes = await fetch("/earn/claim-reward", {
                     method: "POST",
                     headers: {
@@ -88,11 +84,9 @@ function handleAction(button, platform) {
                     button.classList.add("completed");
                     button.style.opacity = "1";
 
-                    // نمایش پیام موفقیت
                     if (claimData.tokens_added) {
                         window.Telegram.WebApp.showAlert(`🎉 Congratulations! You earned ${claimData.tokens_added} tokens!`);
                         
-                        // به‌روزرسانی توکن در صفحه (اگر المنتی برای نمایش توکن وجود داشته باشد)
                         const tokenElement = document.querySelector('.user-tokens');
                         if (tokenElement && claimData.total_tokens) {
                             tokenElement.textContent = claimData.total_tokens;
@@ -105,14 +99,11 @@ function handleAction(button, platform) {
                     button.style.cursor = "pointer";
                     button.style.opacity = "1";
                     
-                    // نمایش پیام خطا
                     window.Telegram.WebApp.showAlert(claimData.error || "Failed to claim reward. Please try again.");
                 }
             } else {
-                // ✅ اگر verification ناموفق بود
                 const attemptCount = verifyData.attempt_count || 0;
                 
-                // 📱 برای Telegram - پیام واقعی نمایش بده
                 if (platform === 'telegram') {
                     statusElement.textContent = "Please join our channel first!";
                     statusElement.style.color = "#ff4444";
@@ -122,33 +113,29 @@ function handleAction(button, platform) {
                     button.style.cursor = "pointer";
                     button.style.opacity = "1";
                 } 
-                // 🎭 برای Instagram, X, YouTube - سیستم 3 بار کلیک
                 else {
                     if (attemptCount < 3) {
-                        // ✅ نمایش "Checking..." برای 5 ثانیه
                         statusElement.textContent = "Checking...";
                         statusElement.style.color = "#ffa500";
                         
-                        // پیام‌های مختلف برای هر attempt
                         if (attemptCount === 1) {
                             window.Telegram.WebApp.showAlert("⏳ We're verifying your follow status. Please make sure you've followed us and try again.");
                         } else if (attemptCount === 2) {
                             window.Telegram.WebApp.showAlert("🔍 Still checking... Please ensure you've followed our page and try one more time.");
                         }
                         
-                        // ✅ بعد از 5 ثانیه برگشت به حالت اولیه
                         setTimeout(() => {
-                            statusElement.textContent = originalText; // برگشت به "+500 ccoin"
-                            statusElement.style.color = ""; // رنگ پیش‌فرض
+                            statusElement.textContent = originalText; 
+                            statusElement.style.color = ""; 
                             button.disabled = false;
                             button.style.cursor = "pointer";
                             button.style.opacity = "1";
                             
                             console.log(`Button reset to original state after attempt ${attemptCount}`);
-                        }, 5000); // 5 ثانیه
+                        }, 5000); 
                         
                     } else {
-                        // در دفعه سوم اگر باز هم verify نشد (نباید اتفاق بیفته چون mock API داریم)
+                       
                         statusElement.textContent = "Verification failed!";
                         statusElement.style.color = "#ff4444";
                         
@@ -174,10 +161,10 @@ function handleAction(button, platform) {
             
             window.Telegram.WebApp.showAlert("⚠️ Network error occurred. Please check your connection and try again.");
         }
-    }, 4000); // 4 ثانیه تاخیر برای شبیه‌سازی بررسی واقعی
+    }, 4000);
 }
 
-// Auto-refresh task status on page load (optional)
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("Page loaded, checking task statuses...");
     
@@ -193,9 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             console.log("Task status check result:", data);
             
-            // اگر نیاز به refresh صفحه باشد
             if (data.success && data.platforms) {
-                // می‌توانید اینجا UI را به‌روزرسانی کنید
                 console.log("All tasks checked successfully");
             }
         }
