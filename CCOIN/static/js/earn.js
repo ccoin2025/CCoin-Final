@@ -13,7 +13,7 @@ function handleAction(button, platform) {
     const urls = {
         'telegram': "https://t.me/CCOIN_OFFICIAL",
         'instagram': "https://instagram.com/ccoin_official",
-        'x': "https://x.com/CCOIN_OFFICIAL",
+        'x': "https://x.com/OFFICIAL_CCOIN",
         'youtube': "https://youtube.com/@CCOIN_OFFICIAL"
     };
 
