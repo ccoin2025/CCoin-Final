@@ -99,16 +99,7 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
 def check_instagram_follow(user_id: str) -> bool:
     """بررسی فالو کردن اینستاگرام ccoin_official"""
     try:
-        # TODO: اینجا باید API اینستاگرام پیاده‌سازی شود
-        # فعلاً برای تست، فرض می‌کنیم همیشه true است
-        # در production باید API واقعی استفاده شود
-        
-        # مثال برای API واقعی:
-        # if INSTAGRAM_ACCESS_TOKEN:
-        #     # استفاده از Instagram Basic Display API
-        #     # بررسی following status
-        #     pass
-        
+
         logger.info(f"Instagram follow check for user {user_id}: Mock verification - returning True")
         return True
         
@@ -119,16 +110,7 @@ def check_instagram_follow(user_id: str) -> bool:
 def check_x_follow(user_id: str) -> bool:
     """بررسی فالو کردن X OFFICIAL_CCOIN"""
     try:
-        # TODO: اینجا باید API X (Twitter) پیاده‌سازی شود
-        # فعلاً برای تست، فرض می‌کنیم همیشه true است
-        # در production باید API واقعی استفاده شود
-        
-        # مثال برای API واقعی:
-        # if X_API_KEY:
-        #     # استفاده از Twitter API v2
-        #     # بررسی following status
-        #     pass
-        
+
         logger.info(f"X follow check for user {user_id}: Mock verification - returning True")
         return True
         
@@ -139,16 +121,7 @@ def check_x_follow(user_id: str) -> bool:
 def check_youtube_subscribe(user_id: str) -> bool:
     """بررسی subscribe کردن یوتیوب @CCOIN_OFFICIAL"""
     try:
-        # TODO: اینجا باید API YouTube پیاده‌سازی شود
-        # فعلاً برای تست، فرض می‌کنیم همیشه true است
-        # در production باید API واقعی استفاده شود
-        
-        # مثال برای API واقعی:
-        # if YOUTUBE_API_KEY:
-        #     # استفاده از YouTube Data API v3
-        #     # بررسی subscription status
-        #     pass
-        
+    
         logger.info(f"YouTube subscribe check for user {user_id}: Mock verification - returning True")
         return True
         
