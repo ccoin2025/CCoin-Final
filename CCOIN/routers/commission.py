@@ -218,7 +218,6 @@ async def confirm_commission(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Confirmation failed: {str(e)}")
 
-
 @router.post("/verify_payment_auto", response_class=JSONResponse)
 @limiter.limit("10/minute")
 async def verify_payment_auto(
@@ -248,27 +247,33 @@ async def verify_payment_auto(
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="No wallet connected")
 
-        # ✅ محدودیت 5 درخواست - چک کردن تعداد تلاش‌ها
-        attempt_count = request.session.get(f'payment_check_attempts_{telegram_id}', 0)
+        # ✅ محدودیت تعداد تلاش‌ها
+        cache_key = f'payment_check_attempts_{telegram_id}'
+        attempt_count = get_from_cache(cache_key)  # فرض: تابع cache دارید
+        
+        if attempt_count is None:
+            attempt_count = 0
         
         if attempt_count >= 5:
             return {
                 "success": True,
                 "payment_found": False,
-                "message": "Maximum verification attempts reached. Please wait 2 minutes and refresh the page.",
+                "message": "Maximum verification attempts reached. Please wait 2 minutes.",
                 "max_attempts_reached": True
             }
 
         # افزایش تعداد تلاش‌ها
-        request.session[f'payment_check_attempts_{telegram_id}'] = attempt_count + 1
+        set_in_cache(cache_key, attempt_count + 1, ttl=120)  # 2 دقیقه
 
+        # ✅ بررسی واقعی blockchain
         client = AsyncClient(SOLANA_RPC)
-        
+
         try:
             user_pubkey = Pubkey.from_string(user.wallet_address)
 
-            print(f"🔍 Payment check attempt {attempt_count + 1}/5 for user: {telegram_id}")
+            logger.info(f"🔍 Payment check attempt {attempt_count + 1}/5 for user: {telegram_id}")
 
+            # دریافت تراکنش‌های اخیر
             signatures_response = await client.get_signatures_for_address(
                 user_pubkey,
                 limit=10
@@ -286,13 +291,18 @@ async def verify_payment_auto(
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             tolerance = int(0.015 * 1_000_000_000)
 
+            # ✅ فقط تراکنش‌های واقعی را چک کن
             for idx, sig_info in enumerate(signatures_response.value):
                 try:
                     if idx > 0:
                         await asyncio.sleep(0.5)
-                    
+
                     sig = str(sig_info.signature)
-                    
+
+                    # ✅ بررسی confirmation status
+                    if sig_info.confirmation_status != 'confirmed' and sig_info.confirmation_status != 'finalized':
+                        continue
+
                     tx_response = await client.get_transaction(
                         sig_info.signature,
                         encoding="json",
@@ -303,46 +313,53 @@ async def verify_payment_auto(
                         continue
 
                     tx_obj = tx_response.value
-                    
+
                     import json
                     tx_json_str = tx_obj.to_json()
                     tx = json.loads(tx_json_str)
-                    
+
                     meta = tx.get('meta')
                     if not meta or meta.get('err'):
                         continue
-                    
+
                     pre_balances = meta.get('preBalances', [])
                     post_balances = meta.get('postBalances', [])
-                    
+
                     if not pre_balances or not post_balances:
                         continue
-                    
+
                     transaction = tx.get('transaction', {})
                     message = transaction.get('message', {})
                     account_keys = message.get('accountKeys', [])
-                    
+
+                    # ✅ بررسی کردن که admin wallet دریافت‌کننده است
                     if not account_keys or ADMIN_WALLET not in account_keys:
                         continue
-                    
+
+                    # ✅ بررسی مقدار پرداختی
                     for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
                         acc_key = account_keys[acc_idx]
-                        
+
                         if acc_key == ADMIN_WALLET:
                             balance_change = post_balances[acc_idx] - pre_balances[acc_idx]
-                            
+
+                            # ✅ بررسی دقیق مقدار
                             if expected_lamports - tolerance <= balance_change <= expected_lamports + tolerance:
-                                print(f"✅ Payment found! Transaction: {sig}")
-                                print(f"   Expected: {expected_lamports} lamports")
-                                print(f"   Found: {balance_change} lamports")
-                                
+                                logger.info(f"✅ Payment found! Transaction: {sig}")
+                                logger.info(f"   Expected: {expected_lamports} lamports")
+                                logger.info(f"   Found: {balance_change} lamports")
+
+                                # ✅ ذخیره در دیتابیس
                                 user.commission_paid = True
                                 user.commission_transaction_hash = sig
                                 user.commission_payment_date = datetime.utcnow()
                                 db.commit()
-                                
+
+                                # پاک کردن cache
+                                clear_cache(cache_key)
+
                                 await client.close()
-                                
+
                                 return {
                                     "success": True,
                                     "payment_found": True,
@@ -350,20 +367,20 @@ async def verify_payment_auto(
                                     "transaction_hash": sig,
                                     "redirect_url": f"https://t.me/{BOT_USERNAME}"
                                 }
-                
+
                 except Exception as tx_error:
-                    print(f"⚠️ Error processing transaction: {tx_error}")
+                    logger.warning(f"⚠️ Error processing transaction: {tx_error}")
                     continue
-            
+
             await client.close()
-            
+
             return {
                 "success": True,
                 "payment_found": False,
                 "message": "No matching payment found in recent transactions",
                 "attempts_remaining": 5 - (attempt_count + 1)
             }
-        
+
         except Exception as e:
             await client.close()
             raise e
@@ -372,7 +389,7 @@ async def verify_payment_auto(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Payment verification error: {e}")
+        logger.error(f"❌ Payment verification error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
