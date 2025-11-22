@@ -10,12 +10,18 @@ from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, ADMIN_WALLET, BOT_USERNAME, APP_DOMAIN
 import structlog
+import json
+import base58
+import nacl.utils
+import nacl.public
 
 logger = structlog.get_logger()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
+
+in_memory_keypairs = {}
 
 @router.get("/browser/connect", response_class=HTMLResponse)
 @limiter.limit("20/minute")
@@ -54,19 +60,14 @@ async def wallet_browser_connect(
         
         if phantom_encryption_public_key and nonce and data:
             try:
-                import json
-                import base58
-                import nacl.utils
-                import nacl.public
-                
                 logger.info("Processing Phantom redirect", extra={"telegram_id": telegram_id})
                 
-                dapp_keypair_json = request.session.get(f'dapp_keypair_{telegram_id}')
+                dapp_keypair_json = in_memory_keypairs.get(telegram_id)
                 
                 if not dapp_keypair_json:
-                    logger.error("dApp keypair not found in session", extra={"telegram_id": telegram_id})
+                    logger.error("dApp keypair not found in memory", extra={"telegram_id": telegram_id})
                     return RedirectResponse(
-                        url=f"/airdrop?wallet_error=Session expired. Please try again.",
+                        url=f"/airdrop?wallet_error=Session expired. Please reconnect.",
                         status_code=302
                     )
                 
@@ -108,6 +109,7 @@ async def wallet_browser_connect(
                         "telegram_id": telegram_id,
                         "wallet": wallet_address
                     })
+                    in_memory_keypairs.pop(telegram_id, None)
                     return RedirectResponse(
                         url=f"/airdrop?wallet_error=Wallet already connected to another account",
                         status_code=302
@@ -124,7 +126,7 @@ async def wallet_browser_connect(
                     "wallet_address": wallet_address
                 })
                 
-                request.session.pop(f'dapp_keypair_{telegram_id}', None)
+                in_memory_keypairs.pop(telegram_id, None)
                 
                 return RedirectResponse(
                     url=f"/airdrop?wallet_connected=success",
@@ -137,9 +139,9 @@ async def wallet_browser_connect(
                     "error": str(e)
                 }, exc_info=True)
                 
-                error_message = str(e)
-                if "decrypt" in error_message.lower():
-                    error_message = "Failed to decrypt response from Phantom. Please try again."
+                in_memory_keypairs.pop(telegram_id, None)
+                
+                error_message = "Failed to decrypt response from Phantom. Please try again."
                 
                 return RedirectResponse(
                     url=f"/airdrop?wallet_error={error_message}",
@@ -147,11 +149,6 @@ async def wallet_browser_connect(
                 )
         
         else:
-            import json
-            import base58
-            import nacl.utils
-            import nacl.public
-            
             dapp_keypair = nacl.public.PrivateKey.generate()
             
             dapp_keypair_dict = {
@@ -159,9 +156,9 @@ async def wallet_browser_connect(
                 'secretKey': list(bytes(dapp_keypair))
             }
             
-            request.session[f'dapp_keypair_{telegram_id}'] = json.dumps(dapp_keypair_dict)
+            in_memory_keypairs[telegram_id] = json.dumps(dapp_keypair_dict)
             
-            logger.info("dApp keypair saved to session", extra={"telegram_id": telegram_id})
+            logger.info("dApp keypair saved to memory", extra={"telegram_id": telegram_id})
             
             dapp_public_key_base58 = base58.b58encode(bytes(dapp_keypair.public_key)).decode('utf-8')
             
@@ -188,7 +185,7 @@ async def wallet_browser_connect(
         }, exc_info=True)
         
         return RedirectResponse(
-            url=f"/airdrop?wallet_error=Internal server error. Please try again.",
+            url=f"/airdrop?wallet_error=Internal server error.",
             status_code=302
         )
 
