@@ -451,18 +451,31 @@ async function handleCommissionPayment() {
             return;
         }
 
-        const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
-        log('🔗 Opening commission payment in external browser: ' + commissionUrl);
+        // ساخت مستقیم Solana Pay URL
+        const recipient = ADMIN_WALLET;
+        const amount = COMMISSION_AMOUNT;
+        const label = encodeURIComponent('CCoin Commission');
+        const message = encodeURIComponent('Airdrop Commission Payment');
 
+        const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
+        
+        log('🔗 Opening Phantom with Solana Pay URL');
+
+        // باز کردن در مرورگر خارجی
         if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.openLink(commissionUrl);
+            window.Telegram.WebApp.openLink(solanaPayUrl);
         } else {
-            window.open(commissionUrl, '_blank');
+            window.location.href = solanaPayUrl;
         }
+
+        // ذخیره زمان شروع پرداخت
+        localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+        
+        showToast('Opening Phantom for payment...', 'info');
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
-        showToast('Failed to open payment page: ' + error.message, 'error');
+        showToast('Failed to open payment: ' + error.message, 'error');
     }
 }
 
