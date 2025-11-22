@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -8,251 +8,281 @@ import os
 from datetime import datetime, timezone
 from CCOIN.database import get_db
 from CCOIN.models.user import User
-from CCOIN.config import SOLANA_RPC
-from solders.pubkey import Pubkey
+from CCOIN.config import SOLANA_RPC, ADMIN_WALLET, BOT_USERNAME, APP_DOMAIN
 import structlog
-from typing import Optional
+import json
+import base58
+import nacl.utils
+import nacl.public
+
+logger = structlog.get_logger()
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
-logger = structlog.get_logger()
-
-# Cache برای جلوگیری از تکرار validation (جدید)
-_address_cache = {}
 
 @router.get("/browser/connect", response_class=HTMLResponse)
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def wallet_browser_connect(
-    request: Request, 
-    telegram_id: str = Query(..., description="Telegram user ID", min_length=1, max_length=50)
-):
-    """نمایش صفحه اتصال کیف پول در مرورگر"""
-    # Sanitize input
-    telegram_id = telegram_id.strip()
-    
-    logger.info(f"Wallet connect request", extra={"telegram_id": telegram_id})
-    
-    return templates.TemplateResponse("wallet_browser_connect.html", {
-        "request": request,
-        "telegram_id": telegram_id
-    })
-
-@router.post("/connect", response_class=JSONResponse)
-@limiter.limit("5/minute")
-async def wallet_connect(
     request: Request,
-    background_tasks: BackgroundTasks,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    phantom_encryption_public_key: str = Query(None),
+    nonce: str = Query(None),
+    data: str = Query(None),
+    errorCode: str = Query(None),
+    errorMessage: str = Query(None),
     db: Session = Depends(get_db)
 ):
-    """اتصال کیف پول کاربر با امنیت بهبود یافته"""
+    """Wallet connection page in browser with Phantom deeplink support"""
+    
+    logger.info("Wallet connect request", extra={"telegram_id": telegram_id})
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        logger.error("User not found", extra={"telegram_id": telegram_id})
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if errorCode or errorMessage:
+        error_msg = errorMessage or f"Connection error: {errorCode}"
+        logger.warning("Phantom connection error", extra={
+            "telegram_id": telegram_id,
+            "error_code": errorCode,
+            "error_message": errorMessage
+        })
+        
+        return RedirectResponse(
+            url=f"/airdrop?wallet_error={error_msg}",
+            status_code=302
+        )
+    
+    if phantom_encryption_public_key and nonce and data:
+        try:
+            logger.info("Processing Phantom redirect", extra={"telegram_id": telegram_id})
+            
+            dapp_keypair_json = request.session.get(f'dapp_keypair_{telegram_id}')
+            
+            if not dapp_keypair_json:
+                logger.error("dApp keypair not found in session", extra={"telegram_id": telegram_id})
+                raise HTTPException(status_code=400, detail="Session expired. Please try again.")
+            
+            dapp_keypair = json.loads(dapp_keypair_json)
+            
+            logger.info("Decrypting Phantom response", extra={"telegram_id": telegram_id})
+            
+            encrypted_data = base58.b58decode(data)
+            nonce_bytes = base58.b58decode(nonce)
+            phantom_public_key_bytes = base58.b58decode(phantom_encryption_public_key)
+            
+            dapp_secret_key = nacl.public.PrivateKey(bytes(dapp_keypair['secretKey']))
+            phantom_public_key_obj = nacl.public.PublicKey(phantom_public_key_bytes)
+            
+            box = nacl.public.Box(dapp_secret_key, phantom_public_key_obj)
+            
+            decrypted_data = box.decrypt(encrypted_data, nonce_bytes)
+            response_data = json.loads(decrypted_data.decode('utf-8'))
+            
+            logger.info("Decryption successful", extra={"telegram_id": telegram_id})
+            
+            wallet_address = response_data.get('public_key')
+            
+            if not wallet_address:
+                raise ValueError("No public_key in response")
+            
+            logger.info("Wallet address extracted", extra={
+                "telegram_id": telegram_id,
+                "wallet_address": wallet_address
+            })
+            
+            existing_user = db.query(User).filter(
+                User.wallet_address == wallet_address,
+                User.id != user.id
+            ).first()
+            
+            if existing_user:
+                logger.warning("Duplicate wallet attempt", extra={
+                    "telegram_id": telegram_id,
+                    "wallet": wallet_address
+                })
+                raise HTTPException(status_code=400, detail="Wallet already connected to another account")
+            
+            user.wallet_address = wallet_address
+            user.wallet_connected = True
+            user.wallet_connection_date = datetime.now(timezone.utc)
+            user.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            
+            logger.info("Wallet connected successfully", extra={
+                "telegram_id": telegram_id,
+                "wallet_address": wallet_address
+            })
+            
+            request.session.pop(f'dapp_keypair_{telegram_id}', None)
+            
+            return RedirectResponse(
+                url=f"/airdrop?wallet_connected=success",
+                status_code=302
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Failed to process Phantom response", extra={
+                "telegram_id": telegram_id,
+                "error": str(e)
+            }, exc_info=True)
+            
+            error_message = str(e)
+            if "decrypt" in error_message.lower():
+                error_message = "Failed to decrypt response from Phantom. Please try again."
+            
+            return RedirectResponse(
+                url=f"/airdrop?wallet_error={error_message}",
+                status_code=302
+            )
+    
+    else:
+        dapp_keypair = nacl.public.PrivateKey.generate()
+        
+        dapp_keypair_dict = {
+            'publicKey': list(bytes(dapp_keypair.public_key)),
+            'secretKey': list(bytes(dapp_keypair))
+        }
+        
+        request.session[f'dapp_keypair_{telegram_id}'] = json.dumps(dapp_keypair_dict)
+        
+        logger.info("dApp keypair saved to session", extra={"telegram_id": telegram_id})
+        
+        dapp_public_key_base58 = base58.b58encode(bytes(dapp_keypair.public_key)).decode('utf-8')
+        
+        redirect_url = f"{APP_DOMAIN}/wallet/browser/connect?telegram_id={telegram_id}"
+        
+        app_url = APP_DOMAIN
+        
+        return templates.TemplateResponse("wallet_connect.html", {
+            "request": request,
+            "telegram_id": telegram_id,
+            "dapp_public_key": dapp_public_key_base58,
+            "redirect_url": redirect_url,
+            "app_url": app_url,
+            "cluster": "mainnet-beta",
+            "bot_username": BOT_USERNAME
+        })
+
+@router.post("/connect", response_class=JSONResponse)
+@limiter.limit("10/minute")
+async def connect_wallet_api(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """API endpoint for wallet connection"""
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
         wallet_address = body.get("wallet_address")
-
-        # Input Validation
-        if not telegram_id or not isinstance(telegram_id, str):
-            logger.warning("Invalid telegram_id", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=400, detail="Invalid Telegram ID")
         
-        if not wallet_address or not isinstance(wallet_address, str):
-            logger.warning("Invalid wallet_address", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=400, detail="Invalid wallet address")
-
-        # Sanitize inputs
-        telegram_id = telegram_id.strip()
-        wallet_address = wallet_address.strip()
-
-        # Find user
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            logger.error("User not found", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # بررسی اینکه آیا قبلاً کیف پول متصل شده
-        if user.wallet_address and user.wallet_address != wallet_address:
-            logger.warning("User attempting to change wallet", extra={
-                "telegram_id": telegram_id,
-                "old_wallet": user.wallet_address,
-                "new_wallet": wallet_address
-            })
-            raise HTTPException(
-                status_code=400, 
-                detail="Wallet already connected. Contact support to change."
-            )
-
-        # Validate Solana address (بهبود یافته)
-        if not is_valid_solana_address(wallet_address):
-            logger.error("Invalid Solana address", extra={
-                "telegram_id": telegram_id,
-                "wallet_address": wallet_address
-            })
-            raise HTTPException(status_code=400, detail="Invalid Solana wallet address")
-
-        # بررسی تکراری بودن آدرس
-        existing_wallet = db.query(User).filter(
-            User.wallet_address == wallet_address,
-            User.telegram_id != telegram_id
-        ).first()
+        if not telegram_id or not wallet_address:
+            raise HTTPException(status_code=400, detail="Missing telegram_id or wallet_address")
         
-        if existing_wallet:
-            logger.warning("Duplicate wallet address attempt", extra={
-                "telegram_id": telegram_id,
-                "wallet_address": wallet_address
-            })
-            raise HTTPException(
-                status_code=400, 
-                detail="This wallet is already connected to another account"
-            )
-
-        # به‌روزرسانی آدرس کیف پول کاربر
-        user.wallet_address = wallet_address
-        user.wallet_connected = True
-        user.wallet_connection_date = datetime.now(timezone.utc)
-        user.updated_at = datetime.now(timezone.utc)
-        
-        db.commit()
-        db.refresh(user)
-
-        logger.info("Wallet connected successfully", extra={
+        logger.info("Wallet connect API request", extra={
             "telegram_id": telegram_id,
             "wallet_address": wallet_address
         })
         
-        # Log در background
-        background_tasks.add_task(log_wallet_connection, telegram_id, wallet_address)
-
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        existing_user = db.query(User).filter(
+            User.wallet_address == wallet_address,
+            User.id != user.id
+        ).first()
+        
+        if existing_user:
+            logger.warning("Duplicate wallet attempt", extra={
+                "telegram_id": telegram_id,
+                "wallet": wallet_address
+            })
+            raise HTTPException(status_code=400, detail="Wallet already connected to another account")
+        
+        user.wallet_address = wallet_address
+        user.wallet_connected = True
+        user.wallet_connection_date = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info("Wallet connected successfully via API", extra={
+            "telegram_id": telegram_id,
+            "wallet_address": wallet_address
+        })
+        
         return {
             "success": True,
             "message": "Wallet connected successfully",
             "wallet_address": wallet_address
         }
-
+        
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error("Unexpected error in wallet connect", extra={
-            "telegram_id": telegram_id if 'telegram_id' in locals() else 'unknown',
-            "error": str(e)
-        }, exc_info=True)
-        # عدم افشای اطلاعات خطا به کاربر
-        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
+        logger.error("Wallet connect API error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to connect wallet: {str(e)}")
 
-@router.get("/status", response_class=JSONResponse)
-@limiter.limit("20/minute")
-async def get_wallet_status(
+@router.post("/disconnect", response_class=JSONResponse)
+@limiter.limit("10/minute")
+async def disconnect_wallet_api(
     request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID", min_length=1, max_length=50),
     db: Session = Depends(get_db)
 ):
-    """دریافت وضعیت اتصال کیف پول"""
-    telegram_id = telegram_id.strip()
+    """API endpoint for wallet disconnection"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+        
+        logger.info("Wallet disconnect request", extra={"telegram_id": telegram_id})
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user.wallet_address = None
+        user.wallet_connected = False
+        user.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info("Wallet disconnected successfully", extra={"telegram_id": telegram_id})
+        
+        return {
+            "success": True,
+            "message": "Wallet disconnected successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error("Wallet disconnect error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect wallet: {str(e)}")
+
+@router.get("/status", response_class=JSONResponse)
+@limiter.limit("30/minute")
+async def wallet_status(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """Check wallet connection status"""
+    logger.info("Wallet status check", extra={"telegram_id": telegram_id})
     
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        logger.error("User not found for wallet status", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
-
+    
     return {
         "wallet_connected": user.wallet_connected,
         "wallet_address": user.wallet_address,
         "connection_date": user.wallet_connection_date.isoformat() if user.wallet_connection_date else None
     }
-
-@router.get("/callback", response_class=HTMLResponse)
-@limiter.limit("10/minute")
-async def wallet_callback(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID", min_length=1, max_length=50),
-    db: Session = Depends(get_db)
-):
-    """صفحه callback بعد از اتصال کیف پول"""
-    telegram_id = telegram_id.strip()
-    
-    logger.info("Wallet callback", extra={"telegram_id": telegram_id})
-
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        logger.error("User not found for wallet callback", extra={"telegram_id": telegram_id})
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return templates.TemplateResponse("wallet_callback.html", {
-        "request": request,
-        "telegram_id": telegram_id,
-        "wallet_address": user.wallet_address,
-        "success_message": "Wallet connected successfully!" if user.wallet_connected else "Wallet connection failed."
-    })
-
-# Helper function برای بررسی اعتبار آدرس Solana (بهبود یافته)
-def is_valid_solana_address(address: str) -> bool:
-    """
-    بررسی دقیق اعتبار آدرس کیف پول Solana
-    با استفاده از کتابخانه solders
-    """
-    if not address or not isinstance(address, str):
-        return False
-
-    # بررسی طول
-    if len(address) < 32 or len(address) > 44:
-        return False
-
-    # Check cache
-    if address in _address_cache:
-        return _address_cache[address]
-
-    # Validate با solders
-    try:
-        Pubkey.from_string(address)
-        _address_cache[address] = True
-        return True
-    except Exception as e:
-        logger.debug(f"Invalid Solana address validation failed", extra={
-            "address": address,
-            "error": str(e)
-        })
-        _address_cache[address] = False
-        return False
-
-# Helper function برای لاگ اتصال کیف پول (بهبود یافته)
-async def log_wallet_connection(telegram_id: str, wallet_address: str):
-    """ثبت لاگ اتصال کیف پول به صورت async"""
-    log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "telegram_id": telegram_id,
-        "wallet_address": wallet_address,
-        "type": "wallet_connection"
-    }
-    
-    logger.info("Wallet connection logged", extra=log_entry)
-
-    # ذخیره لاگ در فایل (اختیاری)
-    try:
-        with open('logs/wallet_connections.log', 'a') as f:
-            import json
-            f.write(json.dumps(log_entry) + '\n')
-    except Exception as e:
-        logger.error(f"Failed to write wallet log to file: {e}")
-
-@router.get("/test-return")
-async def test_return_to_telegram(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID")
-):
-    """تست بازگشت به تلگرام"""
-    return HTMLResponse(f"""
-    <!DOCTYPE html>
-    <html>
-    <body>
-        <h1>Test Return to Telegram</h1>
-        <button onclick="returnToTelegram()">Return to Telegram</button>
-        <script>
-            function returnToTelegram() {{
-                const telegramUrl = 'https://t.me/CTG_COIN_BOT/app?startapp=test';
-                window.location.href = telegramUrl;
-            }}
-        </script>
-    </body>
-    </html>
-    """)
