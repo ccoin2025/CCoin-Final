@@ -14,6 +14,7 @@ import json
 import base58
 import nacl.utils
 import nacl.public
+import time
 
 logger = structlog.get_logger()
 
@@ -22,6 +23,17 @@ limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 in_memory_keypairs = {}
+
+def cleanup_old_keypairs():
+    """Remove keypairs older than 5 minutes"""
+    current_time = time.time()
+    to_remove = []
+    for telegram_id, (keypair_data, timestamp) in in_memory_keypairs.items():
+        if current_time - timestamp > 300:  # 5 minutes
+            to_remove.append(telegram_id)
+    
+    for telegram_id in to_remove:
+        in_memory_keypairs.pop(telegram_id, None)
 
 @router.get("/browser/connect", response_class=HTMLResponse)
 @limiter.limit("20/minute")
@@ -62,15 +74,16 @@ async def wallet_browser_connect(
             try:
                 logger.info("Processing Phantom redirect", extra={"telegram_id": telegram_id})
                 
-                dapp_keypair_json = in_memory_keypairs.get(telegram_id)
+                keypair_entry = in_memory_keypairs.get(telegram_id)
                 
-                if not dapp_keypair_json:
+                if not keypair_entry:
                     logger.error("dApp keypair not found in memory", extra={"telegram_id": telegram_id})
                     return RedirectResponse(
                         url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
                         status_code=302
                     )
                 
+                dapp_keypair_json, _ = keypair_entry
                 dapp_keypair = json.loads(dapp_keypair_json)
                 
                 logger.info("Decrypting Phantom response", extra={"telegram_id": telegram_id})
@@ -126,8 +139,6 @@ async def wallet_browser_connect(
                     "wallet_address": wallet_address
                 })
                 
-                in_memory_keypairs.pop(telegram_id, None)
-                
                 return RedirectResponse(
                     url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_connected",
                     status_code=302
@@ -147,6 +158,8 @@ async def wallet_browser_connect(
                 )
         
         else:
+            cleanup_old_keypairs()
+            
             dapp_keypair = nacl.public.PrivateKey.generate()
             
             dapp_keypair_dict = {
@@ -154,7 +167,7 @@ async def wallet_browser_connect(
                 'secretKey': list(bytes(dapp_keypair))
             }
             
-            in_memory_keypairs[telegram_id] = json.dumps(dapp_keypair_dict)
+            in_memory_keypairs[telegram_id] = (json.dumps(dapp_keypair_dict), time.time())
             
             logger.info("dApp keypair saved to memory", extra={"telegram_id": telegram_id})
             
