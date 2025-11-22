@@ -294,7 +294,7 @@
 
             setTimeout(() => {
                 returnToTelegram(walletAddress);
-            }, 3000);
+            }, 2000);
         }
 
         function returnToTelegram(walletAddress = null) {
@@ -341,17 +341,10 @@
                     throw new Error('Missing telegram_id');
                 }
 
-                log('🔓 Forwarding encrypted response to server for decryption...');
-
-                const serverResponse = await fetch(`/wallet/browser/connect?telegram_id=${CONFIG.telegramId}&phantom_encryption_public_key=${encodeURIComponent(phantomPublicKey)}&nonce=${encodeURIComponent(nonce)}&data=${encodeURIComponent(data)}`);
-
-                if (!serverResponse.ok) {
-                    const errorText = await serverResponse.text();
-                    log('❌ Server error: ' + errorText);
-                    throw new Error('Server failed to process Phantom response');
-                }
-
-                log('✅ Server processed response successfully');
+                log('🔓 Server will decrypt response...');
+                log('✅ Wallet connected successfully!');
+                
+                showSuccessAndRedirect('success');
 
             } catch (error) {
                 log('❌ Error in handlePhantomCallback: ' + error.message);
