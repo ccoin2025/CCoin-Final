@@ -333,6 +333,10 @@
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openLink(solanaPayUrl);
+            } else {
+
             window.location.href = solanaPayUrl;
 
             setTimeout(() => {
