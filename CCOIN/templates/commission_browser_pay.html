@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png" sizes="512x512">
-    <link rel="apple-touch-icon" href="/static/images/icon-512x512.png">
+    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Pay Commission - CCoin</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,7 +25,7 @@
             padding: 40px 30px;
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-            max-width: 500px;
+            max-width: 450px;
             width: 100%;
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
@@ -34,33 +33,6 @@
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
         .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
-
-        .info-box {
-            background: rgba(33, 150, 243, 0.2);
-            border: 1px solid rgba(33, 150, 243, 0.4);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .info-box h3 {
-            color: #ffd700;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        .info-box p {
-            line-height: 1.6;
-            margin-bottom: 10px;
-        }
-        .info-box ol {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-        .info-box li {
-            margin: 8px 0;
-            line-height: 1.5;
-        }
-
         .commission-info {
             background: rgba(255, 255, 255, 0.1);
             padding: 25px;
@@ -136,9 +108,24 @@
             vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        #instructionsSection { display: block; }
-        #phantomSection { display: none; }
+        .payment-guide {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.4);
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+            line-height: 1.8;
+            text-align: left;
+            display: none;
+        }
+        .payment-guide ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        .payment-guide li {
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -147,43 +134,25 @@
         <h1>Commission Payment</h1>
         <p class="subtitle">Complete your payment to unlock the airdrop</p>
 
-        <div class="commission-info">
-            <div class="amount">{{ commission_amount }} SOL</div>
-            <div class="fee-info">Network fees may apply</div>
-        </div>
-
         <div id="status" class="status"></div>
 
-        <!-- بخش توضیحات -->
-        <div id="instructionsSection">
-            <div class="info-box">
-                <h3>📋 Payment Instructions</h3>
-                <p><strong>Dear User,</strong></p>
-                <p>Please follow these steps carefully:</p>
-                <ol>
-                    <li>Click "I Understand" button below</li>
-                    <li>Complete the transaction in Phantom wallet</li>
-                    <li><strong>Return to this page after payment</strong></li>
-                    <li>Click "Check Payment Status" button</li>
-                    <li>Wait for confirmation</li>
-                    <li>Restart the app after successful verification</li>
-                </ol>
-            </div>
-            <button class="btn" id="understand-btn">
-                ✅ I Understand
-            </button>
+        <div id="payment-guide" class="payment-guide">
+            <strong>📱 After Payment:</strong>
+            <ol>
+                <li>Complete the payment in Phantom</li>
+                <li>Close the Phantom screen (back button or X)</li>
+                <li>Return to this page</li>
+                <li>Click "Check Payment Status" button</li>
+            </ol>
         </div>
 
-        <!-- بخش Phantom -->
-        <div id="phantomSection">
-            <button class="btn" id="pay-btn">
-                <span id="btn-text">💳 Pay with Phantom</span>
-            </button>
+        <button class="btn" id="pay-btn" onclick="handlePayment()">
+            <span id="btn-text">💳 Pay with Phantom</span>
+        </button>
 
-            <button class="btn verify-btn" id="verify-btn">
-                ✅ Check Payment Status
-            </button>
-        </div>
+        <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
+            ✅ Check Payment Status
+        </button>
 
         <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
     </div>
@@ -196,31 +165,22 @@
             commissionAmount: parseFloat('{{ commission_amount }}'),
             adminWallet: '{{ admin_wallet }}',
             botUsername: '{{ bot_username }}',
-            rpcUrl: '{{ solana_rpc }}'
+            rpcUrl: 'https://api.mainnet-beta.solana.com'
         };
-
-        console.log('💰 Commission page loaded', CONFIG);
 
         const isPhantomExtension = () => window.solana && window.solana.isPhantom;
 
-        function showPhantomButton() {
-            console.log('🔄 Showing Phantom button section');
-            document.getElementById('instructionsSection').style.display = 'none';
-            document.getElementById('phantomSection').style.display = 'block';
-        }
-
         function showStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.innerHTML = message;
-            statusEl.className = `status ${type}`;
-            console.log(`📢 Status: [${type}] ${message}`);
+            document.getElementById('status').innerHTML = message;
+            document.getElementById('status').className = `status ${type}`;
         }
 
         function setButtonLoading(loading) {
             const btn = document.getElementById('pay-btn');
             const btnText = document.getElementById('btn-text');
             const verifyBtn = document.getElementById('verify-btn');
-
+            const guide = document.getElementById('payment-guide');
+            
             if (loading) {
                 btn.disabled = true;
                 btnText.innerHTML = '<span class="spinner"></span> Processing...';
@@ -228,39 +188,21 @@
                 btn.disabled = false;
                 btnText.innerHTML = '💳 Pay with Phantom';
                 verifyBtn.style.display = 'block';
+                guide.style.display = 'block';
             }
         }
 
-        // Event Listeners
-        document.getElementById('understand-btn').addEventListener('click', function() {
-            console.log('✅ I Understand button clicked');
-            showPhantomButton();
-        });
-
-        document.getElementById('pay-btn').addEventListener('click', function() {
-            console.log('💳 Pay button clicked');
-            handlePayment();
-        });
-
-        document.getElementById('verify-btn').addEventListener('click', function() {
-            console.log('🔍 Verify button clicked');
-            checkPayment();
-        });
-
         window.addEventListener('load', async function() {
-            console.log('🚀 Page loaded, checking payment status...');
-            
             // Check if payment was initiated
             if (localStorage.getItem('ccoin_payment_initiated')) {
                 const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
                 const now = Date.now();
-
+                
                 // If less than 5 minutes passed
                 if (now - paymentTime < 300000) {
-                    showPhantomButton();
                     showStatus('⏳ Checking payment...', 'info');
                     setButtonLoading(false);
-
+                    
                     // Start auto-check
                     await autoCheckPayment();
                     return;
@@ -277,7 +219,7 @@
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                 }
             } catch (error) {
-                console.error('❌ Status check error:', error);
+                console.error('Status check error:', error);
             }
         });
 
@@ -292,7 +234,7 @@
                     await payWithSolanaPay();
                 }
             } catch (error) {
-                console.error('❌ Payment error:', error);
+                console.error('Payment error:', error);
                 showStatus(`❌ Error: ${error.message}`, 'error');
                 setButtonLoading(false);
             }
@@ -301,7 +243,7 @@
         async function payWithExtension() {
             try {
                 showStatus('🔗 Connecting to Phantom...', 'info');
-
+                
                 const provider = window.solana;
                 await provider.connect();
                 const userPublicKey = provider.publicKey;
@@ -352,28 +294,18 @@
             const message = encodeURIComponent('Airdrop Commission Payment');
 
             const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
-
+            
             console.log('🔗 Solana Pay URL:', solanaPayUrl);
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
-            // باز کردن در مرورگر خارجی
-            if (window.Telegram && window.Telegram.WebApp) {
-                console.log('📱 Opening via Telegram WebApp.openLink');
-                window.Telegram.WebApp.openLink(solanaPayUrl);
-            } else {
-                console.log('📱 Opening via window.location.href');
-                window.location.href = solanaPayUrl;
-            }
+            window.location.href = solanaPayUrl;
 
             setTimeout(() => {
                 showStatus('📱 After completing payment in Phantom, return here and click "Check Payment Status".', 'info');
                 setButtonLoading(false);
             }, 3000);
         }
-
-        let checkAttempts = 0;
-        const maxCheckAttempts = 5;
 
         async function autoCheckPayment() {
             let attempts = 0;
@@ -382,16 +314,7 @@
             const checkInterval = setInterval(async () => {
                 attempts++;
 
-                if (checkAttempts >= maxCheckAttempts) {
-                    clearInterval(checkInterval);
-                    showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
-                    setButtonLoading(false);
-                    return;
-                }
-
                 try {
-                    checkAttempts++;
-
                     const response = await fetch('/commission/verify_payment_auto', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -400,31 +323,40 @@
 
                     const data = await response.json();
 
-                    if (data.success) {
+                    if (data.success && data.payment_found) {
                         clearInterval(checkInterval);
                         localStorage.removeItem('ccoin_payment_initiated');
-                        showStatus('✅ Payment confirmed! Redirecting...', 'success');
-                        setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                        showStatus('✅ Payment confirmed!', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                        }, 1500);
+                        return;
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        showStatus('⏳ Payment not detected yet. Please click "Check Payment Status".', 'info');
+                        setButtonLoading(false);
+                    } else {
+                        showStatus(`⏳ Checking... (${attempts}/${maxAttempts})`, 'info');
                     }
 
                 } catch (error) {
                     console.error('Auto-check error:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        setButtonLoading(false);
+                    }
                 }
-
-                if (attempts >= maxAttempts) {
-                    clearInterval(checkInterval);
-                    showStatus('⏱️ Auto-check timeout. Please click "Check Payment Status" manually.', 'info');
-                    setButtonLoading(false);
-                }
-
-            }, 5000);
+            }, 3000);
         }
 
         async function checkPayment() {
             try {
-                showStatus('🔍 Checking payment status...', 'info');
+                showStatus('🔍 Checking payment...', 'info');
+                document.getElementById('verify-btn').disabled = true;
 
-                const response = await fetch('/commission/verify_payment', {
+                const response = await fetch('/commission/verify_payment_auto', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: CONFIG.telegramId })
@@ -432,43 +364,59 @@
 
                 const data = await response.json();
 
-                if (data.success) {
+                if (data.success && data.payment_found) {
                     localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    showStatus('✅ Payment confirmed!', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
-                    showStatus(`⏳ ${data.message || 'Payment not found yet. Please wait and try again.'}`, 'info');
+                    showStatus('⏳ Payment not detected yet. Please wait 10-30 seconds after payment and try again.', 'info');
+                    setTimeout(() => {
+                        document.getElementById('verify-btn').disabled = false;
+                    }, 3000);
                 }
 
             } catch (error) {
-                console.error('Check payment error:', error);
-                showStatus('❌ Error checking payment: ' + error.message, 'error');
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                document.getElementById('verify-btn').disabled = false;
             }
         }
 
         async function confirmOnServer(signature) {
             try {
-                const response = await fetch('/commission/confirm_payment', {
+                showStatus('📤 Confirming with server...', 'info');
+
+                const response = await fetch('/commission/confirm_commission', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         telegram_id: CONFIG.telegramId,
-                        transaction_signature: signature
+                        signature: signature,
+                        amount: CONFIG.commissionAmount,
+                        recipient: CONFIG.adminWallet
                     })
                 });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Server confirmation failed');
+                }
 
                 const data = await response.json();
 
                 if (data.success) {
                     localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    showStatus('✅ Payment successful!', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
-                    throw new Error(data.message || 'Server confirmation failed');
+                    throw new Error(data.message || 'Confirmation failed');
                 }
 
             } catch (error) {
-                throw new Error('Failed to confirm payment on server: ' + error.message);
+                throw new Error(`Server error: ${error.message}`);
             }
         }
     </script>
