@@ -1,3 +1,76 @@
+// ✅ لاگ کامل برای debugging
+async function handlePhantomRedirect() {
+    console.log('=== PHANTOM REDIRECT DEBUG START ===');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    console.log('1. URL Params:', Object.fromEntries(urlParams));
+    
+    const encryptedData = urlParams.get('data');
+    const nonce = urlParams.get('nonce');
+    
+    console.log('2. Encrypted Data:', encryptedData);
+    console.log('3. Nonce:', nonce);
+    
+    // چک کردن localStorage
+    const storedKeypair = localStorage.getItem('dAppKeypair');
+    console.log('4. Stored Keypair:', storedKeypair ? 'EXISTS' : 'NOT FOUND');
+    
+    if (!encryptedData || !nonce) {
+        console.log('❌ Missing encrypted data or nonce');
+        console.log('=== PHANTOM REDIRECT DEBUG END ===');
+        return;
+    }
+    
+    if (!storedKeypair) {
+        console.log('❌ No dApp keypair in localStorage');
+        console.log('=== PHANTOM REDIRECT DEBUG END ===');
+        return;
+    }
+    
+    try {
+        console.log('5. Parsing keypair...');
+        const dAppKeypair = JSON.parse(storedKeypair);
+        console.log('6. Keypair parsed successfully');
+        
+        console.log('7. Decoding base58...');
+        const encryptedBytes = bs58.decode(encryptedData);
+        const nonceBytes = bs58.decode(nonce);
+        console.log('8. Base58 decoded successfully');
+        
+        console.log('9. Attempting decryption...');
+        const decryptedData = nacl.box.open(
+            encryptedBytes,
+            nonceBytes,
+            new Uint8Array(dAppKeypair.publicKey),
+            new Uint8Array(dAppKeypair.secretKey)
+        );
+        
+        if (!decryptedData) {
+            console.log('❌ Decryption failed - returned null');
+            console.log('=== PHANTOM REDIRECT DEBUG END ===');
+            throw new Error('Failed to decrypt response from Phantom');
+        }
+        
+        console.log('10. Decryption successful!');
+        
+        const responseData = JSON.parse(new TextDecoder().decode(decryptedData));
+        console.log('11. Response data:', responseData);
+        
+        console.log('=== PHANTOM REDIRECT DEBUG END ===');
+        
+        // ادامه کد...
+        
+    } catch (error) {
+        console.log('❌ ERROR:', error.message);
+        console.log('❌ ERROR STACK:', error.stack);
+        console.log('=== PHANTOM REDIRECT DEBUG END ===');
+        throw error;
+    }
+}
+
+
+
+
 // تشخیص وجود APP_CONFIG و ایجاد fallback در صورت عدم وجود
 if (typeof window.APP_CONFIG === 'undefined') {
     console.error('❌ APP_CONFIG not found! Using fallback values.');
