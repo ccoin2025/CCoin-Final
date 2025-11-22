@@ -54,7 +54,7 @@ async def wallet_browser_connect(
             })
             
             return RedirectResponse(
-                url=f"/airdrop?wallet_error={error_msg}",
+                url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
                 status_code=302
             )
         
@@ -67,7 +67,7 @@ async def wallet_browser_connect(
                 if not dapp_keypair_json:
                     logger.error("dApp keypair not found in memory", extra={"telegram_id": telegram_id})
                     return RedirectResponse(
-                        url=f"/airdrop?wallet_error=Session expired. Please reconnect.",
+                        url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
                         status_code=302
                     )
                 
@@ -111,7 +111,7 @@ async def wallet_browser_connect(
                     })
                     in_memory_keypairs.pop(telegram_id, None)
                     return RedirectResponse(
-                        url=f"/airdrop?wallet_error=Wallet already connected to another account",
+                        url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
                         status_code=302
                     )
                 
@@ -129,7 +129,7 @@ async def wallet_browser_connect(
                 in_memory_keypairs.pop(telegram_id, None)
                 
                 return RedirectResponse(
-                    url=f"/airdrop?wallet_connected=success",
+                    url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_connected",
                     status_code=302
                 )
                 
@@ -141,10 +141,8 @@ async def wallet_browser_connect(
                 
                 in_memory_keypairs.pop(telegram_id, None)
                 
-                error_message = "Failed to decrypt response from Phantom. Please try again."
-                
                 return RedirectResponse(
-                    url=f"/airdrop?wallet_error={error_message}",
+                    url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
                     status_code=302
                 )
         
@@ -185,7 +183,7 @@ async def wallet_browser_connect(
         }, exc_info=True)
         
         return RedirectResponse(
-            url=f"/airdrop?wallet_error=Internal server error.",
+            url=f"https://t.me/{BOT_USERNAME}/app?startapp=wallet_error",
             status_code=302
         )
 
