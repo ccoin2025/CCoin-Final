@@ -93,6 +93,8 @@
             Open in Phantom App
         </button>
 
+        <div id="debug" class="debug"></div>
+
         <div id="status" class="status"></div>
 
         <div id="successMessage" class="success-message" style="display: none;">
@@ -103,11 +105,16 @@
     </div>
 
     <script>
-        let dappKeyPair = null;
-        let dappPublicKey = '';
+        const CONFIG = {
+            telegramId: '{{ telegram_id }}',
+            dappPublicKey: '{{ dapp_public_key }}',
+            redirectUrl: '{{ redirect_url }}',
+            appUrl: '{{ app_url }}',
+            cluster: '{{ cluster }}',
+            botUsername: '{{ bot_username }}'
+        };
 
         const urlParams = new URLSearchParams(window.location.search);
-        const telegramId = urlParams.get('telegram_id');
 
         const base58 = {
             encode: (buffer) => {
@@ -160,48 +167,6 @@
             }
         }
 
-        function checkLibraries() {
-            log('🔍 Checking cryptographic libraries...');
-
-            if (typeof nacl === 'undefined') {
-                log('❌ TweetNaCl library not loaded');
-                return false;
-            }
-            log('✅ TweetNaCl library loaded');
-
-            if (typeof solanaWeb3 === 'undefined') {
-                log('❌ Solana Web3.js not loaded');
-                return false;
-            }
-            log('✅ Solana Web3.js loaded');
-
-            log('✅ Base58 encoder/decoder ready');
-
-            return true;
-        }
-
-        function initializeCrypto() {
-            try {
-                log('🔑 Generating encryption keypair...');
-
-                if (!checkLibraries()) {
-                    throw new Error('Required cryptographic libraries not available');
-                }
-
-                dappKeyPair = nacl.box.keyPair();
-                dappPublicKey = base58.encode(dappKeyPair.publicKey);
-
-                log('✅ Keypair generated successfully');
-                log('🔑 Public key: ' + dappPublicKey.substring(0, 20) + '...');
-
-                return true;
-            } catch (error) {
-                log('❌ Failed to generate keypair: ' + error.message);
-                console.error('Crypto init error:', error);
-                return false;
-            }
-        }
-
         async function handlePhantomConnect() {
             const connectBtn = document.getElementById('connectBtn');
 
@@ -209,15 +174,24 @@
                 connectBtn.disabled = true;
                 connectBtn.innerHTML = '<span class="loading-spinner"></span>Initializing...';
 
-                if (!telegramId) {
+                if (!CONFIG.telegramId) {
                     log('❌ Error: Missing telegram_id parameter');
                     alert('Error: Missing telegram_id parameter');
                     connectBtn.disabled = false;
-                    connectBtn.innerHTML = '🦄 Open in Phantom App';
+                    connectBtn.innerHTML = 'Open in Phantom App';
                     return;
                 }
 
-                log('👤 Telegram ID: ' + telegramId);
+                if (!CONFIG.dappPublicKey) {
+                    log('❌ Error: Missing dapp_public_key from server');
+                    alert('Error: Server configuration error. Please try again.');
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = 'Open in Phantom App';
+                    return;
+                }
+
+                log('👤 Telegram ID: ' + CONFIG.telegramId);
+                log('🔑 Using server dApp public key: ' + CONFIG.dappPublicKey.substring(0, 20) + '...');
 
                 if (window.solana && window.solana.isPhantom) {
                     log('✅ Already in Phantom browser, connecting directly');
@@ -225,42 +199,24 @@
                     return;
                 }
 
-                const cryptoReady = initializeCrypto();
-                if (!cryptoReady) {
-                    throw new Error('Failed to initialize cryptographic functions. Please refresh the page and try again.');
-                }
-
                 connectBtn.innerHTML = '<span class="loading-spinner"></span>Opening Phantom...';
                 log('🚀 Creating Phantom deeplink...');
 
-                const currentUrl = new URL(window.location.href);
-                const redirectUrl = currentUrl.origin + currentUrl.pathname + '?telegram_id=' + telegramId;
-
-                // ✅ ساخت URL parameters
                 const params = new URLSearchParams({
-                    dapp_encryption_public_key: dappPublicKey,
-                    cluster: "devnet",
-                    app_url: "https://ccoin-final-tsv6.onrender.com",
-                    redirect_link: redirectUrl
+                    dapp_encryption_public_key: CONFIG.dappPublicKey,
+                    cluster: CONFIG.cluster,
+                    app_url: CONFIG.appUrl,
+                    redirect_link: CONFIG.redirectUrl
                 });
 
-                // ✅ اضافه کردن icon به صورت جداگانه (بدون JSON.stringify)
-                // شما باید این آیکون را در Imgur آپلود کنید و لینک را اینجا قرار دهید
-                const iconUrl = "https://i.imgur.com/a2pwd7M.png"; // ⚠️ این را با لینک Imgur خودتان جایگزین کنید
-                https://i.imgur.com/a2pwd7M.png
-                // روش جدید: اضافه کردن icon به عنوان parameter جداگانه
+                const iconUrl = "https://i.imgur.com/a2pwd7M.png";
                 params.append('icon', iconUrl);
 
                 const phantomDeeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
 
-                log('🔗 Redirect URL: ' + redirectUrl);
+                log('🔗 Redirect URL: ' + CONFIG.redirectUrl);
                 log('🎨 Icon URL added: ' + iconUrl);
-
-                localStorage.setItem('dapp_keypair_public', dappPublicKey);
-                localStorage.setItem('dapp_keypair_secret', base58.encode(dappKeyPair.secretKey));
-                localStorage.setItem('telegram_id', telegramId);
-
-                log('💾 Data saved, opening Phantom...');
+                log('💾 Opening Phantom...');
 
                 setTimeout(() => {
                     window.location.href = phantomDeeplink;
@@ -271,7 +227,7 @@
                 console.error('Connection error:', error);
 
                 connectBtn.disabled = false;
-                connectBtn.innerHTML = '🦄 Open in Phantom App';
+                connectBtn.innerHTML = 'Open in Phantom App';
                 alert('Failed to initialize connection.\n\nError: ' + error.message);
             }
         }
@@ -285,7 +241,7 @@
 
                 log('✅ Wallet connected: ' + walletAddress);
 
-                await saveWalletToServer(telegramId, walletAddress);
+                await saveWalletToServer(CONFIG.telegramId, walletAddress);
 
             } catch (error) {
                 log('❌ Error in connectDirectly: ' + error.message);
@@ -349,9 +305,8 @@
                     return;
                 }
 
-                const botUsername = 'CTG_COIN_BOT';
                 const startParam = walletAddress ? 'wallet_connected' : 'wallet_failed';
-                const telegramUrl = `https://t.me/${botUsername}/app?startapp=${startParam}`;
+                const telegramUrl = `https://t.me/${CONFIG.botUsername}/app?startapp=${startParam}`;
 
                 log('🔄 Redirecting to Telegram: ' + telegramUrl);
                 window.location.href = telegramUrl;
@@ -363,8 +318,6 @@
         }
 
         window.addEventListener('load', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-
             if (urlParams.has('phantom_encryption_public_key')) {
                 log('🔙 Returned from Phantom with response');
                 handlePhantomCallback();
@@ -373,8 +326,6 @@
 
         async function handlePhantomCallback() {
             try {
-                const urlParams = new URLSearchParams(window.location.search);
-
                 const phantomPublicKey = urlParams.get('phantom_encryption_public_key');
                 const nonce = urlParams.get('nonce');
                 const data = urlParams.get('data');
@@ -386,41 +337,30 @@
                     throw new Error('Missing required parameters from Phantom');
                 }
 
-                const savedPublicKey = localStorage.getItem('dapp_keypair_public');
-                const savedSecretKey = localStorage.getItem('dapp_keypair_secret');
-                const savedTelegramId = localStorage.getItem('telegram_id');
-
-                if (!savedSecretKey || !savedTelegramId) {
-                    throw new Error('Session data not found. Please try connecting again.');
+                if (!CONFIG.telegramId) {
+                    throw new Error('Missing telegram_id');
                 }
 
-                log('🔓 Decrypting Phantom response...');
+                log('🔓 Forwarding encrypted response to server for decryption...');
 
-                const sharedSecret = nacl.box.before(
-                    base58.decode(phantomPublicKey),
-                    base58.decode(savedSecretKey)
-                );
+                const serverResponse = await fetch(`/wallet/browser/connect?telegram_id=${CONFIG.telegramId}&phantom_encryption_public_key=${encodeURIComponent(phantomPublicKey)}&nonce=${encodeURIComponent(nonce)}&data=${encodeURIComponent(data)}`);
 
-                const decryptedData = nacl.box.open.after(
-                    base58.decode(data),
-                    base58.decode(nonce),
-                    sharedSecret
-                );
-
-                if (!decryptedData) {
-                    throw new Error('Failed to decrypt response from Phantom');
+                if (!serverResponse.ok) {
+                    const errorText = await serverResponse.text();
+                    log('❌ Server error: ' + errorText);
+                    throw new Error('Server failed to process Phantom response');
                 }
 
-                const response = JSON.parse(new TextDecoder().decode(decryptedData));
-                log('✅ Response decrypted successfully');
-                log('💼 Wallet address: ' + response.public_key);
-
-                await saveWalletToServer(savedTelegramId, response.public_key, response.session);
+                log('✅ Server processed response successfully');
 
             } catch (error) {
-                log('❌ Error handling Phantom callback: ' + error.message);
+                log('❌ Error in handlePhantomCallback: ' + error.message);
                 console.error('Callback error:', error);
                 alert('Failed to process Phantom response: ' + error.message);
+
+                setTimeout(() => {
+                    returnToTelegram(null);
+                }, 2000);
             }
         }
     </script>
