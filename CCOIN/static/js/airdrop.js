@@ -45,7 +45,7 @@ function log(msg) {
 
 function updateCountdown() {
     try {
-        const targetDate = new Date('2026-01-20T23:59:59Z').getTime();
+        const targetDate = new Date('2026-01-24T23:59:59Z').getTime();
         const now = new Date().getTime();
         const distance = targetDate - now;
 
@@ -451,31 +451,28 @@ async function handleCommissionPayment() {
             return;
         }
 
-        // ساخت مستقیم Solana Pay URL
-        const recipient = ADMIN_WALLET;
-        const amount = COMMISSION_AMOUNT;
-        const label = encodeURIComponent('CCoin Commission');
-        const message = encodeURIComponent('Airdrop Commission Payment');
-
-        const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
-        
-        log('🔗 Opening Phantom with Solana Pay URL');
-
-        // باز کردن در مرورگر خارجی
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.openLink(solanaPayUrl);
-        } else {
-            window.location.href = solanaPayUrl;
-        }
-
         // ذخیره زمان شروع پرداخت
         localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+
+        // ساخت URL کامل برای صفحه کمیسیون
+        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
         
-        showToast('Opening Phantom for payment...', 'info');
+        log('🔗 Opening commission page in external browser: ' + commissionUrl);
+
+        // استفاده از Telegram WebApp API برای باز کردن در مرورگر خارجی
+        if (window.Telegram && window.Telegram.WebApp) {
+            // این متد صفحه را در مرورگر خارجی باز می‌کند
+            window.Telegram.WebApp.openTelegramLink(`https://t.me/iv?url=${encodeURIComponent(commissionUrl)}&rhash=${Math.random()}`);
+        } else {
+            // fallback
+            window.open(commissionUrl, '_blank');
+        }
+
+        showToast('Opening payment page...', 'info');
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
-        showToast('Failed to open payment: ' + error.message, 'error');
+        showToast('Failed to open payment page: ' + error.message, 'error');
     }
 }
 
