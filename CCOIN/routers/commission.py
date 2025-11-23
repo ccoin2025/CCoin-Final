@@ -385,24 +385,3 @@ async def verify_payment_auto(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get('/redirect_to_phantom')
-async def redirect_to_phantom(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID")
-):
-    """Direct Solana Pay link - Opens Phantom wallet"""
-    logger.info("Creating Solana Pay link", extra={"telegram_id": telegram_id})
-    
-    # ساخت Solana Pay URL
-    recipient = ADMIN_WALLET
-    amount = COMMISSION_AMOUNT
-    label = 'CCoin%20Commission'
-    message = 'Airdrop%20Commission%20Payment'
-    
-    # Solana Pay URL
-    solana_pay_url = f"solana:{recipient}?amount={amount}&label={label}&message={message}"
-    
-    logger.info("Redirecting to Solana Pay", extra={"telegram_id": telegram_id})
-    
-    return RedirectResponse(url=solana_pay_url)
