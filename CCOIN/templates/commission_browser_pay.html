@@ -199,6 +199,8 @@
         };
 
         console.log('💰 Commission page loaded', CONFIG);
+        console.log('📊 Amount in SOL:', CONFIG.commissionAmount);
+        console.log('💼 Admin wallet:', CONFIG.adminWallet);
 
         const isPhantomExtension = () => window.solana && window.solana.isPhantom;
 
@@ -275,9 +277,14 @@
                 setButtonLoading(true);
                 showStatus('🔄 Preparing payment...', 'info');
 
+                console.log('🔍 Checking Phantom availability...');
+                console.log('Is Extension:', isPhantomExtension());
+
                 if (isPhantomExtension()) {
+                    console.log('💻 Using Extension method');
                     await payWithExtension();
                 } else {
+                    console.log('📱 Using Mobile/DeepLink method');
                     await payWithSolanaPay();
                 }
             } catch (error) {
@@ -289,42 +296,92 @@
 
         async function payWithExtension() {
             try {
+                console.log('🔗 Step 1: Connecting to Phantom Extension...');
                 showStatus('🔗 Connecting to Phantom...', 'info');
                 
                 const provider = window.solana;
-                await provider.connect();
+                
+                // Connect to wallet
+                const resp = await provider.connect();
+                console.log('✅ Connected! Public Key:', resp.publicKey.toString());
+                
                 const userPublicKey = provider.publicKey;
 
                 showStatus('📝 Creating transaction...', 'info');
+                console.log('📝 Step 2: Creating transaction...');
 
                 const connection = new solanaWeb3.Connection(CONFIG.rpcUrl, 'confirmed');
-                const transaction = new solanaWeb3.Transaction();
+                
+                // Get latest blockhash first
+                console.log('🔍 Getting latest blockhash...');
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+                console.log('✅ Blockhash received:', blockhash);
 
-                transaction.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
-                transaction.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
+                const transaction = new solanaWeb3.Transaction();
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = userPublicKey;
+
+                // Add compute budget instructions
+                console.log('⚙️ Adding compute budget...');
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ 
+                        units: 200000 
+                    })
+                );
+                transaction.add(
+                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ 
+                        microLamports: 1 
+                    })
+                );
+
+                // Calculate lamports
+                const lamports = Math.floor(CONFIG.commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
+                console.log('💰 Transfer details:');
+                console.log('  - From:', userPublicKey.toString());
+                console.log('  - To:', CONFIG.adminWallet);
+                console.log('  - Amount SOL:', CONFIG.commissionAmount);
+                console.log('  - Amount Lamports:', lamports);
+
+                // Add transfer instruction
                 transaction.add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: userPublicKey,
                         toPubkey: new solanaWeb3.PublicKey(CONFIG.adminWallet),
-                        lamports: Math.floor(CONFIG.commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
+                        lamports: lamports
                     })
                 );
 
-                const { blockhash } = await connection.getLatestBlockhash('finalized');
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = userPublicKey;
+                console.log('📋 Transaction created with', transaction.instructions.length, 'instructions');
 
                 showStatus('✍️ Please approve in Phantom...', 'info');
+                console.log('✍️ Step 3: Requesting signature from Phantom...');
 
-                const signed = await provider.signAndSendTransaction(transaction);
-                const signature = signed.signature;
+                // Sign and send transaction
+                const { signature } = await provider.signAndSendTransaction(transaction);
+                
+                console.log('✅ Transaction signed!');
+                console.log('🔐 Signature:', signature);
 
                 showStatus('⏳ Confirming transaction...', 'info');
+                console.log('⏳ Step 4: Waiting for confirmation...');
 
-                await connection.confirmTransaction(signature, 'confirmed');
+                // Wait for confirmation
+                const confirmation = await connection.confirmTransaction({
+                    signature,
+                    blockhash,
+                    lastValidBlockHeight
+                }, 'confirmed');
+
+                console.log('✅ Transaction confirmed!', confirmation);
+
+                // Send to server
                 await confirmOnServer(signature);
 
             } catch (error) {
+                console.error('❌ Extension payment error:', error);
+                console.error('Error details:', error.message);
+                console.error('Error stack:', error.stack);
+                
                 if (error.message && error.message.includes('User rejected')) {
                     throw new Error('Payment cancelled by user');
                 }
@@ -334,18 +391,23 @@
 
         async function payWithSolanaPay() {
             showStatus('📱 Opening Phantom app...', 'info');
+            console.log('📱 Creating Solana Pay deep link...');
 
             const recipient = CONFIG.adminWallet;
             const amount = CONFIG.commissionAmount;
             const label = encodeURIComponent('CCoin Commission');
             const message = encodeURIComponent('Airdrop Commission Payment');
+            const memo = encodeURIComponent('CCoin-' + CONFIG.telegramId);
 
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
+            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=${memo}`;
             
             console.log('🔗 Solana Pay URL:', solanaPayUrl);
+            console.log('💰 Amount:', amount, 'SOL');
+            console.log('📧 Recipient:', recipient);
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
+            // Open Phantom
             window.location.href = solanaPayUrl;
 
             setTimeout(() => {
@@ -357,9 +419,11 @@
         async function autoCheckPayment() {
             let attempts = 0;
             const maxAttempts = 20;
+            console.log('🔄 Starting auto-check payment...');
 
             const checkInterval = setInterval(async () => {
                 attempts++;
+                console.log(`🔍 Auto-check attempt ${attempts}/${maxAttempts}`);
 
                 try {
                     const response = await fetch('/commission/verify_payment_auto', {
@@ -369,11 +433,13 @@
                     });
 
                     const data = await response.json();
+                    console.log('📥 Auto-check response:', data);
 
                     if (data.success) {
                         clearInterval(checkInterval);
                         localStorage.removeItem('ccoin_payment_initiated');
                         showStatus('✅ Payment confirmed! Redirecting...', 'success');
+                        console.log('✅ Payment verified successfully!');
                         setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                         return;
                     }
@@ -381,10 +447,11 @@
                     if (attempts >= maxAttempts) {
                         clearInterval(checkInterval);
                         showStatus('⏳ Please click "Check Payment Status" to verify manually.', 'info');
+                        console.log('⏰ Auto-check timeout reached');
                     }
 
                 } catch (error) {
-                    console.error('Auto-check error:', error);
+                    console.error('❌ Auto-check error:', error);
                 }
             }, 3000);
         }
@@ -392,6 +459,7 @@
         async function checkPayment() {
             try {
                 showStatus('🔍 Verifying payment...', 'info');
+                console.log('🔍 Manual payment verification started...');
 
                 const response = await fetch('/commission/verify_payment', {
                     method: 'POST',
@@ -400,16 +468,19 @@
                 });
 
                 const data = await response.json();
+                console.log('📥 Verification response:', data);
 
                 if (data.success) {
                     localStorage.removeItem('ccoin_payment_initiated');
                     showStatus('✅ Payment confirmed! Redirecting to bot...', 'success');
+                    console.log('✅ Payment verified!');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                 } else {
                     showStatus('❌ Payment not found. Please wait a moment and try again.', 'error');
+                    console.log('❌ Payment not found');
                 }
             } catch (error) {
-                console.error('Verification error:', error);
+                console.error('❌ Verification error:', error);
                 showStatus('❌ Verification failed. Please try again.', 'error');
             }
         }
@@ -417,6 +488,8 @@
         async function confirmOnServer(signature) {
             try {
                 showStatus('📡 Registering payment...', 'info');
+                console.log('📡 Sending confirmation to server...');
+                console.log('🔐 Signature:', signature);
 
                 const response = await fetch('/commission/confirm_payment', {
                     method: 'POST',
@@ -428,16 +501,18 @@
                 });
 
                 const data = await response.json();
+                console.log('📥 Server response:', data);
 
                 if (data.success) {
                     localStorage.removeItem('ccoin_payment_initiated');
                     showStatus('✅ Payment successful! Redirecting...', 'success');
+                    console.log('✅ Payment confirmed on server!');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                 } else {
                     throw new Error(data.error || 'Confirmation failed');
                 }
             } catch (error) {
-                console.error('Server confirmation error:', error);
+                console.error('❌ Server confirmation error:', error);
                 showStatus('⚠️ Payment sent but verification pending. Please use "Check Payment Status".', 'info');
                 setButtonLoading(false);
             }
