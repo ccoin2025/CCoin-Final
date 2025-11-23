@@ -410,3 +410,30 @@ async def verify_payment(
 ):
     """Manual payment verification (same as auto but for manual click)"""
     return await verify_payment_auto(request, db)
+
+@router.get("/phantom_redirect", response_class=RedirectResponse)
+async def phantom_redirect(
+    telegram_id: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Redirect to Phantom with Solana Pay URL"""
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Create Solana Pay URL
+    recipient = ADMIN_WALLET
+    amount = COMMISSION_AMOUNT
+    label = "CCoin Commission"
+    message = f"Airdrop Commission Payment - User {telegram_id}"
+    
+    # Build Solana Pay URL
+    solana_pay_url = (
+        f"solana:{recipient}"
+        f"?amount={amount}"
+        f"&label={label}"
+        f"&message={message}"
+    )
+    
+    # Redirect to Solana Pay URL
+    return RedirectResponse(url=solana_pay_url, status_code=302)
