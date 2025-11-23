@@ -34,6 +34,7 @@
         h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
         .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
         
+        /* Info Box for Instructions */
         .info-box {
             background: rgba(33, 150, 243, 0.2);
             border: 1px solid rgba(33, 150, 243, 0.4);
@@ -226,19 +227,24 @@
         }
 
         window.addEventListener('load', async function() {
+            // Check if payment was initiated
             if (localStorage.getItem('ccoin_payment_initiated')) {
                 const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
                 const now = Date.now();
 
+                // If less than 5 minutes passed
                 if (now - paymentTime < 300000) {
                     showPhantomButton();
                     showStatus('⏳ Checking payment...', 'info');
                     setButtonLoading(false);
+
+                    // Start auto-check
                     await autoCheckPayment();
                     return;
                 }
             }
 
+            // Check previous payment status
             try {
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
@@ -323,8 +329,6 @@
             const message = encodeURIComponent('Airdrop Commission Payment');
 
             const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
-            
-            console.log('🔗 Solana Pay URL:', solanaPayUrl);
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
@@ -336,6 +340,9 @@
             }, 3000);
         }
 
+        let checkAttempts = 0;
+        const maxCheckAttempts = 5; // محدودیت 5 بار
+
         async function autoCheckPayment() {
             let attempts = 0;
             const maxAttempts = 20;
@@ -343,7 +350,16 @@
             const checkInterval = setInterval(async () => {
                 attempts++;
 
+                if (checkAttempts >= maxCheckAttempts) {
+                    clearInterval(checkInterval);
+                    showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
+                    setButtonLoading(false);
+                    return;
+                }
+
                 try {
+                    checkAttempts++;
+                    
                     const response = await fetch('/commission/verify_payment_auto', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -352,30 +368,57 @@
 
                     const data = await response.json();
 
+                    if (data.max_attempts_reached) {
+                        clearInterval(checkInterval);
+                        showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
+                        setButtonLoading(false);
+                        return;
+                    }
+
                     if (data.success && data.payment_found) {
                         clearInterval(checkInterval);
                         localStorage.removeItem('ccoin_payment_initiated');
-                        showStatus('✅ Payment confirmed! Redirecting...', 'success');
-                        setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                        checkAttempts = 0;
+                        showStatus('✅ Payment confirmed!', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                        }, 1500);
                         return;
                     }
 
                     if (attempts >= maxAttempts) {
                         clearInterval(checkInterval);
-                        showStatus('⏳ Please click "Check Payment Status" to verify manually.', 'info');
+                        const remaining = data.attempts_remaining || 0;
+                        showStatus(`⏳ Payment not detected yet. ${remaining} attempts remaining. Please click "Check Payment Status".`, 'info');
+                        setButtonLoading(false);
+                    } else {
+                        const remaining = data.attempts_remaining || 0;
+                        showStatus(`⏳ Checking... (${attempts}/${maxAttempts}) - ${remaining} server attempts remaining`, 'info');
                     }
 
                 } catch (error) {
                     console.error('Auto-check error:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        setButtonLoading(false);
+                    }
                 }
             }, 3000);
         }
 
         async function checkPayment() {
-            try {
-                showStatus('🔍 Verifying payment...', 'info');
+            if (checkAttempts >= maxCheckAttempts) {
+                showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
+                return;
+            }
 
-                const response = await fetch('/commission/verify_payment', {
+            try {
+                showStatus('🔍 Checking payment...', 'info');
+                document.getElementById('verify-btn').disabled = true;
+
+                checkAttempts++;
+
+                const response = await fetch('/commission/verify_payment_auto', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ telegram_id: CONFIG.telegramId })
@@ -383,24 +426,37 @@
 
                 const data = await response.json();
 
+                if (data.max_attempts_reached) {
+                    showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
+                    return;
+                }
+
                 if (data.success && data.payment_found) {
                     localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment confirmed! Redirecting to bot...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    checkAttempts = 0;
+                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
-                    showStatus('❌ Payment not found. Please wait a moment and try again.', 'error');
+                    const remaining = data.attempts_remaining || 0;
+                    showStatus(`❌ Payment not detected. ${remaining} attempts remaining. Please wait 30 seconds and try again.`, 'info');
+                    
+                    setTimeout(() => {
+                        document.getElementById('verify-btn').disabled = false;
+                    }, 30000); // 30 seconds wait
                 }
+
             } catch (error) {
-                console.error('Verification error:', error);
-                showStatus('❌ Verification failed. Please try again.', 'error');
+                console.error('Check error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                document.getElementById('verify-btn').disabled = false;
             }
         }
 
         async function confirmOnServer(signature) {
             try {
-                showStatus('📡 Registering payment...', 'info');
-
-                const response = await fetch('/commission/confirm_commission', {
+                const response = await fetch('/commission/verify_payment_auto', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -411,16 +467,19 @@
 
                 const data = await response.json();
 
-                if (data.success) {
+                if (data.success && data.payment_found) {
                     localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment successful! Redirecting...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    showStatus('✅ Payment confirmed!', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
-                    throw new Error(data.error || 'Confirmation failed');
+                    showStatus('⏳ Payment pending. Click "Check Payment Status" after a moment.', 'info');
+                    setButtonLoading(false);
                 }
             } catch (error) {
                 console.error('Server confirmation error:', error);
-                showStatus('⚠️ Payment sent but verification pending. Please use "Check Payment Status".', 'info');
+                showStatus('⚠️ Please click "Check Payment Status" to verify.', 'info');
                 setButtonLoading(false);
             }
         }
