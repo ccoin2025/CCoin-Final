@@ -267,7 +267,7 @@
                 if (isPhantomExtension()) {
                     await payWithExtension();
                 } else {
-                    await payWithPhantomLink();
+                    await payWithRedirect();
                 }
             } catch (error) {
                 console.error('Payment error:', error);
@@ -319,30 +319,19 @@
             }
         }
 
-        async function payWithPhantomLink() {
-            const recipient = CONFIG.adminWallet;
-            const amount = CONFIG.commissionAmount;
-            
-            // Create Phantom Universal Link (HTTPS)
-            const phantomUrl = `https://phantom.app/ul/v1/signAndSendTransaction?` + 
-                `recipient=${encodeURIComponent(recipient)}&` +
-                `amount=${encodeURIComponent(amount)}&` +
-                `network=mainnet-beta&` +
-                `label=${encodeURIComponent('CCoin Commission')}&` +
-                `message=${encodeURIComponent('Airdrop Commission Payment')}&` +
-                `redirect=${encodeURIComponent(window.location.href)}`;
-            
+        async function payWithRedirect() {
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
             showStatus('🚀 Opening Phantom wallet...', 'info');
 
-            // Use Telegram WebApp API
+            // Use backend redirect URL (HTTPS)
+            const redirectUrl = `/commission/phantom_redirect?telegram_id=${CONFIG.telegramId}`;
+            const fullUrl = window.location.origin + redirectUrl;
+
             if (tg && tg.openLink) {
-                // این URL معتبر HTTPS است
-                tg.openLink(phantomUrl);
+                tg.openLink(fullUrl);
             } else {
-                // Fallback
-                window.open(phantomUrl, '_blank');
+                window.location.href = fullUrl;
             }
 
             setTimeout(() => {
