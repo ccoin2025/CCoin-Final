@@ -346,32 +346,28 @@
         async function payWithSolanaPay() {
             showStatus('📱 Opening Phantom app...', 'info');
 
-            const recipient = CONFIG.adminWallet;
-            const amount = CONFIG.commissionAmount;
-            const label = encodeURIComponent('CCoin Commission');
-            const message = encodeURIComponent('Airdrop Commission Payment');
-
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
-
-            console.log('🔗 Solana Pay URL:', solanaPayUrl);
+            // ✅ لینک به صفحه redirect
+            const redirectUrl = `${window.location.origin}/commission/redirect_to_phantom?telegram_id=${CONFIG.telegramId}`;
+  
+            console.log('🔗 Redirect URL:', redirectUrl);
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
-            // باز کردن در مرورگر خارجی
+            // ✅ باز کردن صفحه redirect در مرورگر خارجی
             if (window.Telegram && window.Telegram.WebApp) {
                 console.log('📱 Opening via Telegram WebApp.openLink');
-                window.Telegram.WebApp.openLink(solanaPayUrl);
-            } else {
-                console.log('📱 Opening via window.location.href');
-                window.location.href = solanaPayUrl;
-            }
-
-            setTimeout(() => {
-                showStatus('📱 After completing payment in Phantom, return here and click "Check Payment Status".', 'info');
+                window.Telegram.WebApp.openLink(redirectUrl);
+ 
+                showStatus('✅ Payment page opened in external browser. Return here after payment to check status.', 'success');
                 setButtonLoading(false);
-            }, 3000);
-        }
+          } else {
+              console.log('📱 Opening via window.open');
+              window.open(redirectUrl, '_blank');
 
+              showStatus('📱 After completing payment in Phantom, return here and click "Check Payment Status".', 'info');
+              setButtonLoading(false);
+          }
+        }
         let checkAttempts = 0;
         const maxCheckAttempts = 5;
 
