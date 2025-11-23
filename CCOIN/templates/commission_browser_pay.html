@@ -199,7 +199,6 @@
             rpcUrl: '{{ solana_rpc }}'
         };
 
-        // Initialize Telegram WebApp
         let tg = window.Telegram?.WebApp;
         if (tg) {
             tg.ready();
@@ -268,7 +267,7 @@
                 if (isPhantomExtension()) {
                     await payWithExtension();
                 } else {
-                    await payWithExternalLink();
+                    await payWithPhantomLink();
                 }
             } catch (error) {
                 console.error('Payment error:', error);
@@ -320,23 +319,30 @@
             }
         }
 
-        async function payWithExternalLink() {
+        async function payWithPhantomLink() {
             const recipient = CONFIG.adminWallet;
             const amount = CONFIG.commissionAmount;
-            const label = encodeURIComponent('CCoin Commission');
-            const message = encodeURIComponent('Airdrop Commission Payment');
-
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
+            
+            // Create Phantom Universal Link (HTTPS)
+            const phantomUrl = `https://phantom.app/ul/v1/signAndSendTransaction?` + 
+                `recipient=${encodeURIComponent(recipient)}&` +
+                `amount=${encodeURIComponent(amount)}&` +
+                `network=mainnet-beta&` +
+                `label=${encodeURIComponent('CCoin Commission')}&` +
+                `message=${encodeURIComponent('Airdrop Commission Payment')}&` +
+                `redirect=${encodeURIComponent(window.location.href)}`;
             
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
-            // Use Telegram WebApp API to open link externally
+            showStatus('🚀 Opening Phantom wallet...', 'info');
+
+            // Use Telegram WebApp API
             if (tg && tg.openLink) {
-                showStatus('🚀 Opening Phantom in external browser...', 'info');
-                tg.openLink(solanaPayUrl);
+                // این URL معتبر HTTPS است
+                tg.openLink(phantomUrl);
             } else {
-                // Fallback for non-Telegram environment
-                window.open(solanaPayUrl, '_blank');
+                // Fallback
+                window.open(phantomUrl, '_blank');
             }
 
             setTimeout(() => {
