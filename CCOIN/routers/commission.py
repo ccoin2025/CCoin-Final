@@ -406,4 +406,3 @@ async def redirect_to_phantom(
     logger.info("Redirecting to Solana Pay", extra={"telegram_id": telegram_id})
     
     return RedirectResponse(url=solana_pay_url)
-
