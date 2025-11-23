@@ -407,16 +407,8 @@ async def redirect_to_phantom(
     request: Request,
     telegram_id: str = Query(..., description="Telegram user ID")
 ):
-    """Redirect to Phantom Wallet for payment"""
-    logger.info("Redirecting to Phantom", extra={"telegram_id": telegram_id})
+    """Redirect to payment page - این endpoint دیگر لازم نیست"""
+    logger.info("Redirecting to payment page", extra={"telegram_id": telegram_id})
     
-    from urllib.parse import quote
-    
-    # ساخت Solana Pay URL
-    solana_pay_url = f"solana:{ADMIN_WALLET}?amount={COMMISSION_AMOUNT}&label=CCoin%20Commission&memo={telegram_id}"
-    
-    # Redirect به Phantom
-    phantom_url = f"https://phantom.app/ul/browse/{quote(solana_pay_url)}"
-    
-    return RedirectResponse(url=phantom_url)
-
+    # به همان صفحه commission_browser_pay برگرداندن
+    return RedirectResponse(url=f"/commission/browser/pay?telegram_id={telegram_id}")
