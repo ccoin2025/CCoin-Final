@@ -136,6 +136,16 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        .debug-info {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 11px;
+            text-align: left;
+            font-family: monospace;
+        }
+
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
     </style>
@@ -149,6 +159,11 @@
         <div class="commission-info">
             <div class="amount">{{ commission_amount }} SOL</div>
             <div class="fee-info">Network fees may apply</div>
+        </div>
+
+        <!-- Debug Info -->
+        <div class="debug-info" id="debug-info">
+            Loading config...
         </div>
 
         <div id="status" class="status"></div>
@@ -175,11 +190,11 @@
 
         <!-- بخش Phantom -->
         <div id="phantomSection">
-            <button class="btn" id="pay-btn" onclick="handlePayment()">
+            <button class="btn" id="pay-btn">
                 <span id="btn-text">💳 Pay with Phantom</span>
             </button>
 
-            <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
+            <button class="btn verify-btn" id="verify-btn">
                 ✅ Check Payment Status
             </button>
         </div>
@@ -190,19 +205,38 @@
     <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
 
     <script>
+        console.log('🚀 Script starting...');
+        
+        // Check if Solana library loaded
+        console.log('📦 Solana Web3:', typeof solanaWeb3);
+        
         const CONFIG = {
             telegramId: '{{ telegram_id }}',
             commissionAmount: parseFloat('{{ commission_amount }}'),
             adminWallet: '{{ admin_wallet }}',
             botUsername: '{{ bot_username }}',
-            rpcUrl: 'https://api.mainnet-beta.solana.com'
+            rpcUrl: '{{ solana_rpc }}'
         };
 
-        console.log('💰 Commission page loaded', CONFIG);
-        console.log('📊 Amount in SOL:', CONFIG.commissionAmount);
-        console.log('💼 Admin wallet:', CONFIG.adminWallet);
+        console.log('⚙️ CONFIG loaded:', CONFIG);
 
-        const isPhantomExtension = () => window.solana && window.solana.isPhantom;
+        // Show debug info
+        const debugInfo = document.getElementById('debug-info');
+        debugInfo.innerHTML = `
+            <strong>Debug Info:</strong><br>
+            Telegram ID: ${CONFIG.telegramId}<br>
+            Amount: ${CONFIG.commissionAmount} SOL<br>
+            Admin: ${CONFIG.adminWallet.substring(0, 20)}...<br>
+            RPC: ${CONFIG.rpcUrl ? 'OK' : 'MISSING!'}<br>
+            Solana Lib: ${typeof solanaWeb3 !== 'undefined' ? 'Loaded ✅' : 'Failed ❌'}<br>
+            Phantom: ${window.solana ? 'Detected ✅' : 'Not Found'}
+        `;
+
+        const isPhantomExtension = () => {
+            const hasPhantom = window.solana && window.solana.isPhantom;
+            console.log('🔍 Phantom check:', hasPhantom);
+            return hasPhantom;
+        };
 
         function showPhantomButton() {
             console.log('🔄 Showing Phantom button section');
@@ -238,6 +272,16 @@
             showPhantomButton();
         });
 
+        document.getElementById('pay-btn').addEventListener('click', async function() {
+            console.log('💳 PAY BUTTON CLICKED!');
+            await handlePayment();
+        });
+
+        document.getElementById('verify-btn').addEventListener('click', async function() {
+            console.log('🔍 VERIFY BUTTON CLICKED!');
+            await checkPayment();
+        });
+
         window.addEventListener('load', async function() {
             console.log('🚀 Page loaded, checking payment status...');
             
@@ -245,6 +289,9 @@
             if (localStorage.getItem('ccoin_payment_initiated')) {
                 const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
                 const now = Date.now();
+                
+                console.log('⏰ Payment initiated at:', new Date(paymentTime));
+                console.log('⏰ Time elapsed:', Math.floor((now - paymentTime) / 1000), 'seconds');
                 
                 // If less than 5 minutes passed
                 if (now - paymentTime < 300000) {
@@ -263,6 +310,8 @@
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
 
+                console.log('📊 Status check result:', data);
+
                 if (data.commission_paid) {
                     showStatus('✅ Payment already completed!', 'success');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
@@ -274,13 +323,15 @@
 
         async function handlePayment() {
             try {
+                console.log('💰 handlePayment() started');
                 setButtonLoading(true);
                 showStatus('🔄 Preparing payment...', 'info');
 
                 console.log('🔍 Checking Phantom availability...');
-                console.log('Is Extension:', isPhantomExtension());
+                const hasPhantomExt = isPhantomExtension();
+                console.log('Is Extension:', hasPhantomExt);
 
-                if (isPhantomExtension()) {
+                if (hasPhantomExt) {
                     console.log('💻 Using Extension method');
                     await payWithExtension();
                 } else {
@@ -289,6 +340,7 @@
                 }
             } catch (error) {
                 console.error('❌ Payment error:', error);
+                console.error('Error stack:', error.stack);
                 showStatus(`❌ Error: ${error.message}`, 'error');
                 setButtonLoading(false);
             }
@@ -299,9 +351,16 @@
                 console.log('🔗 Step 1: Connecting to Phantom Extension...');
                 showStatus('🔗 Connecting to Phantom...', 'info');
                 
+                if (typeof solanaWeb3 === 'undefined') {
+                    throw new Error('Solana library not loaded');
+                }
+
                 const provider = window.solana;
+                if (!provider) {
+                    throw new Error('Phantom wallet not found');
+                }
                 
-                // Connect to wallet
+                console.log('📡 Calling provider.connect()...');
                 const resp = await provider.connect();
                 console.log('✅ Connected! Public Key:', resp.publicKey.toString());
                 
@@ -320,19 +379,6 @@
                 const transaction = new solanaWeb3.Transaction();
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
-
-                // Add compute budget instructions
-                console.log('⚙️ Adding compute budget...');
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ 
-                        units: 200000 
-                    })
-                );
-                transaction.add(
-                    solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ 
-                        microLamports: 1 
-                    })
-                );
 
                 // Calculate lamports
                 const lamports = Math.floor(CONFIG.commissionAmount * solanaWeb3.LAMPORTS_PER_SOL);
@@ -379,7 +425,7 @@
 
             } catch (error) {
                 console.error('❌ Extension payment error:', error);
-                console.error('Error details:', error.message);
+                console.error('Error message:', error.message);
                 console.error('Error stack:', error.stack);
                 
                 if (error.message && error.message.includes('User rejected')) {
@@ -390,16 +436,15 @@
         }
 
         async function payWithSolanaPay() {
+            console.log('📱 payWithSolanaPay() started');
             showStatus('📱 Opening Phantom app...', 'info');
-            console.log('📱 Creating Solana Pay deep link...');
 
             const recipient = CONFIG.adminWallet;
             const amount = CONFIG.commissionAmount;
             const label = encodeURIComponent('CCoin Commission');
             const message = encodeURIComponent('Airdrop Commission Payment');
-            const memo = encodeURIComponent('CCoin-' + CONFIG.telegramId);
 
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=${memo}`;
+            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
             
             console.log('🔗 Solana Pay URL:', solanaPayUrl);
             console.log('💰 Amount:', amount, 'SOL');
@@ -407,7 +452,7 @@
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
-            // Open Phantom
+            console.log('🚀 Redirecting to Phantom...');
             window.location.href = solanaPayUrl;
 
             setTimeout(() => {
@@ -435,7 +480,7 @@
                     const data = await response.json();
                     console.log('📥 Auto-check response:', data);
 
-                    if (data.success) {
+                    if (data.success && data.payment_found) {
                         clearInterval(checkInterval);
                         localStorage.removeItem('ccoin_payment_initiated');
                         showStatus('✅ Payment confirmed! Redirecting...', 'success');
@@ -458,8 +503,8 @@
 
         async function checkPayment() {
             try {
+                console.log('🔍 checkPayment() started');
                 showStatus('🔍 Verifying payment...', 'info');
-                console.log('🔍 Manual payment verification started...');
 
                 const response = await fetch('/commission/verify_payment', {
                     method: 'POST',
@@ -470,7 +515,7 @@
                 const data = await response.json();
                 console.log('📥 Verification response:', data);
 
-                if (data.success) {
+                if (data.success && data.payment_found) {
                     localStorage.removeItem('ccoin_payment_initiated');
                     showStatus('✅ Payment confirmed! Redirecting to bot...', 'success');
                     console.log('✅ Payment verified!');
@@ -487,8 +532,8 @@
 
         async function confirmOnServer(signature) {
             try {
+                console.log('📡 confirmOnServer() started');
                 showStatus('📡 Registering payment...', 'info');
-                console.log('📡 Sending confirmation to server...');
                 console.log('🔐 Signature:', signature);
 
                 const response = await fetch('/commission/confirm_payment', {
@@ -517,6 +562,8 @@
                 setButtonLoading(false);
             }
         }
+
+        console.log('✅ Script loaded successfully');
     </script>
 </body>
 </html>
