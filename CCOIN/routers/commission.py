@@ -401,14 +401,3 @@ async def verify_payment_auto(
         logger.error("Payment verification error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
-
-@router.get('/redirect_to_phantom')
-async def redirect_to_phantom(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID")
-):
-    """Redirect to payment page - این endpoint دیگر لازم نیست"""
-    logger.info("Redirecting to payment page", extra={"telegram_id": telegram_id})
-    
-    # به همان صفحه commission_browser_pay برگرداندن
-    return RedirectResponse(url=f"/commission/browser/pay?telegram_id={telegram_id}")
