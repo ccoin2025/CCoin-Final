@@ -403,107 +403,20 @@ async def verify_payment_auto(
 
 
 @router.get('/redirect_to_phantom')
-async def redirect_to_phantom(request: Request, telegram_id: str = Query(...)):
-    """صفحه redirect به Phantom Wallet"""
-    telegram_id = request.args.get('telegram_id')
+async def redirect_to_phantom(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID")
+):
+    """Redirect to Phantom Wallet for payment"""
+    logger.info("Redirecting to Phantom", extra={"telegram_id": telegram_id})
     
-    if not telegram_id:
-        return "Telegram ID required", 400
+    from urllib.parse import quote
     
     # ساخت Solana Pay URL
-    from urllib.parse import quote
-    recipient = Config.ADMIN_WALLET
-    amount = Config.COMMISSION_AMOUNT
-    label = quote('CCoin Commission')
-    message = quote('Airdrop Commission Payment')
+    solana_pay_url = f"solana:{ADMIN_WALLET}?amount={COMMISSION_AMOUNT}&label=CCoin%20Commission&memo={telegram_id}"
     
-    solana_pay_url = f"solana:{recipient}?amount={amount}&label={label}&message={message}"
+    # Redirect به Phantom
+    phantom_url = f"https://phantom.app/ul/browse/{quote(solana_pay_url)}"
     
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Opening Phantom...</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-                text-align: center;
-                padding: 20px;
-            }}
-            .container {{
-                background: rgba(255, 255, 255, 0.15);
-                backdrop-filter: blur(20px);
-                border-radius: 24px;
-                padding: 40px 30px;
-                max-width: 500px;
-            }}
-            .spinner {{
-                border: 4px solid rgba(255, 255, 255, 0.3);
-                border-top: 4px solid #fff;
-                border-radius: 50%;
-                width: 50px;
-                height: 50px;
-                animation: spin 1s linear infinite;
-                margin: 20px auto;
-            }}
-            @keyframes spin {{
-                0% {{ transform: rotate(0deg); }}
-                100% {{ transform: rotate(360deg); }}
-            }}
-            h1 {{ font-size: 24px; margin-bottom: 20px; }}
-            p {{ font-size: 16px; opacity: 0.9; line-height: 1.6; }}
-            .btn {{
-                display: inline-block;
-                background: linear-gradient(135deg, #ffd700, #ffed4e);
-                color: #000;
-                padding: 15px 40px;
-                border-radius: 50px;
-                text-decoration: none;
-                font-weight: bold;
-                margin-top: 20px;
-                cursor: pointer;
-                border: none;
-                font-size: 16px;
-            }}
-            .btn:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div style="font-size: 64px; margin-bottom: 20px;">💰</div>
-            <div class="spinner"></div>
-            <h1>Opening Phantom Wallet...</h1>
-            <p>Please wait while we redirect you to Phantom.</p>
-            <p style="font-size: 14px; margin-top: 20px;">If the app doesn't open automatically, click below:</p>
-            <button class="btn" onclick="openPhantom()">Open Phantom</button>
-        </div>
-        
-        <script>
-            const solanaPayUrl = "{solana_pay_url}";
-            
-            function openPhantom() {{
-                console.log('Opening Phantom:', solanaPayUrl);
-                localStorage.setItem('ccoin_payment_initiated', Date.now());
-                window.location.href = solanaPayUrl;
-            }}
-            
-            // Auto-open after 1 second
-            setTimeout(openPhantom, 1000);
-        </script>
-    </body>
-    </html>
-    """
-    
-    return html
+    return RedirectResponse(url=phantom_url)
+
