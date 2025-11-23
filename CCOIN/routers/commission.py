@@ -402,8 +402,8 @@ async def verify_payment_auto(
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
-@commission_router.route('/redirect_to_phantom', methods=['GET'])
-def redirect_to_phantom():
+@router.get('/redirect_to_phantom')
+async def redirect_to_phantom(request: Request, telegram_id: str = Query(...)):
     """صفحه redirect به Phantom Wallet"""
     telegram_id = request.args.get('telegram_id')
     
