@@ -13,6 +13,8 @@ from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.pubkey import Pubkey
+from nacl.public import PrivateKey
+import base64
 import time
 import asyncio
 import structlog
@@ -437,3 +439,20 @@ async def phantom_redirect(
     
     # Redirect to Solana Pay URL
     return RedirectResponse(url=solana_pay_url, status_code=302)
+
+
+EPHEMERAL_KEYS = {}  # In production use Redis or DB
+
+@app.post("/commission/create_ephemeral")
+async def create_ephemeral(data: dict):
+    telegram_id = data.get("telegram_id")
+    private_key = PrivateKey.generate()
+    public_key = private_key.public_key
+
+    # Store temporarily (you can add expiration)
+    session_id = f"{telegram_id}_{int(time.time())}"
+    EPHEMERAL_KEYS[session_id] = private_key
+
+    return {
+        "dapp_encryption_public_key": base64.b64encode(bytes(public_key)).decode()
+    }
