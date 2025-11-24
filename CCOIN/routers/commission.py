@@ -310,6 +310,14 @@ async def verify_payment_auto(
                 limit=10
             )
 
+            # ✅ لاگ تعداد تراکنش‌ها
+            tx_count = len(signatures_response.value) if signatures_response.value else 0
+            logger.info(f"Found {tx_count} transactions for user", extra={
+                "telegram_id": telegram_id,
+                "wallet": user.wallet_address,
+                "transaction_count": tx_count
+            })
+
             if not signatures_response.value:
                 await client.close()
                 return {
