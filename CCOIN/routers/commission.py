@@ -443,16 +443,27 @@ async def phantom_redirect(
 
 EPHEMERAL_KEYS = {}  # In production use Redis or DB
 
-@router.post("/commission/create_ephemeral")
-async def create_ephemeral(data: dict):
-    telegram_id = data.get("telegram_id")
-    private_key = PrivateKey.generate()
-    public_key = private_key.public_key
-
-    # Store temporarily (you can add expiration)
-    session_id = f"{telegram_id}_{int(time.time())}"
-    EPHEMERAL_KEYS[session_id] = private_key
-
-    return {
-        "dapp_encryption_public_key": base64.b64encode(bytes(public_key)).decode()
-    }
+@router.post("/create_ephemeral", response_class=JSONResponse)
+async def create_ephemeral(request: Request):
+    """Generate ephemeral key for Phantom connection"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        # Generate ephemeral keypair
+        private_key = PrivateKey.generate()
+        public_key = private_key.public_key
+        
+        # Convert to base64
+        public_key_base64 = base64.b64encode(bytes(public_key)).decode('utf-8')
+        
+        # Store private key in cache (5 minutes)
+        cache_key = f'ephemeral_key_{telegram_id}'
+        set_in_cache(cache_key, private_key, ttl=300)
+        
+        return {
+            "dapp_encryption_public_key": public_key_base64
+        }
+    except Exception as e:
+        logger.error("Ephemeral key generation failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Failed to create payment link")
