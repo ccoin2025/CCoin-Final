@@ -641,3 +641,36 @@ async def verify_payment_auto(
     except Exception as e:
         logger.error("Auto-verification error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/phantom_redirect", response_class=HTMLResponse)
+async def phantom_redirect(
+    request: Request,
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """Redirect page to open Phantom with Solana Pay"""
+    
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Create Solana Pay URL
+    recipient = ADMIN_WALLET
+    amount = COMMISSION_AMOUNT
+    label = "CCoin Commission"
+    message = f"Commission Payment - User {telegram_id}"
+    memo = f"ccoin_{telegram_id}_{int(time.time())}"
+
+    solana_pay_url = f"solana:{recipient}?amount={amount}&label={label}&message={message}&memo={memo}"
+
+    logger.info("Phantom redirect page", extra={
+        "telegram_id": telegram_id,
+        "solana_pay_url": solana_pay_url[:50]
+    })
+
+    return templates.TemplateResponse("phantom_redirect.html", {
+        "request": request,
+        "solana_pay_url": solana_pay_url,
+        "telegram_id": telegram_id
+    })
