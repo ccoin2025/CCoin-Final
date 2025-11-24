@@ -2,64 +2,341 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
-    <title>Commission Callback</title>
+    <title>Payment Callback - CCoin</title>
     <style>
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; }
-        .container { max-width: 400px; margin: 0 auto; background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; }
-        .btn { background: linear-gradient(135deg, #AB9FF2, #7B68EE); color: white; border: none; padding: 20px 30px; border-radius: 25px; font-size: 18px; cursor: pointer; width: 100%; margin: 15px 0; text-decoration: none; display: inline-block; box-sizing: border-box; font-weight: 600; transition: all 0.3s ease; }
-        .btn:hover { background: linear-gradient(135deg, #9A8CF1, #6A5ACD); transform: translateY(-2px); }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .icon.success { color: #4caf50; }
+        .icon.error { color: #f44336; }
+        .icon.pending { color: #ffd700; }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        .message {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            opacity: 0.95;
+        }
+        .signature-box {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .signature-box a {
+            color: #ffd700;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+        .signature-box a:hover {
+            color: #ffed4e;
+            text-decoration: underline;
+        }
+        .btn {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #000;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            margin: 10px 0;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+        }
+        .btn:active {
+            transform: translateY(-1px);
+        }
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: none;
+        }
+        .btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .timer {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status-details {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.4);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .status-details h3 {
+            color: #ffd700;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .status-details p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffd700, #ffed4e);
+            animation: progress 5s ease-in-out;
+        }
+        @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         {% if success %}
-            <h1>💰 Payment Successful!</h1>
-            <p>Your commission payment has been confirmed. You're now eligible for the airdrop!</p>
+            <div class="icon success">✅</div>
+            <h1>Payment Successful!</h1>
+            <p class="message">{{ message or "Your commission payment has been confirmed. You're now eligible for the airdrop!" }}</p>
+            
             {% if signature %}
-            <p>Transaction Signature: <a href="https://solscan.io/tx/{{ signature }}" target="_blank" style="color: #AB9FF2;">{{ signature }}</a></p>
+            <div class="signature-box">
+                <strong>Transaction Signature:</strong><br>
+                <a href="https://solscan.io/tx/{{ signature }}?cluster=mainnet" target="_blank" rel="noopener noreferrer">
+                    {{ signature[:8] }}...{{ signature[-8:] }}
+                </a>
+                <br><small>Click to view on Solscan</small>
+            </div>
             {% endif %}
+
+            <div class="progress-bar">
+                <div class="progress-bar-fill"></div>
+            </div>
+
+            <button class="btn" onclick="returnToBot()">
+                🎉 Return to Telegram Bot
+            </button>
+
+            <p class="timer" id="countdown">Redirecting in <span id="counter">5</span> seconds...</p>
+
+        {% elif error %}
+            <div class="icon error">❌</div>
+            <h1>Payment Failed</h1>
+            <p class="message">{{ error }}</p>
+
+            <div class="status-details">
+                <h3>What happened?</h3>
+                <p>The payment could not be completed. This might be due to:</p>
+                <ul style="margin-left: 20px; text-align: left;">
+                    <li>Transaction was cancelled in Phantom</li>
+                    <li>Insufficient balance for fees</li>
+                    <li>Network congestion</li>
+                    <li>Transaction already used</li>
+                </ul>
+            </div>
+
+            <button class="btn" onclick="retryPayment()">
+                🔄 Try Again
+            </button>
+
+            <button class="btn secondary" onclick="returnToBot()">
+                ← Return to Bot
+            </button>
+
         {% else %}
-            <h1>❌ Payment Failed</h1>
-            <p>{{ error or "Commission payment was not completed. Please try again." }}</p>
+            <div class="icon pending">⏳</div>
+            <h1>Processing Payment...</h1>
+            <p class="message">{{ message or "Your payment is being verified on the blockchain. Please wait..." }}</p>
+
+            <div class="spinner"></div>
+
+            <div class="status-details">
+                <h3>Verification in Progress</h3>
+                <p>We're confirming your transaction on the Solana blockchain. This typically takes a few seconds.</p>
+                <p><strong>Do not close this page.</strong></p>
+            </div>
+
+            <button class="btn secondary" onclick="checkStatus()">
+                🔍 Check Status Now
+            </button>
+
+            <p class="timer">Auto-checking every 5 seconds...</p>
         {% endif %}
-        
-        <button class="btn" onclick="returnToAirdrop()">
-            Return to Airdrop
-        </button>
-        
-        <p>Returning to airdrop...</p>
     </div>
 
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <script>
-        async function confirmOnChain() {
-            var params = new URLSearchParams(window.location.search);
-            var signature = params.get('signature');
-            var telegramId = params.get('telegram_id');
+        const CONFIG = {
+            telegramId: '{{ telegram_id }}',
+            botUsername: '{{ bot_username }}',
+            signature: '{{ signature }}' || null,
+            success: {{ 'true' if success else 'false' }},
+            error: {{ 'true' if error else 'false' }}
+        };
+
+        let tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Auto-redirect timer for success
+        {% if success %}
+        let countdown = 5;
+        const counterElement = document.getElementById('counter');
+        
+        const timer = setInterval(() => {
+            countdown--;
+            if (counterElement) {
+                counterElement.textContent = countdown;
+            }
             
-            if (signature) {
-                const res = await fetch('/confirm_commission', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({signature: signature, telegram_id: telegramId})
-                });
-                const data = await res.json();
-                if (data.success) {
-                    console.log('Confirmed on-chain');
+            if (countdown <= 0) {
+                clearInterval(timer);
+                returnToBot();
+            }
+        }, 1000);
+        {% endif %}
+
+        // Auto-verify for pending state
+        {% if not success and not error %}
+        let verifyAttempts = 0;
+        const maxAttempts = 20;
+
+        const verifyInterval = setInterval(async () => {
+            verifyAttempts++;
+            
+            if (verifyAttempts > maxAttempts) {
+                clearInterval(verifyInterval);
+                window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`;
+                return;
+            }
+
+            await checkStatus();
+        }, 5000);
+        {% endif %}
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
+                const data = await response.json();
+
+                if (data.commission_paid) {
+                    // Payment confirmed!
+                    window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
                 }
+            } catch (error) {
+                console.error('Status check error:', error);
             }
         }
-        
-        function returnToAirdrop() {
-            var params = new URLSearchParams(window.location.search);
-            var telegramId = params.get('telegram_id');
-            window.location.href = `/airdrop?telegram_id=${telegramId}`;
+
+        function returnToBot() {
+            const botUrl = `https://t.me/${CONFIG.botUsername}`;
+            
+            if (tg && tg.close) {
+                // Try to close the WebApp
+                tg.close();
+            } else if (tg && tg.openTelegramLink) {
+                // Open bot in Telegram
+                tg.openTelegramLink(botUrl);
+            } else {
+                // Fallback
+                window.location.href = botUrl;
+            }
         }
-        
-        setTimeout(returnToAirdrop, 5000);
-        confirmOnChain(); // Poll for confirmation
+
+        function retryPayment() {
+            window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`;
+        }
+
+        // Parse URL params for additional data
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorCode = urlParams.get('errorCode');
+        const errorMessage = urlParams.get('errorMessage');
+
+        if (errorCode && !CONFIG.error) {
+            // Phantom returned an error
+            console.error('Phantom error:', errorCode, errorMessage);
+        }
+
+        // Log callback event
+        console.log('Callback page loaded', {
+            success: CONFIG.success,
+            error: CONFIG.error,
+            telegram_id: CONFIG.telegramId,
+            signature: CONFIG.signature
+        });
     </script>
 </body>
 </html>
