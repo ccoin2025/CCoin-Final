@@ -331,7 +331,14 @@
 
             localStorage.setItem('ccoin_payment_initiated', Date.now());
 
-            window.location.href = solanaPayUrl;
+            // ✅ استفاده از Telegram WebApp API
+            if (tg && tg.openLink) {
+                console.log('📱 Opening with Telegram API');
+                tg.openLink(solanaPayUrl);
+            } else {
+                console.log('🌐 Fallback to window.location.href');
+                window.location.href = solanaPayUrl;
+            }
 
             setTimeout(() => {
                 showStatus('📱 After completing payment in Phantom, return here and click "Check Payment Status".', 'info');
