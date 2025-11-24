@@ -46,7 +46,6 @@
             color: #ffd700;
             margin-bottom: 15px;
             text-align: center;
-            font-size: 18px;
         }
         .info-box p {
             line-height: 1.6;
@@ -59,63 +58,6 @@
         .info-box li {
             margin: 8px 0;
             line-height: 1.5;
-        }
-
-        .payment-box {
-            background: rgba(255, 215, 0, 0.15);
-            border: 2px solid rgba(255, 215, 0, 0.4);
-            border-radius: 16px;
-            padding: 25px;
-            margin: 20px 0;
-        }
-        .payment-box h3 {
-            color: #ffd700;
-            margin-bottom: 20px;
-            font-size: 20px;
-        }
-        .payment-row {
-            margin: 15px 0;
-            text-align: left;
-        }
-        .payment-label {
-            font-size: 13px;
-            opacity: 0.8;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        .payment-value {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 14px;
-            border-radius: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            word-break: break-all;
-            position: relative;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .payment-value.large {
-            font-size: 28px;
-            font-weight: bold;
-            color: #ffd700;
-            justify-content: center;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        .copy-btn {
-            background: rgba(255, 215, 0, 0.3);
-            border: 1px solid rgba(255, 215, 0, 0.5);
-            color: #fff;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            cursor: pointer;
-            margin-left: 10px;
-            white-space: nowrap;
-            font-weight: bold;
-        }
-        .copy-btn:active {
-            background: rgba(255, 215, 0, 0.5);
         }
         
         .commission-info {
@@ -164,6 +106,8 @@
         .verify-btn {
             background: rgba(76, 175, 80, 0.3);
             color: white;
+            margin-top: 5px;
+            display: none;
         }
         .verify-btn:hover { background: rgba(76, 175, 80, 0.5); }
         .status {
@@ -191,30 +135,12 @@
             vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(76, 175, 80, 0.95);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            display: none;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-            font-weight: bold;
-        }
         
         #instructionsSection { display: block; }
-        #paymentSection { display: none; }
+        #phantomSection { display: none; }
     </style>
 </head>
 <body>
-    <div class="toast" id="toast">✅ Copied!</div>
-    
     <div class="container">
         <div class="logo">💰</div>
         <h1>Commission Payment</h1>
@@ -222,7 +148,7 @@
 
         <div class="commission-info">
             <div class="amount">{{ commission_amount }} SOL</div>
-            <div class="fee-info">⚠️ Send exact amount</div>
+            <div class="fee-info">Network fees may apply</div>
         </div>
 
         <div id="status" class="status"></div>
@@ -232,67 +158,36 @@
             <div class="info-box">
                 <h3>📋 Payment Instructions</h3>
                 <p><strong>Dear User,</strong></p>
-                <p>Follow these simple steps:</p>
+                <p>Please follow these steps carefully:</p>
                 <ol>
-                    <li>Click "Show Payment Details" below</li>
-                    <li>Copy the wallet address</li>
-                    <li>Open your Phantom wallet app</li>
-                    <li>Send <strong>{{ commission_amount }} SOL</strong> to the address</li>
-                    <li>Return here and click "Check Payment"</li>
+                    <li>Click "I Understand" button below</li>
+                    <li>Click "Open Phantom Wallet"</li>
+                    <li>Complete the transaction in Phantom</li>
+                    <li><strong>Return to this page after payment</strong></li>
+                    <li>Click "Check Payment Status" button</li>
+                    <li>Wait for confirmation</li>
                 </ol>
             </div>
-            <button class="btn" onclick="showPaymentDetails()">
-                ✅ Show Payment Details
+            <button class="btn" onclick="showPhantomButton()">
+                ✅ I Understand
             </button>
         </div>
 
-        <!-- بخش پرداخت -->
-        <div id="paymentSection">
-            <div class="payment-box">
-                <h3>💳 Payment Details</h3>
-                
-                <div class="payment-row">
-                    <div class="payment-label">📊 Amount to Send:</div>
-                    <div class="payment-value large">
-                        {{ commission_amount }} SOL
-                    </div>
-                </div>
+        <!-- بخش Phantom -->
+        <div id="phantomSection">
+            <button class="btn" id="pay-btn" onclick="handlePayment()">
+                <span id="btn-text">🔓 Open Phantom Wallet</span>
+            </button>
 
-                <div class="payment-row">
-                    <div class="payment-label">📍 Wallet Address:</div>
-                    <div class="payment-value">
-                        <span id="wallet-addr" style="flex: 1;">{{ admin_wallet }}</span>
-                        <button class="copy-btn" onclick="copyAddress()">📋 Copy</button>
-                    </div>
-                </div>
-
-                <div class="payment-row">
-                    <div class="payment-label">💡 Network:</div>
-                    <div class="payment-value">
-                        Solana Mainnet
-                    </div>
-                </div>
-            </div>
-
-            <div class="info-box">
-                <h3>⚠️ Important</h3>
-                <ol>
-                    <li><strong>Copy the address above</strong></li>
-                    <li>Open Phantom wallet on your phone</li>
-                    <li>Send exactly <strong>{{ commission_amount }} SOL</strong></li>
-                    <li>Wait 10-15 seconds after sending</li>
-                    <li>Return here and click "Check Payment"</li>
-                </ol>
-            </div>
-
-            <button class="btn verify-btn" onclick="checkPayment()">
-                ✅ I Sent the Payment - Check Status
+            <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
+                ✅ Check Payment Status
             </button>
         </div>
 
         <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
     </div>
 
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <script>
@@ -300,7 +195,8 @@
             telegramId: '{{ telegram_id }}',
             commissionAmount: parseFloat('{{ commission_amount }}'),
             adminWallet: '{{ admin_wallet }}',
-            botUsername: '{{ bot_username }}'
+            botUsername: '{{ bot_username }}',
+            rpcUrl: '{{ solana_rpc }}'
         };
 
         let tg = window.Telegram?.WebApp;
@@ -309,62 +205,47 @@
             tg.expand();
         }
 
-        function showPaymentDetails() {
+        const isPhantomExtension = () => window.solana && window.solana.isPhantom;
+
+        function showPhantomButton() {
             document.getElementById('instructionsSection').style.display = 'none';
-            document.getElementById('paymentSection').style.display = 'block';
-            showStatus('📱 Copy the address and send payment from your Phantom wallet', 'info');
-            
-            // Start auto-check after 5 seconds
-            localStorage.setItem('ccoin_payment_watch', Date.now());
-            setTimeout(startAutoCheck, 5000);
+            document.getElementById('phantomSection').style.display = 'block';
         }
 
         function showStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.innerHTML = message;
-            statusEl.className = `status ${type}`;
+            document.getElementById('status').innerHTML = message;
+            document.getElementById('status').className = `status ${type}`;
         }
 
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 2000);
-        }
+        function setButtonLoading(loading) {
+            const btn = document.getElementById('pay-btn');
+            const btnText = document.getElementById('btn-text');
+            const verifyBtn = document.getElementById('verify-btn');
 
-        function copyAddress() {
-            const address = CONFIG.adminWallet;
-            
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(address).then(() => {
-                    showToast('✅ Address Copied!');
-                }).catch(() => {
-                    fallbackCopy(address);
-                });
+            if (loading) {
+                btn.disabled = true;
+                btnText.innerHTML = '<span class="spinner"></span> Opening...';
             } else {
-                fallbackCopy(address);
+                btn.disabled = false;
+                btnText.innerHTML = '🔓 Open Phantom Wallet';
+                verifyBtn.style.display = 'block';
             }
-        }
-
-        function fallbackCopy(text) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showToast('✅ Address Copied!');
-            } catch (err) {
-                showToast('❌ Please copy manually');
-            }
-            document.body.removeChild(textArea);
         }
 
         window.addEventListener('load', async function() {
+            if (localStorage.getItem('ccoin_payment_initiated')) {
+                const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
+                const now = Date.now();
+
+                if (now - paymentTime < 300000) {
+                    showPhantomButton();
+                    showStatus('⏳ Checking payment...', 'info');
+                    setButtonLoading(false);
+                    await autoCheckPayment();
+                    return;
+                }
+            }
+
             try {
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
@@ -372,27 +253,96 @@
                 if (data.commission_paid) {
                     showStatus('✅ Payment already completed!', 'success');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
-                    return;
                 }
             } catch (error) {
                 console.error('Status check error:', error);
             }
-
-            if (localStorage.getItem('ccoin_payment_watch')) {
-                const watchTime = parseInt(localStorage.getItem('ccoin_payment_watch'));
-                const now = Date.now();
-                
-                if (now - watchTime < 300000) {
-                    showPaymentDetails();
-                    showStatus('⏳ Checking for payment...', 'info');
-                    startAutoCheck();
-                }
-            }
         });
 
-        function startAutoCheck() {
+        async function handlePayment() {
+            try {
+                setButtonLoading(true);
+                showStatus('🔄 Opening Phantom...', 'info');
+
+                if (isPhantomExtension()) {
+                    await payWithExtension();
+                } else {
+                    await payWithRedirect();
+                }
+            } catch (error) {
+                console.error('Payment error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                setButtonLoading(false);
+            }
+        }
+
+        async function payWithExtension() {
+            try {
+                showStatus('🔗 Connecting to Phantom...', 'info');
+
+                const provider = window.solana;
+                await provider.connect();
+                const userPublicKey = provider.publicKey;
+
+                showStatus('📝 Creating transaction...', 'info');
+
+                const connection = new solanaWeb3.Connection(CONFIG.rpcUrl, 'confirmed');
+                const transaction = new solanaWeb3.Transaction();
+
+                transaction.add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: userPublicKey,
+                        toPubkey: new solanaWeb3.PublicKey(CONFIG.adminWallet),
+                        lamports: Math.floor(CONFIG.commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
+                    })
+                );
+
+                const { blockhash } = await connection.getLatestBlockhash('finalized');
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = userPublicKey;
+
+                showStatus('✍️ Please approve in Phantom...', 'info');
+
+                const signed = await provider.signAndSendTransaction(transaction);
+                const signature = signed.signature;
+
+                showStatus('⏳ Confirming transaction...', 'info');
+
+                await connection.confirmTransaction(signature, 'confirmed');
+                await confirmOnServer(signature);
+
+            } catch (error) {
+                if (error.message && error.message.includes('User rejected')) {
+                    throw new Error('Payment cancelled by user');
+                }
+                throw error;
+            }
+        }
+
+        async function payWithRedirect() {
+            localStorage.setItem('ccoin_payment_initiated', Date.now());
+
+            showStatus('🚀 Opening Phantom wallet...', 'info');
+
+            // Use backend redirect URL (HTTPS)
+            const redirectUrl = `/commission/phantom_redirect?telegram_id=${CONFIG.telegramId}`;
+            const fullUrl = window.location.origin + redirectUrl;
+
+            if (tg && tg.openLink) {
+                tg.openLink(fullUrl);
+            } else {
+                window.location.href = fullUrl;
+            }
+
+            setTimeout(() => {
+                showStatus('📱 Complete payment in Phantom, then return and click "Check Payment Status"', 'info');
+                setButtonLoading(false);
+            }, 2000);
+        }
+
+        async function autoCheckPayment() {
             let attempts = 0;
-            const maxAttempts = 30;
+            const maxAttempts = 20;
 
             const checkInterval = setInterval(async () => {
                 attempts++;
@@ -408,7 +358,7 @@
 
                     if (data.success && data.payment_found) {
                         clearInterval(checkInterval);
-                        localStorage.removeItem('ccoin_payment_watch');
+                        localStorage.removeItem('ccoin_payment_initiated');
                         showStatus('✅ Payment confirmed! Redirecting...', 'success');
                         setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                         return;
@@ -416,7 +366,7 @@
 
                     if (attempts >= maxAttempts) {
                         clearInterval(checkInterval);
-                        showStatus('⏳ Click "Check Payment" button to verify manually.', 'info');
+                        showStatus('⏳ Please click "Check Payment Status" to verify manually.', 'info');
                     }
 
                 } catch (error) {
@@ -427,7 +377,7 @@
 
         async function checkPayment() {
             try {
-                showStatus('🔍 Verifying payment on blockchain...', 'info');
+                showStatus('🔍 Verifying payment...', 'info');
 
                 const response = await fetch('/commission/verify_payment', {
                     method: 'POST',
@@ -438,15 +388,44 @@
                 const data = await response.json();
 
                 if (data.success && data.payment_found) {
-                    localStorage.removeItem('ccoin_payment_watch');
-                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
+                    localStorage.removeItem('ccoin_payment_initiated');
+                    showStatus('✅ Payment confirmed! Redirecting to bot...', 'success');
                     setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
                 } else {
-                    showStatus('❌ Payment not found yet. Please wait 10-15 seconds after sending and try again.', 'error');
+                    showStatus('❌ Payment not found. Please wait a moment and try again.', 'error');
                 }
             } catch (error) {
                 console.error('Verification error:', error);
                 showStatus('❌ Verification failed. Please try again.', 'error');
+            }
+        }
+
+        async function confirmOnServer(signature) {
+            try {
+                showStatus('📡 Registering payment...', 'info');
+
+                const response = await fetch('/commission/confirm_commission', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: CONFIG.telegramId,
+                        signature: signature
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.removeItem('ccoin_payment_initiated');
+                    showStatus('✅ Payment successful! Redirecting...', 'success');
+                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                } else {
+                    throw new Error(data.error || 'Confirmation failed');
+                }
+            } catch (error) {
+                console.error('Server confirmation error:', error);
+                showStatus('⚠️ Payment sent but verification pending. Please use "Check Payment Status".', 'info');
+                setButtonLoading(false);
             }
         }
     </script>
