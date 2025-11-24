@@ -655,6 +655,9 @@ async def phantom_redirect(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if not user.wallet_address:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+
     # Create Solana Pay URL
     recipient = ADMIN_WALLET
     amount = COMMISSION_AMOUNT
@@ -662,15 +665,24 @@ async def phantom_redirect(
     message = f"Commission Payment - User {telegram_id}"
     memo = f"ccoin_{telegram_id}_{int(time.time())}"
 
-    solana_pay_url = f"solana:{recipient}?amount={amount}&label={label}&message={message}&memo={memo}"
+    # Build Solana Pay URL with all parameters
+    solana_pay_url = (
+        f"solana:{recipient}"
+        f"?amount={amount}"
+        f"&label={label}"
+        f"&message={message}"
+        f"&memo={memo}"
+    )
 
     logger.info("Phantom redirect page", extra={
         "telegram_id": telegram_id,
-        "solana_pay_url": solana_pay_url[:50]
+        "solana_pay_url": solana_pay_url[:80],
+        "user_wallet": user.wallet_address
     })
 
     return templates.TemplateResponse("phantom_redirect.html", {
         "request": request,
         "solana_pay_url": solana_pay_url,
-        "telegram_id": telegram_id
+        "telegram_id": telegram_id,
+        "commission_amount": COMMISSION_AMOUNT
     })
