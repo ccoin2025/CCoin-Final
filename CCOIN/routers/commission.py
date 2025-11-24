@@ -76,14 +76,13 @@ async def commission_browser_pay(
         logger.warning("No wallet connected", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
 
-    # ✅ اضافه کردن solana_rpc
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
         "telegram_id": telegram_id,
         "commission_amount": COMMISSION_AMOUNT,
         "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME,
-        "solana_rpc": SOLANA_RPC  # ✅ این خط مهمه!
+        "solana_rpc": SOLANA_RPC
     })
 
 @router.get("/success", response_class=HTMLResponse)
@@ -168,6 +167,18 @@ async def confirm_commission(
         if not user.wallet_address:
             logger.error("No wallet connected", extra={"telegram_id": telegram_id})
             raise HTTPException(status_code=400, detail="No wallet connected")
+
+        # ✅ چک کردن استفاده مجدد تراکنش
+        existing_user = db.query(User).filter(
+            User.commission_transaction_hash == signature
+        ).first()
+        
+        if existing_user:
+            logger.warning("Transaction already used", extra={
+                "signature": signature,
+                "previous_user": existing_user.telegram_id
+            })
+            raise HTTPException(status_code=400, detail="This transaction has already been used")
 
         # ✅ Verify transaction on blockchain
         client = Client(SOLANA_RPC)
@@ -317,6 +328,29 @@ async def verify_payment_auto(
                         await asyncio.sleep(0.5)
 
                     sig = str(sig_info.signature)
+                    
+                    # ✅ چک کردن زمان تراکنش - فقط تراکنش‌های 5 دقیقه اخیر
+                    tx_time = sig_info.block_time
+                    current_time = time.time()
+                    
+                    if tx_time and (current_time - tx_time) > 300:  # 300 ثانیه = 5 دقیقه
+                        logger.info(f"Transaction too old, skipping", extra={
+                            "signature": sig[:20],
+                            "age_seconds": int(current_time - tx_time)
+                        })
+                        continue
+
+                    # ✅ چک کردن استفاده مجدد تراکنش
+                    existing_user = db.query(User).filter(
+                        User.commission_transaction_hash == sig
+                    ).first()
+                    
+                    if existing_user:
+                        logger.warning(f"Transaction already used, skipping", extra={
+                            "signature": sig[:20],
+                            "previous_user": existing_user.telegram_id
+                        })
+                        continue
 
                     tx_response = await client.get_transaction(
                         sig_info.signature,
@@ -378,40 +412,60 @@ async def verify_payment_auto(
                                 return {
                                     "success": True,
                                     "payment_found": True,
-                                    "message": "Payment verified!",
+                                    "message": "Payment confirmed!",
                                     "transaction_hash": sig
                                 }
 
                 except Exception as e:
-                    logger.warning(f"TX check error", extra={"error": str(e)})
+                    logger.warning(f"Error processing transaction {sig[:20]}", extra={"error": str(e)})
                     continue
 
             await client.close()
+
             return {
                 "success": True,
                 "payment_found": False,
-                "message": "No matching payment found",
+                "message": "Payment not found in recent transactions",
                 "attempts_remaining": 5 - (attempt_count + 1)
             }
 
         except Exception as e:
             await client.close()
-            raise
+            logger.error("Payment verification error", extra={"error": str(e)})
+            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Payment verification error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+        logger.error("Payment auto-verification error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Auto-verification failed: {str(e)}")
 
-@router.post("/verify_payment", response_class=JSONResponse)
-@limiter.limit("10/minute")
-async def verify_payment(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Manual payment verification (same as auto but for manual click)"""
-    return await verify_payment_auto(request, db)
+@router.post("/create_ephemeral", response_class=JSONResponse)
+async def create_ephemeral(request: Request):
+    """Generate ephemeral key for Phantom connection"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        # Generate ephemeral keypair
+        private_key = PrivateKey.generate()
+        public_key = private_key.public_key
+        
+        # Convert to base64
+        public_key_base64 = base64.b64encode(bytes(public_key)).decode('utf-8')
+        
+        # Store private key in cache (5 minutes)
+        cache_key = f'ephemeral_key_{telegram_id}'
+        set_in_cache(cache_key, private_key, ttl=300)
+        
+        logger.info("Ephemeral key generated", extra={"telegram_id": telegram_id})
+        
+        return {
+            "dapp_encryption_public_key": public_key_base64
+        }
+    except Exception as e:
+        logger.error("Ephemeral key generation failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Failed to create payment link")
 
 @router.get("/phantom_redirect", response_class=RedirectResponse)
 async def phantom_redirect(
@@ -439,31 +493,3 @@ async def phantom_redirect(
     
     # Redirect to Solana Pay URL
     return RedirectResponse(url=solana_pay_url, status_code=302)
-
-
-EPHEMERAL_KEYS = {}  # In production use Redis or DB
-
-@router.post("/create_ephemeral", response_class=JSONResponse)
-async def create_ephemeral(request: Request):
-    """Generate ephemeral key for Phantom connection"""
-    try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        
-        # Generate ephemeral keypair
-        private_key = PrivateKey.generate()
-        public_key = private_key.public_key
-        
-        # Convert to base64
-        public_key_base64 = base64.b64encode(bytes(public_key)).decode('utf-8')
-        
-        # Store private key in cache (5 minutes)
-        cache_key = f'ephemeral_key_{telegram_id}'
-        set_in_cache(cache_key, private_key, ttl=300)
-        
-        return {
-            "dapp_encryption_public_key": public_key_base64
-        }
-    except Exception as e:
-        logger.error("Ephemeral key generation failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Failed to create payment link")
