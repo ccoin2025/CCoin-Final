@@ -443,7 +443,7 @@ async def phantom_redirect(
 
 EPHEMERAL_KEYS = {}  # In production use Redis or DB
 
-@app.post("/commission/create_ephemeral")
+@router.post("/commission/create_ephemeral")
 async def create_ephemeral(data: dict):
     telegram_id = data.get("telegram_id")
     private_key = PrivateKey.generate()
