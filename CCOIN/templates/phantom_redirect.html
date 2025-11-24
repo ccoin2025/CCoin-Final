@@ -5,23 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redirecting to Phantom...</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            text-align: center;
             padding: 20px;
         }
         .container {
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(20px);
-            padding: 40px;
-            border-radius: 20px;
-            max-width: 400px;
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: 700;
         }
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
@@ -36,20 +54,163 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .instructions {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.4);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .instructions h3 {
+            color: #ffd700;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        .btn {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #000;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            margin: 10px 0;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+        }
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: none;
+        }
+        .btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .manual-link {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            word-break: break-all;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🔄 Opening Phantom Wallet...</h2>
+        <div class="icon">👛</div>
+        <h2>Opening Phantom Wallet...</h2>
         <div class="spinner"></div>
-        <p>If Phantom doesn't open automatically, <a href="{{ solana_pay_url }}" style="color: #ffd700;">click here</a></p>
+        
+        <div class="instructions">
+            <h3>📱 Next Steps</h3>
+            <ol>
+                <li>Phantom app should open automatically</li>
+                <li>Review the payment details ({{ commission_amount }} SOL)</li>
+                <li>Approve the transaction</li>
+                <li>Return to the payment page and click "Check Payment Status"</li>
+            </ol>
+        </div>
+
+        <a href="{{ solana_pay_url }}" class="btn" id="manual-open">
+            🔓 Open Phantom Manually
+        </a>
+
+        <a href="/commission/browser/pay?telegram_id={{ telegram_id }}" class="btn secondary">
+            ← Return to Payment Page
+        </a>
+
+        <div class="manual-link">
+            <strong>Troubleshooting:</strong><br>
+            If Phantom doesn't open, make sure you have the Phantom app installed on your device.
+        </div>
     </div>
 
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <script>
-        // Auto-redirect
+        const SOLANA_PAY_URL = '{{ solana_pay_url }}';
+        const TELEGRAM_ID = '{{ telegram_id }}';
+
+        let tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Try multiple methods to open Phantom
+        function openPhantom() {
+            console.log('Attempting to open Phantom with URL:', SOLANA_PAY_URL);
+
+            // Method 1: Direct navigation (works on most mobile browsers)
+            try {
+                window.location.href = SOLANA_PAY_URL;
+                console.log('✅ Method 1: Direct navigation attempted');
+            } catch (e) {
+                console.error('❌ Method 1 failed:', e);
+            }
+
+            // Method 2: Create invisible iframe (backup method)
+            setTimeout(() => {
+                try {
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = SOLANA_PAY_URL;
+                    document.body.appendChild(iframe);
+                    console.log('✅ Method 2: Iframe method attempted');
+                    
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 2000);
+                } catch (e) {
+                    console.error('❌ Method 2 failed:', e);
+                }
+            }, 500);
+
+            // Method 3: Create link and click it (another backup)
+            setTimeout(() => {
+                try {
+                    const link = document.createElement('a');
+                    link.href = SOLANA_PAY_URL;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    console.log('✅ Method 3: Auto-click link attempted');
+                } catch (e) {
+                    console.error('❌ Method 3 failed:', e);
+                }
+            }, 1000);
+        }
+
+        // Auto-open on page load
+        window.addEventListener('load', function() {
+            setTimeout(openPhantom, 500);
+        });
+
+        // Manual open button
+        document.getElementById('manual-open').addEventListener('click', function(e) {
+            e.preventDefault();
+            openPhantom();
+        });
+
+        // Show helpful message
         setTimeout(() => {
-            window.location.href = '{{ solana_pay_url }}';
-        }, 500);
+            console.log('💡 If Phantom didn\'t open, click the "Open Phantom Manually" button');
+        }, 3000);
     </script>
 </body>
 </html>
