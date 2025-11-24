@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
@@ -13,11 +13,18 @@ from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.pubkey import Pubkey
-from nacl.public import PrivateKey
+from solders.transaction import Transaction
+from solders.system_program import TransferParams, transfer
+from solders.keypair import Keypair
+import nacl.public
+import nacl.utils
+import base58
 import base64
 import time
 import asyncio
 import structlog
+import secrets
+import json
 
 logger = structlog.get_logger()
 
@@ -25,11 +32,12 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# Memory cache for rate limiting
+# Memory cache for rate limiting and session management
 memory_cache = {}
+phantom_sessions = {}
 
 def get_from_cache(key: str):
-    """دریافت از memory cache"""
+    """Get from memory cache"""
     if key in memory_cache:
         value, expiry = memory_cache[key]
         if time.time() < expiry:
@@ -39,11 +47,11 @@ def get_from_cache(key: str):
     return None
 
 def set_in_cache(key: str, value, ttl: int):
-    """ذخیره در memory cache"""
+    """Set in memory cache"""
     memory_cache[key] = (value, time.time() + ttl)
 
 def clear_cache(key: str):
-    """پاک کردن cache"""
+    """Clear cache"""
     if key in memory_cache:
         del memory_cache[key]
 
@@ -83,6 +91,258 @@ async def commission_browser_pay(
         "admin_wallet": ADMIN_WALLET,
         "bot_username": BOT_USERNAME,
         "solana_rpc": SOLANA_RPC
+    })
+
+@router.post("/create_payment_session", response_class=JSONResponse)
+@limiter.limit("10/minute")
+async def create_payment_session(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Create encrypted payment session for Phantom Deep Links"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        amount = body.get("amount")
+        recipient = body.get("recipient")
+
+        if not telegram_id or not amount or not recipient:
+            raise HTTPException(status_code=400, detail="Missing required parameters")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            raise HTTPException(status_code=400, detail="Commission already paid")
+
+        # Generate ephemeral keypair for this session
+        dapp_keypair = nacl.public.PrivateKey.generate()
+        dapp_public_key = bytes(dapp_keypair.public_key)
+        dapp_secret_key = bytes(dapp_keypair)
+
+        # Create session ID
+        session_id = secrets.token_urlsafe(32)
+
+        # Create transaction
+        try:
+            connection = AsyncClient(SOLANA_RPC)
+            
+            # Get latest blockhash
+            blockhash_resp = await connection.get_latest_blockhash()
+            recent_blockhash = blockhash_resp.value.blockhash
+
+            # Create transfer instruction
+            from_pubkey = Pubkey.from_string(user.wallet_address)
+            to_pubkey = Pubkey.from_string(recipient)
+            lamports = int(float(amount) * 1_000_000_000)
+
+            transfer_ix = transfer(
+                TransferParams(
+                    from_pubkey=from_pubkey,
+                    to_pubkey=to_pubkey,
+                    lamports=lamports
+                )
+            )
+
+            # Build transaction
+            transaction = Transaction.new_unsigned(
+                [transfer_ix],
+                from_pubkey,
+                recent_blockhash
+            )
+
+            # Serialize transaction
+            serialized_tx = base58.b58encode(bytes(transaction)).decode('utf-8')
+
+            await connection.close()
+
+            logger.info("Transaction created", extra={
+                "session_id": session_id,
+                "telegram_id": telegram_id,
+                "amount": amount
+            })
+
+        except Exception as e:
+            logger.error("Transaction creation failed", extra={"error": str(e)})
+            raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
+
+        # Prepare payload for encryption
+        payload = {
+            "transaction": serialized_tx,
+            "session": session_id
+        }
+
+        # Generate nonce for encryption
+        nonce = nacl.utils.random(24)
+        nonce_b58 = base58.b58encode(nonce).decode('utf-8')
+
+        # Store session (expires in 5 minutes)
+        session_data = {
+            "telegram_id": telegram_id,
+            "dapp_public_key": base58.b58encode(dapp_public_key).decode('utf-8'),
+            "dapp_secret_key": base58.b58encode(dapp_secret_key).decode('utf-8'),
+            "amount": amount,
+            "recipient": recipient,
+            "created_at": datetime.utcnow().isoformat(),
+            "nonce": nonce_b58,
+            "payload": json.dumps(payload)
+        }
+
+        phantom_sessions[session_id] = session_data
+        set_in_cache(f"phantom_session_{session_id}", session_data, ttl=300)
+
+        logger.info("Payment session created", extra={
+            "session_id": session_id,
+            "telegram_id": telegram_id
+        })
+
+        return {
+            "success": True,
+            "session_id": session_id,
+            "dapp_public_key": base58.b58encode(dapp_public_key).decode('utf-8'),
+            "nonce": nonce_b58,
+            "payload": base58.b58encode(json.dumps(payload).encode()).decode('utf-8'),
+            "expires_in": 300
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Session creation error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Session creation failed: {str(e)}")
+
+@router.get("/phantom_callback", response_class=HTMLResponse)
+async def phantom_callback(
+    request: Request,
+    session: str = Query(..., description="Session ID"),
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """Handle Phantom Deep Link callback"""
+    logger.info("Phantom callback received", extra={
+        "session": session,
+        "telegram_id": telegram_id
+    })
+
+    # Parse URL parameters from Phantom
+    params = dict(request.query_params)
+    
+    error_code = params.get("errorCode")
+    error_message = params.get("errorMessage")
+    phantom_public_key = params.get("phantom_encryption_public_key")
+    nonce = params.get("nonce")
+    data = params.get("data")
+
+    # Check for errors
+    if error_code:
+        logger.error("Phantom returned error", extra={
+            "error_code": error_code,
+            "error_message": error_message
+        })
+        
+        return templates.TemplateResponse("commission_callback.html", {
+            "request": request,
+            "success": False,
+            "error": error_message or f"Payment failed (code: {error_code})",
+            "telegram_id": telegram_id,
+            "bot_username": BOT_USERNAME
+        })
+
+    # Retrieve session
+    session_data = get_from_cache(f"phantom_session_{session}")
+    if not session_data:
+        session_data = phantom_sessions.get(session)
+    
+    if not session_data:
+        logger.error("Session not found or expired", extra={"session": session})
+        return templates.TemplateResponse("commission_callback.html", {
+            "request": request,
+            "success": False,
+            "error": "Session expired. Please try again.",
+            "telegram_id": telegram_id,
+            "bot_username": BOT_USERNAME
+        })
+
+    # Verify the response contains transaction signature
+    if data and phantom_public_key and nonce:
+        try:
+            # Decrypt response
+            dapp_secret_key = base58.b58decode(session_data['dapp_secret_key'])
+            phantom_pk = base58.b58decode(phantom_public_key)
+            nonce_bytes = base58.b58decode(nonce)
+            encrypted_data = base58.b58decode(data)
+
+            # Create shared secret
+            dapp_private_key = nacl.public.PrivateKey(dapp_secret_key)
+            phantom_public = nacl.public.PublicKey(phantom_pk)
+            shared_secret = nacl.public.Box(dapp_private_key, phantom_public)
+
+            # Decrypt
+            decrypted = shared_secret.decrypt(encrypted_data, nonce_bytes)
+            response_data = json.loads(decrypted.decode('utf-8'))
+
+            signature = response_data.get("signature")
+
+            if signature:
+                logger.info("Transaction signature received", extra={
+                    "signature": signature,
+                    "telegram_id": telegram_id
+                })
+
+                # Verify and mark as paid
+                user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                if user and not user.commission_paid:
+                    
+                    # Check duplicate transaction
+                    existing = db.query(User).filter(
+                        User.commission_transaction_hash == signature
+                    ).first()
+
+                    if existing:
+                        logger.warning("Transaction already used", extra={"signature": signature})
+                        return templates.TemplateResponse("commission_callback.html", {
+                            "request": request,
+                            "success": False,
+                            "error": "This transaction has already been used",
+                            "telegram_id": telegram_id,
+                            "bot_username": BOT_USERNAME
+                        })
+
+                    user.commission_paid = True
+                    user.commission_transaction_hash = signature
+                    user.commission_payment_date = datetime.utcnow()
+                    db.commit()
+
+                    # Clear session
+                    clear_cache(f"phantom_session_{session}")
+                    if session in phantom_sessions:
+                        del phantom_sessions[session]
+
+                    logger.info("Payment confirmed via callback", extra={
+                        "telegram_id": telegram_id,
+                        "signature": signature
+                    })
+
+                    return templates.TemplateResponse("commission_callback.html", {
+                        "request": request,
+                        "success": True,
+                        "message": "Payment confirmed successfully!",
+                        "signature": signature,
+                        "telegram_id": telegram_id,
+                        "bot_username": BOT_USERNAME
+                    })
+
+        except Exception as e:
+            logger.error("Callback decryption error", extra={"error": str(e)}, exc_info=True)
+
+    # Default success page (will verify later)
+    return templates.TemplateResponse("commission_callback.html", {
+        "request": request,
+        "success": True,
+        "message": "Payment initiated. Verification in progress...",
+        "telegram_id": telegram_id,
+        "bot_username": BOT_USERNAME
     })
 
 @router.get("/success", response_class=HTMLResponse)
@@ -128,128 +388,81 @@ async def check_commission_status(
         "transaction_hash": user.commission_transaction_hash
     }
 
-@router.post("/confirm_payment", response_class=JSONResponse)
-@limiter.limit("5/minute")
-async def confirm_commission(
+@router.post("/verify_payment", response_class=JSONResponse)
+@limiter.limit("10/minute")
+async def verify_payment(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Confirm commission payment with blockchain verification"""
+    """Verify payment with transaction signature (for Extension flow)"""
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
         signature = body.get("signature")
 
-        logger.info("Commission confirmation request", extra={
-            "telegram_id": telegram_id,
-            "signature": signature
-        })
-
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Missing telegram_id")
-
-        if not signature:
-            raise HTTPException(status_code=400, detail="Missing transaction signature")
+        if not telegram_id or not signature:
+            raise HTTPException(status_code=400, detail="Missing required parameters")
 
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
-            logger.error("User not found", extra={"telegram_id": telegram_id})
             raise HTTPException(status_code=404, detail="User not found")
 
         if user.commission_paid:
-            logger.info("Commission already paid", extra={"telegram_id": telegram_id})
             return {
-                "success": True,
-                "message": "Commission already confirmed",
-                "already_paid": True
+                "status": "verified",
+                "message": "Commission already paid"
             }
 
-        if not user.wallet_address:
-            logger.error("No wallet connected", extra={"telegram_id": telegram_id})
-            raise HTTPException(status_code=400, detail="No wallet connected")
-
-        # ✅ چک کردن استفاده مجدد تراکنش
-        existing_user = db.query(User).filter(
+        # Check duplicate transaction
+        existing = db.query(User).filter(
             User.commission_transaction_hash == signature
         ).first()
-        
-        if existing_user:
-            logger.warning("Transaction already used", extra={
-                "signature": signature,
-                "previous_user": existing_user.telegram_id
-            })
-            raise HTTPException(status_code=400, detail="This transaction has already been used")
 
-        # ✅ Verify transaction on blockchain
+        if existing:
+            raise HTTPException(status_code=400, detail="Transaction already used")
+
+        # Verify on blockchain
         client = Client(SOLANA_RPC)
-        max_retries = 5
-        retry_delay = 2
-        transaction_confirmed = False
+        
+        try:
+            tx = client.get_transaction(
+                signature,
+                encoding="json",
+                max_supported_transaction_version=0
+            )
 
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"Verifying transaction (attempt {attempt + 1}/{max_retries})", extra={"signature": signature})
+            if tx.value:
+                if tx.value.meta and tx.value.meta.err:
+                    raise HTTPException(status_code=400, detail="Transaction failed on blockchain")
 
-                tx = client.get_transaction(
-                    signature,
-                    encoding="json",
-                    max_supported_transaction_version=0
-                )
+                user.commission_paid = True
+                user.commission_transaction_hash = signature
+                user.commission_payment_date = datetime.utcnow()
+                db.commit()
 
-                if tx.value:
-                    if tx.value.meta and tx.value.meta.err:
-                        logger.error("Transaction failed on blockchain", extra={"error": tx.value.meta.err})
-                        raise HTTPException(status_code=400, detail="Transaction failed on blockchain")
+                logger.info("Payment verified", extra={
+                    "telegram_id": telegram_id,
+                    "signature": signature
+                })
 
-                    transaction_confirmed = True
-                    logger.info("Transaction confirmed on blockchain", extra={"signature": signature})
-                    break
-                else:
-                    logger.warning(f"Transaction not found yet (attempt {attempt + 1})")
+                return {
+                    "status": "verified",
+                    "message": "Payment confirmed successfully",
+                    "signature": signature
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Transaction not found")
 
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                    else:
-                        logger.error(f"Transaction not found after {max_retries} attempts")
-                        raise HTTPException(status_code=404, detail="Transaction not found on blockchain")
-
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.warning(f"Verification attempt {attempt + 1} failed", extra={"error": str(e)})
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    retry_delay *= 1.5
-                else:
-                    raise HTTPException(status_code=500, detail=f"Transaction verification failed: {str(e)}")
-
-        if transaction_confirmed:
-            user.commission_paid = True
-            user.commission_transaction_hash = signature
-            user.commission_payment_date = datetime.utcnow()
-            db.commit()
-
-            logger.info("Commission confirmed successfully", extra={
-                "telegram_id": telegram_id,
-                "transaction_hash": signature
-            })
-
-            return {
-                "success": True,
-                "message": "Commission confirmed successfully!",
-                "transaction_hash": signature,
-                "redirect_url": f"https://t.me/{BOT_USERNAME}"
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Transaction confirmation failed")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
-        logger.error("Commission confirmation error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Confirmation failed: {str(e)}")
+        logger.error("Verification error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/verify_payment_auto", response_class=JSONResponse)
 @limiter.limit("10/minute")
@@ -271,7 +484,7 @@ async def verify_payment_auto(
 
         if user.commission_paid:
             return {
-                "success": True,
+                "status": "verified",
                 "payment_found": True,
                 "message": "Commission already paid",
                 "transaction_hash": user.commission_transaction_hash
@@ -280,7 +493,7 @@ async def verify_payment_auto(
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="No wallet connected")
 
-        # ✅ محدودیت 5 تلاش
+        # Rate limiting
         cache_key = f'payment_check_attempts_{telegram_id}'
         attempt_count = get_from_cache(cache_key)
 
@@ -289,14 +502,13 @@ async def verify_payment_auto(
 
         if attempt_count >= 5:
             return {
-                "success": True,
+                "status": "pending",
                 "payment_found": False,
                 "message": "Maximum verification attempts reached. Please wait 2 minutes.",
                 "max_attempts_reached": True
             }
 
-        # افزایش تعداد تلاش‌ها
-        set_in_cache(cache_key, attempt_count + 1, ttl=120)  # 2 دقیقه
+        set_in_cache(cache_key, attempt_count + 1, ttl=120)
 
         client = AsyncClient(SOLANA_RPC)
 
@@ -310,21 +522,12 @@ async def verify_payment_auto(
                 limit=10
             )
 
-            # ✅ لاگ تعداد تراکنش‌ها
-            tx_count = len(signatures_response.value) if signatures_response.value else 0
-            logger.info(f"Found {tx_count} transactions for user", extra={
-                "telegram_id": telegram_id,
-                "wallet": user.wallet_address,
-                "transaction_count": tx_count
-            })
-
             if not signatures_response.value:
                 await client.close()
                 return {
-                    "success": True,
+                    "status": "pending",
                     "payment_found": False,
-                    "message": "No transactions found",
-                    "attempts_remaining": 5 - (attempt_count + 1)
+                    "message": "No transactions found"
                 }
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
@@ -336,28 +539,21 @@ async def verify_payment_auto(
                         await asyncio.sleep(0.5)
 
                     sig = str(sig_info.signature)
-                    
-                    # ✅ چک کردن زمان تراکنش - فقط تراکنش‌های 5 دقیقه اخیر
+
+                    # Check transaction age (5 minutes window)
                     tx_time = sig_info.block_time
                     current_time = time.time()
-                    
-                    if tx_time and (current_time - tx_time) > 300:  # 300 ثانیه = 5 دقیقه
-                        logger.info(f"Transaction too old, skipping", extra={
-                            "signature": sig[:20],
-                            "age_seconds": int(current_time - tx_time)
-                        })
+
+                    if tx_time and (current_time - tx_time) > 300:
                         continue
 
-                    # ✅ چک کردن استفاده مجدد تراکنش
-                    existing_user = db.query(User).filter(
+                    # Check duplicate
+                    existing = db.query(User).filter(
                         User.commission_transaction_hash == sig
                     ).first()
-                    
-                    if existing_user:
-                        logger.warning(f"Transaction already used, skipping", extra={
-                            "signature": sig[:20],
-                            "previous_user": existing_user.telegram_id
-                        })
+
+                    if existing:
+                        logger.warning(f"Transaction already used", extra={"signature": sig[:20]})
                         continue
 
                     tx_response = await client.get_transaction(
@@ -370,8 +566,6 @@ async def verify_payment_auto(
                         continue
 
                     tx_obj = tx_response.value
-
-                    import json
                     tx_json_str = tx_obj.to_json()
                     tx = json.loads(tx_json_str)
 
@@ -392,8 +586,6 @@ async def verify_payment_auto(
                     if not account_keys or ADMIN_WALLET not in account_keys:
                         continue
 
-                    logger.info(f"Admin wallet found in TX", extra={"signature": sig[:20]})
-
                     for acc_idx in range(min(len(pre_balances), len(post_balances), len(account_keys))):
                         account = account_keys[acc_idx]
                         pre = pre_balances[acc_idx]
@@ -401,7 +593,6 @@ async def verify_payment_auto(
 
                         if account == user.wallet_address and pre > post:
                             sent = pre - post
-                            logger.info(f"User sent", extra={"amount_sol": sent / 1_000_000_000})
 
                             if abs(sent - expected_lamports) <= tolerance:
                                 user.commission_paid = True
@@ -418,86 +609,30 @@ async def verify_payment_auto(
                                 })
 
                                 return {
-                                    "success": True,
+                                    "status": "verified",
                                     "payment_found": True,
-                                    "message": "Payment confirmed!",
+                                    "message": "Payment verified successfully!",
                                     "transaction_hash": sig
                                 }
 
                 except Exception as e:
-                    logger.warning(f"Error processing transaction {sig[:20]}", extra={"error": str(e)})
+                    logger.warning(f"Transaction check error", extra={"error": str(e)})
                     continue
 
             await client.close()
-
             return {
-                "success": True,
+                "status": "pending",
                 "payment_found": False,
-                "message": "Payment not found in recent transactions",
-                "attempts_remaining": 5 - (attempt_count + 1)
+                "message": "Payment not found yet"
             }
 
         except Exception as e:
             await client.close()
-            logger.error("Payment verification error", extra={"error": str(e)})
-            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+            logger.error("Auto-verification error", extra={"error": str(e)}, exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Payment auto-verification error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Auto-verification failed: {str(e)}")
-
-@router.post("/create_ephemeral", response_class=JSONResponse)
-async def create_ephemeral(request: Request):
-    """Generate ephemeral key for Phantom connection"""
-    try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        
-        # Generate ephemeral keypair
-        private_key = PrivateKey.generate()
-        public_key = private_key.public_key
-        
-        # Convert to base64
-        public_key_base64 = base64.b64encode(bytes(public_key)).decode('utf-8')
-        
-        # Store private key in cache (5 minutes)
-        cache_key = f'ephemeral_key_{telegram_id}'
-        set_in_cache(cache_key, private_key, ttl=300)
-        
-        logger.info("Ephemeral key generated", extra={"telegram_id": telegram_id})
-        
-        return {
-            "dapp_encryption_public_key": public_key_base64
-        }
-    except Exception as e:
-        logger.error("Ephemeral key generation failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Failed to create payment link")
-
-@router.get("/phantom_redirect", response_class=RedirectResponse)
-async def phantom_redirect(
-    telegram_id: str = Query(...),
-    db: Session = Depends(get_db)
-):
-    """Redirect to Phantom with Solana Pay URL"""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Create Solana Pay URL
-    recipient = ADMIN_WALLET
-    amount = COMMISSION_AMOUNT
-    label = "CCoin Commission"
-    message = f"Airdrop Commission Payment - User {telegram_id}"
-    
-    # Build Solana Pay URL
-    solana_pay_url = (
-        f"solana:{recipient}"
-        f"?amount={amount}"
-        f"&label={label}"
-        f"&message={message}"
-    )
-    
-    # Redirect to Solana Pay URL
-    return RedirectResponse(url=solana_pay_url, status_code=302)
+        logger.error("Auto-verification error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
