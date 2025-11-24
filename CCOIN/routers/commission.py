@@ -16,6 +16,7 @@ from solders.pubkey import Pubkey
 from solders.transaction import Transaction
 from solders.system_program import TransferParams, transfer
 from solders.keypair import Keypair
+from solders.message import Message
 import nacl.public
 import nacl.utils
 import base58
@@ -145,12 +146,16 @@ async def create_payment_session(
                 )
             )
 
-            # Build transaction
-            transaction = Transaction.new_unsigned(
+            # ✅ FIX: Correct way to build transaction with solders
+            from solders.message import Message
+            
+            message = Message.new_with_blockhash(
                 [transfer_ix],
                 from_pubkey,
                 recent_blockhash
             )
+            
+            transaction = Transaction.new_unsigned(message)
 
             # Serialize transaction
             serialized_tx = base58.b58encode(bytes(transaction)).decode('utf-8')
