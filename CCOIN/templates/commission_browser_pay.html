@@ -33,7 +33,7 @@
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
         .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
-        
+
         .info-box {
             background: rgba(33, 150, 243, 0.2);
             border: 1px solid rgba(33, 150, 243, 0.4);
@@ -59,7 +59,7 @@
             margin: 8px 0;
             line-height: 1.5;
         }
-        
+
         .commission-info {
             background: rgba(255, 255, 255, 0.1);
             padding: 25px;
@@ -135,7 +135,7 @@
             vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
+
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
     </style>
@@ -321,63 +321,49 @@
 
         async function payWithRedirect() {
             localStorage.setItem('ccoin_payment_initiated', Date.now());
-            showStatus('Preparing payment link...', 'info');
-  
+            showStatus('🔄 Preparing payment link...', 'info');
+
             try {
-            // Generate ephemeral key for this session
-            const response = await fetch('/commission/create_ephemeral', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: CONFIG.telegramId })
-            });
+                // Create Solana Pay Transaction Request
+                const recipient = CONFIG.adminWallet;
+                const lamports = Math.floor(CONFIG.commissionAmount * 1_000_000_000); // Convert SOL to lamports
 
-            const data = await response.json();
-            if (!data.dapp_encryption_public_key) {
-                throw new Error('Failed to generate encryption key');
+                // Build transaction request URL for your backend
+                const requestUrl = `${window.location.origin}/commission/create_transaction?` +
+                    `telegram_id=${CONFIG.telegramId}&` +
+                    `recipient=${recipient}&` +
+                    `amount=${lamports}`;
+
+                // Encode for Phantom
+                const encodedUrl = encodeURIComponent(requestUrl);
+
+                // Phantom Connect & Sign Transaction Deep Link
+                const phantomDeeplink = `https://phantom.app/ul/v1/signAndSendTransaction?` +
+                    `dapp_encryption_public_key=temp&` +
+                    `nonce=temp&` +
+                    `redirect_link=${encodeURIComponent(window.location.href)}&` +
+                    `payload=${encodedUrl}`;
+
+                showStatus('🚀 Opening Phantom wallet...', 'info');
+
+                // Open in Phantom (Telegram WebApp or browser)
+                if (tg && tg.openLink) {
+                    tg.openLink(phantomDeeplink);
+                } else {
+                    window.location.href = phantomDeeplink;
+                }
+
+                setTimeout(() => {
+                    showStatus('📱 Approve the transaction in Phantom, then return here and click "Check Payment Status"', 'info');
+                    setButtonLoading(false);
+                }, 2000);
+
+            } catch (error) {
+                console.error('Payment link error:', error);
+                showStatus(`❌ Failed to create payment link: ${error.message}`, 'error');
+                setButtonLoading(false);
             }
-
-            const dappPublicKey = data.dapp_encryption_public_key;
-            const redirectUrl = encodeURIComponent(window.location.href);
-
-            // Phantom Deep Link v1 - Pay endpoint
-            const params = new URLSearchParams({
-                dapp_encryption_public_key: dappPublicKey,
-                cluster: 'mainnet-beta',
-                app_url: window.location.origin,           // or your public metadata.html URL
-                redirect_link: redirectUrl
-            });
-
-            const phantomDeeplink = `https://phantom.app/ul/v1/pay?${params.toString()}`;
-
-             // Payment details (lamports = SOL * 1e9)
-            const payParams = new URLSearchParams({
-                amount: (CONFIG.commissionAmount * 1_000_000_000).toString(), // lamports
-                recipient: CONFIG.adminWallet,
-                label: 'CCoin Commission Payment',
-                message: `Airdrop commission - User ID: ${CONFIG.telegramId}`,
-                memo: `commission_${CONFIG.telegramId}`
-            });
-
-            const finalDeeplink = `${phantomDeeplink}&${payParams.toString()}`;
-
-            // Open in Phantom (Telegram WebApp or browser)
-             if (tg && tg.openLink) {
-                 tg.openLink(finalDeeplink);
-             } else {
-                 window.location.href = finalDeeplink;
-             }
-
-             setTimeout(() => {
-                 showStatus('Approve the transaction in Phantom, then return here', 'info');
-                 setButtonLoading(false);
-             }, 3000);
-
-          } catch (error) {
-              console.error('Payment link error:', error);
-              showStatus('Failed to create payment link', 'error');
-              setButtonLoading(false);
-          }
-    }
+        }
 
         async function autoCheckPayment() {
             let attempts = 0;
