@@ -328,10 +328,10 @@
             }
         }
 
-        // Method 2: Solana Pay (Mobile - Simplified)
+        // Method 2: Solana Pay (Mobile - Telegram Compatible)
         async function payWithSolanaPay() {
             try {
-                showStatus('📱 Opening Phantom app...', 'info');
+                showStatus('📱 Preparing payment link...', 'info');
 
                 const recipient = CONFIG.adminWallet;
                 const amount = CONFIG.commissionAmount;
@@ -339,7 +339,7 @@
                 const message = encodeURIComponent(`Commission Payment - User ${CONFIG.telegramId}`);
                 const memo = encodeURIComponent(`ccoin_${CONFIG.telegramId}_${Date.now()}`);
 
-                // ✅ Solana Pay URL (Simple & Works on all devices)
+                // ✅ Create Solana Pay URL
                 const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=${memo}`;
 
                 // Mark payment as initiated
@@ -347,12 +347,30 @@
 
                 console.log('Opening Solana Pay URL:', solanaPayUrl);
 
-                // Open in Phantom
-                if (tg && tg.openLink) {
-                    console.log('Using Telegram WebApp openLink');
-                    tg.openLink(solanaPayUrl);
+                showStatus('📱 Opening Phantom app...', 'info');
+
+                // ✅ Telegram WebApp Compatible Method
+                if (tg) {
+                    try {
+                        // Try opening as external link (works on mobile)
+                        if (typeof tg.openLink === 'function') {
+                            // openLink only accepts HTTPS, so we need a workaround
+                            // Create a temporary redirect page or use phantom universal link
+
+                            // Option 1: Use Phantom's universal link format
+                            const phantomUniversalLink = `https://phantom.app/ul/browse/${encodeURIComponent(solanaPayUrl)}?ref=${encodeURIComponent(window.location.href)}`;
+
+                            tg.openLink(phantomUniversalLink);
+                        } else {
+                            // Fallback: Direct navigation
+                            window.location.href = solanaPayUrl;
+                        }
+                    } catch (e) {
+                        console.warn('Telegram openLink failed, trying direct method:', e);
+                        window.location.href = solanaPayUrl;
+                    }
                 } else {
-                    console.log('Fallback to window.location');
+                    // Not in Telegram WebApp - direct navigation
                     window.location.href = solanaPayUrl;
                 }
 
@@ -367,11 +385,6 @@
                 throw new Error(`Failed to open Phantom: ${error.message}`);
             }
         }
-
-        // Auto-check payment status
-        let checkAttempts = 0;
-        const maxCheckAttempts = 20;
-
         async function autoCheckPayment() {
             const checkInterval = setInterval(async () => {
                 if (checkAttempts >= maxCheckAttempts) {
