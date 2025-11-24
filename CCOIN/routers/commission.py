@@ -14,9 +14,9 @@ from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.pubkey import Pubkey
 from solders.transaction import Transaction
+from solders.message import Message
 from solders.system_program import TransferParams, transfer
 from solders.keypair import Keypair
-from solders.message import Message
 import nacl.public
 import nacl.utils
 import base58
