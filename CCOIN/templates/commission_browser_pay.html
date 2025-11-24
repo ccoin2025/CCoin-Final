@@ -33,7 +33,8 @@
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
         .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
-
+        
+        /* Info Box for Instructions */
         .info-box {
             background: rgba(33, 150, 243, 0.2);
             border: 1px solid rgba(33, 150, 243, 0.4);
@@ -59,7 +60,7 @@
             margin: 8px 0;
             line-height: 1.5;
         }
-
+        
         .commission-info {
             background: rgba(255, 255, 255, 0.1);
             padding: 25px;
@@ -135,7 +136,7 @@
             vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
+        
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
     </style>
@@ -161,11 +162,11 @@
                 <p>Please follow these steps carefully:</p>
                 <ol>
                     <li>Click "I Understand" button below</li>
-                    <li>Click "Open Phantom Wallet"</li>
-                    <li>Complete the transaction in Phantom</li>
+                    <li>Complete the transaction in Phantom wallet</li>
                     <li><strong>Return to this page after payment</strong></li>
                     <li>Click "Check Payment Status" button</li>
                     <li>Wait for confirmation</li>
+                    <li>Restart the app after successful verification</li>
                 </ol>
             </div>
             <button class="btn" onclick="showPhantomButton()">
@@ -176,7 +177,7 @@
         <!-- بخش Phantom -->
         <div id="phantomSection">
             <button class="btn" id="pay-btn" onclick="handlePayment()">
-                <span id="btn-text">🔓 Open Phantom Wallet</span>
+                <span id="btn-text">💳 Pay with Phantom</span>
             </button>
 
             <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
@@ -188,7 +189,6 @@
     </div>
 
     <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <script>
         const CONFIG = {
@@ -232,7 +232,7 @@
             }
         }
 
-        window.addEventListener('load', async function() {
+        window.addEventListener('load', async function () {
             if (localStorage.getItem('ccoin_payment_initiated')) {
                 const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
                 const now = Date.now();
@@ -267,7 +267,7 @@
                 if (isPhantomExtension()) {
                     await payWithExtension();
                 } else {
-                    await payWithRedirect();
+                    await payWithSolanaPay();  // ✅ تغییر از payWithRedirect به payWithSolanaPay
                 }
             } catch (error) {
                 console.error('Payment error:', error);
@@ -297,7 +297,7 @@
                     })
                 );
 
-                const { blockhash } = await connection.getLatestBlockhash('finalized');
+                const {blockhash} = await connection.getLatestBlockhash('finalized');
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = userPublicKey;
 
@@ -340,7 +340,7 @@
         }
 
         let checkAttempts = 0;
-        const maxCheckAttempts = 5; // محدودیت 5 بار
+        const maxCheckAttempts = 5;
 
         async function autoCheckPayment() {
             let attempts = 0;
@@ -358,11 +358,11 @@
 
                 try {
                     checkAttempts++;
-                    
+
                     const response = await fetch('/commission/verify_payment_auto', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({telegram_id: CONFIG.telegramId})
                     });
 
                     const data = await response.json();
@@ -405,25 +405,27 @@
             }, 3000);
         }
 
-        
         async function checkPayment() {
             try {
                 showStatus('🔍 Verifying payment...', 'info');
 
-                const response = await fetch('/commission/verify_payment', {
+                const response = await fetch('/commission/verify_payment_auto', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({telegram_id: CONFIG.telegramId})
                 });
 
                 const data = await response.json();
 
                 if (data.success && data.payment_found) {
                     localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment confirmed! Redirecting to bot...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    checkAttempts = 0;
+                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
-                    showStatus('❌ Payment not found. Please wait a moment and try again.', 'error');
+                    showStatus('❌ Payment not found. Please wait a moment after sending and try again.', 'error');
                 }
             } catch (error) {
                 console.error('Verification error:', error);
@@ -435,9 +437,9 @@
             try {
                 showStatus('📡 Registering payment...', 'info');
 
-                const response = await fetch('/commission/confirm_commission', {
+                const response = await fetch('/commission/confirm_payment', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         telegram_id: CONFIG.telegramId,
                         signature: signature
@@ -449,7 +451,9 @@
                 if (data.success) {
                     localStorage.removeItem('ccoin_payment_initiated');
                     showStatus('✅ Payment successful! Redirecting...', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 1500);
                 } else {
                     throw new Error(data.error || 'Confirmation failed');
                 }
@@ -459,6 +463,6 @@
                 setButtonLoading(false);
             }
         }
-    </script>
+</script>
 </body>
 </html>
