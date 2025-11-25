@@ -34,8 +34,9 @@
             margin: 0 auto 20px;
         }
         @keyframes spin { 100% { transform: rotate(360deg); } }
-        h1 { margin: 20px 0; }
+        h1 { margin: 20px 0; font-size: 24px; }
         p { opacity: 0.9; margin: 10px 0; }
+        .amount { font-size: 32px; font-weight: bold; color: #ffd700; margin: 15px 0; }
         .btn {
             background: #ffd700;
             color: #000;
@@ -48,54 +49,90 @@
             text-decoration: none;
             display: inline-block;
         }
+        .error {
+            background: rgba(244, 67, 54, 0.3);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="spinner"></div>
+        <div class="spinner" id="spinner"></div>
         <h1>Opening Phantom Wallet...</h1>
-        <p>Please approve the transaction of {{ commission_amount }} SOL</p>
-        <p id="status">Redirecting...</p>
+        <p>Please approve the payment</p>
+        <div class="amount">{{ commission_amount }} SOL</div>
+        <p id="status">Preparing transaction...</p>
+        
+        <div id="error" class="error"></div>
+        
         <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn" style="display:none;">Return to Bot</a>
+        <button class="btn" id="retry-btn" onclick="openPhantom()" style="display:none;">Try Again</button>
     </div>
 
-    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <script>
         const CONFIG = {
-            dappPublicKey: '{{ dapp_public_key }}',
-            nonce: '{{ nonce }}',
-            payload: '{{ payload }}',
-            redirectUrl: '{{ redirect_url }}',
+            recipient: '{{ admin_wallet }}',
+            amount: '{{ commission_amount }}',
             sessionId: '{{ session_id }}',
-            telegramId: '{{ telegram_id }}'
+            telegramId: '{{ telegram_id }}',
+            label: 'CCoin Commission',
+            message: 'Airdrop eligibility payment',
+            redirectUrl: '{{ redirect_url }}',
+            botUsername: '{{ bot_username }}'
         };
 
+        function showError(message) {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('return-btn').style.display = 'inline-block';
+            document.getElementById('retry-btn').style.display = 'inline-block';
+        }
+
         function openPhantom() {
-            const params = new URLSearchParams({
-                dapp_encryption_public_key: CONFIG.dappPublicKey,
-                nonce: CONFIG.nonce,
-                redirect_link: `${CONFIG.redirectUrl}?session=${CONFIG.sessionId}&telegram_id=${CONFIG.telegramId}`,
-                payload: CONFIG.payload
-            });
+            try {
+                document.getElementById('spinner').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('retry-btn').style.display = 'none';
+                document.getElementById('status').textContent = 'Opening Phantom...';
 
-            const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
+                // Build Solana Pay URL
+                const params = new URLSearchParams({
+                    recipient: CONFIG.recipient,
+                    amount: CONFIG.amount,
+                    label: CONFIG.label,
+                    message: CONFIG.message,
+                    reference: CONFIG.sessionId,
+                    memo: `CCoin-${CONFIG.telegramId}`
+                });
 
-            console.log('Opening Phantom:', deeplink);
-            document.getElementById('status').textContent = 'Opening Phantom app...';
+                // Solana Pay deeplink
+                const solanaPayUrl = `solana:${CONFIG.recipient}?${params.toString()}`;
+                
+                console.log('Opening Solana Pay URL:', solanaPayUrl);
 
-            // Try to open Phantom
-            window.location.href = deeplink;
+                // Open in Phantom
+                window.location.href = solanaPayUrl;
 
-            // Show return button after 3 seconds
-            setTimeout(() => {
-                document.getElementById('status').textContent = 'Complete the transaction in Phantom, then return here.';
-                document.getElementById('return-btn').style.display = 'inline-block';
-            }, 3000);
+                // Show instructions after delay
+                setTimeout(() => {
+                    document.getElementById('status').textContent = 'Complete payment in Phantom, then return to bot';
+                    document.getElementById('return-btn').style.display = 'inline-block';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error opening Phantom:', error);
+                showError('Failed to open Phantom. Please try again.');
+            }
         }
 
         // Auto-open on page load
         window.addEventListener('load', () => {
-            setTimeout(openPhantom, 500);
+            setTimeout(openPhantom, 800);
         });
     </script>
 </body>
