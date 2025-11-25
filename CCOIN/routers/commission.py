@@ -158,7 +158,8 @@ async def create_payment_session(
             transaction = Transaction.new_unsigned(message)
 
             # Serialize transaction
-            serialized_tx = base58.b58encode(bytes(transaction)).decode('utf-8')
+            wire_bytes = bytes(transaction) 
+            tx_base64 = base64.b64encode(wire_bytes).decode('utf-8')
 
             await connection.close()
 
