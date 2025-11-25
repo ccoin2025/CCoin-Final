@@ -700,3 +700,115 @@ async def commission_phantom_redirect(
         "bot_username": BOT_USERNAME,
         "commission_amount": COMMISSION_AMOUNT
     })
+
+@router.post("/verify", response_class=JSONResponse)
+@limiter.limit("30/minute")
+async def verify_commission_payment(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify commission payment on blockchain
+    Called by user after completing payment
+    """
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        signature = body.get("signature")  # Optional - user can provide
+
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        logger.info("Verifying commission payment", extra={"telegram_id": telegram_id})
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            return {"success": True, "already_paid": True, "message": "Payment already confirmed"}
+
+        # Check blockchain for recent transactions
+        connection = AsyncClient(SOLANA_RPC)
+        
+        try:
+            user_pubkey = Pubkey.from_string(user.wallet_address)
+            admin_pubkey = Pubkey.from_string(ADMIN_WALLET)
+
+            # Get recent signatures
+            signatures_resp = await connection.get_signatures_for_address(
+                user_pubkey,
+                limit=10
+            )
+
+            if signatures_resp.value:
+                for sig_info in signatures_resp.value:
+                    sig = str(sig_info.signature)
+                    
+                    # Get transaction details
+                    tx_resp = await connection.get_transaction(
+                        sig,
+                        encoding="jsonParsed",
+                        max_supported_transaction_version=0
+                    )
+
+                    if tx_resp.value:
+                        tx = tx_resp.value.transaction
+                        meta = tx_resp.value.transaction.meta
+
+                        # Check if this is a transfer to admin wallet
+                        if hasattr(tx, 'message') and hasattr(tx.message, 'instructions'):
+                            for ix in tx.message.instructions:
+                                if hasattr(ix, 'parsed'):
+                                    parsed = ix.parsed
+                                    if parsed.get('type') == 'transfer':
+                                        info = parsed.get('info', {})
+                                        
+                                        # Check destination and amount
+                                        if (info.get('destination') == ADMIN_WALLET and
+                                            info.get('source') == user.wallet_address):
+                                            
+                                            lamports = info.get('lamports', 0)
+                                            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+                                            
+                                            # Allow 1% tolerance for fees
+                                            if abs(lamports - expected_lamports) < (expected_lamports * 0.01):
+                                                # Payment found!
+                                                user.commission_paid = True
+                                                user.commission_transaction_hash = sig
+                                                user.commission_payment_date = datetime.utcnow()
+                                                db.commit()
+
+                                                logger.info("Commission payment verified", extra={
+                                                    "telegram_id": telegram_id,
+                                                    "signature": sig,
+                                                    "amount": lamports / 1_000_000_000
+                                                })
+
+                                                await connection.close()
+                                                return {
+                                                    "success": True,
+                                                    "verified": True,
+                                                    "signature": sig,
+                                                    "message": "Payment verified successfully!"
+                                                }
+
+            await connection.close()
+            
+            logger.info("No matching payment found yet", extra={"telegram_id": telegram_id})
+            return {
+                "success": True,
+                "verified": False,
+                "message": "Payment not found yet. Please wait a moment and try again."
+            }
+
+        except Exception as e:
+            await connection.close()
+            logger.error("Blockchain verification error", extra={"error": str(e)}, exc_info=True)
+            raise
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Verification error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
