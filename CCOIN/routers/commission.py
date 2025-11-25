@@ -643,6 +643,7 @@ async def verify_payment_auto(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @router.get("/phantom_redirect", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def commission_phantom_redirect(
@@ -651,8 +652,8 @@ async def commission_phantom_redirect(
     db: Session = Depends(get_db)
 ):
     """
-    Intermediate page that creates Phantom deeplink for payment
-    This page builds the transaction and redirects to Phantom
+    Solana Pay redirect page for commission payment
+    Uses standard Solana Pay URL scheme compatible with all wallets
     """
     logger.info("Phantom redirect page", extra={"telegram_id": telegram_id})
 
@@ -669,85 +670,33 @@ async def commission_phantom_redirect(
     if not user.wallet_address:
         raise HTTPException(status_code=400, detail="Wallet not connected")
 
-    # Create payment session
-    try:
-        # Generate session keypair
-        dapp_keypair = nacl.public.PrivateKey.generate()
-        dapp_public_key = bytes(dapp_keypair.public_key)
-        dapp_secret_key = bytes(dapp_keypair)
+    # Generate session ID for tracking
+    session_id = secrets.token_urlsafe(32)
 
-        session_id = secrets.token_urlsafe(32)
+    # Store session
+    session_data = {
+        "telegram_id": telegram_id,
+        "amount": COMMISSION_AMOUNT,
+        "recipient": ADMIN_WALLET,
+        "created_at": datetime.utcnow().isoformat(),
+        "wallet_address": user.wallet_address
+    }
 
-        # Create transaction
-        connection = AsyncClient(SOLANA_RPC)
-        blockhash_resp = await connection.get_latest_blockhash()
-        recent_blockhash = blockhash_resp.value.blockhash
+    phantom_sessions[session_id] = session_data
+    set_in_cache(f"phantom_session_{session_id}", session_data, ttl=600)  # 10 minutes
 
-        from_pubkey = Pubkey.from_string(user.wallet_address)
-        to_pubkey = Pubkey.from_string(ADMIN_WALLET)
-        lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+    logger.info("Payment session created for redirect", extra={
+        "session_id": session_id,
+        "telegram_id": telegram_id
+    })
 
-        transfer_ix = transfer(
-            TransferParams(
-                from_pubkey=from_pubkey,
-                to_pubkey=to_pubkey,
-                lamports=lamports
-            )
-        )
-
-        message = Message.new_with_blockhash(
-            [transfer_ix],
-            from_pubkey,
-            recent_blockhash
-        )
-
-        transaction = Transaction.new_unsigned(message)
-        serialized_tx = base58.b58encode(bytes(transaction)).decode('utf-8')
-
-        await connection.close()
-
-        # Prepare payload
-        payload = {
-            "transaction": serialized_tx,
-            "session": session_id
-        }
-
-        nonce = nacl.utils.random(24)
-        nonce_b58 = base58.b58encode(nonce).decode('utf-8')
-
-        # Store session
-        session_data = {
-            "telegram_id": telegram_id,
-            "dapp_public_key": base58.b58encode(dapp_public_key).decode('utf-8'),
-            "dapp_secret_key": base58.b58encode(dapp_secret_key).decode('utf-8'),
-            "amount": COMMISSION_AMOUNT,
-            "recipient": ADMIN_WALLET,
-            "created_at": datetime.utcnow().isoformat(),
-            "nonce": nonce_b58,
-            "payload": json.dumps(payload)
-        }
-
-        phantom_sessions[session_id] = session_data
-        set_in_cache(f"phantom_session_{session_id}", session_data, ttl=300)
-
-        logger.info("Payment session created for redirect", extra={
-            "session_id": session_id,
-            "telegram_id": telegram_id
-        })
-
-        # Render intermediate page with Phantom deeplink
-        return templates.TemplateResponse("commission_phantom_redirect.html", {
-            "request": request,
-            "telegram_id": telegram_id,
-            "session_id": session_id,
-            "dapp_public_key": base58.b58encode(dapp_public_key).decode('utf-8'),
-            "nonce": nonce_b58,
-            "payload": base58.b58encode(json.dumps(payload).encode()).decode('utf-8'),
-            "redirect_url": f"{os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')}/commission/phantom_callback",
-            "bot_username": BOT_USERNAME,
-            "commission_amount": COMMISSION_AMOUNT
-        })
-
-    except Exception as e:
-        logger.error("Phantom redirect error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create payment: {str(e)}")
+    # Render Solana Pay page
+    return templates.TemplateResponse("commission_phantom_redirect.html", {
+        "request": request,
+        "telegram_id": telegram_id,
+        "session_id": session_id,
+        "admin_wallet": ADMIN_WALLET,
+        "redirect_url": f"{os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')}/commission/verify",
+        "bot_username": BOT_USERNAME,
+        "commission_amount": COMMISSION_AMOUNT
+    })
