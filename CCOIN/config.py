@@ -54,7 +54,7 @@ X_API_KEY = os.getenv("X_API_KEY", "")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 
 # App Settings
-APP_DOMAIN = os.getenv("APP_DOMAIN", "https://ccoin-final.onrender.com")
+APP_DOMAIN = os.getenv("APP_DOMAIN", "https://ccoin2025.onrender.com")
 WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN")
 if not WEBHOOK_TOKEN:
     logger.warning("WEBHOOK_TOKEN is not set in environment variables")
