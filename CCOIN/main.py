@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from telegram import Update, Bot
 from starlette.responses import RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -106,12 +108,21 @@ app = FastAPI(
     redoc_url="/redoc" if ENV == "development" else None,
 )
 
-# ✅ CORS برای دسترسی عمومی به static files
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        "ccoin2025.onrender.com",
+        "*.onrender.com",
+        "localhost",
+        "127.0.0.1"
+    ]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET"],
+    allow_origins=["https://ccoin2025.onrender.com"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
