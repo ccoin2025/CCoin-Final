@@ -71,6 +71,7 @@
             margin: 20px 0;
             font-size: 14px;
             line-height: 1.6;
+            text-align: left;
         }
         .btn {
             background: linear-gradient(135deg, #ffd700, #ffed4e);
@@ -85,6 +86,7 @@
             display: inline-block;
             font-size: 16px;
             transition: all 0.3s ease;
+            width: 90%;
         }
         .btn:hover {
             transform: translateY(-2px);
@@ -100,38 +102,59 @@
             padding: 15px;
             border-radius: 12px;
             margin-top: 20px;
+        }
+        .qr-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
             display: none;
         }
-        #status {
-            font-weight: 500;
-            margin: 15px 0;
+        #qrcode {
+            margin: 10px auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">💰</div>
-        <div class="spinner" id="spinner"></div>
-        <h1 id="title">Opening Phantom Wallet...</h1>
+        <h1>Pay Commission</h1>
         <div class="amount">{{ commission_amount }} SOL</div>
-        <p id="status">Preparing payment link...</p>
+        <p id="status">Please complete the payment in Phantom</p>
 
-        <div class="instruction" id="instruction" style="display:none;">
-            <strong>📱 Next Steps:</strong><br>
-            1️⃣ Phantom app should open automatically<br>
-            2️⃣ Review and approve the {{ commission_amount }} SOL payment<br>
-            3️⃣ Wait for confirmation (10-30 seconds)<br>
-            4️⃣ Return here to verify payment
+        <div class="instruction">
+            <strong>📱 Payment Instructions:</strong><br><br>
+            <strong>Method 1: Automatic (Recommended)</strong><br>
+            Click "Open Phantom" below to pay automatically<br><br>
+            <strong>Method 2: Manual Transfer</strong><br>
+            If automatic doesn't work:<br>
+            1. Open Phantom app manually<br>
+            2. Send exactly <strong>{{ commission_amount }} SOL</strong><br>
+            3. To address: <code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px;font-size:11px;word-break:break-all;">{{ admin_wallet }}</code><br>
+            4. Return here and click "Verify Payment"
         </div>
 
-        <div id="error" class="error"></div>
+        <!-- Payment Methods -->
+        <button class="btn" onclick="openPhantomApp()">
+            💳 Open Phantom App
+        </button>
 
-        <div id="buttons" style="display:none; margin-top:20px;">
-            <button class="btn" onclick="openPhantom()">🔄 Try Again</button>
-            <a href="https://t.me/{{ bot_username }}" class="btn secondary">← Return to Bot</a>
-        </div>
+        <button class="btn secondary" onclick="copyAddress()" style="font-size:14px;">
+            📋 Copy Wallet Address
+        </button>
+
+        <button class="btn secondary" onclick="verifyPayment()" style="background:rgba(76,175,80,0.3);">
+            ✅ Verify Payment
+        </button>
+
+        <a href="https://t.me/{{ bot_username }}" class="btn secondary">
+            ← Return to Bot
+        </a>
+
+        <div id="error" class="error" style="display:none;"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script>
         const CONFIG = {
             recipient: '{{ admin_wallet }}',
@@ -148,64 +171,106 @@
         }
 
         function showError(message) {
-            document.getElementById('spinner').style.display = 'none';
-            document.getElementById('title').textContent = 'Error';
-            document.getElementById('error').textContent = message;
-            document.getElementById('error').style.display = 'block';
-            document.getElementById('buttons').style.display = 'block';
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
         }
 
-        function showSuccess() {
-            document.getElementById('spinner').style.display = 'none';
-            document.getElementById('instruction').style.display = 'block';
-            document.getElementById('buttons').style.display = 'block';
+        function showStatus(message) {
+            document.getElementById('status').textContent = message;
         }
 
-        function openPhantom() {
+        // Method 1: Open Phantom app
+        function openPhantomApp() {
             try {
-                document.getElementById('spinner').style.display = 'block';
-                document.getElementById('error').style.display = 'none';
-                document.getElementById('status').textContent = 'Opening Phantom...';
+                showStatus('Opening Phantom app...');
 
-                console.log('Payment Config:', CONFIG);
+                // Build Phantom Universal Link
+                const phantomUrl = `https://phantom.app/ul/browse/${encodeURIComponent(buildSolanaPayUrl())}?ref=ccoin`;
 
-                // Method 1: Solana Pay URL (Standard)
-                const solanaPayUrl = `solana:${CONFIG.recipient}?amount=${CONFIG.amount}&label=CCoin%20Commission&message=Airdrop%20Payment&memo=CCoin-${CONFIG.telegramId}`;
+                console.log('Opening Phantom URL:', phantomUrl);
 
-                console.log('Solana Pay URL:', solanaPayUrl);
+                // Open in new window/tab
+                const opened = window.open(phantomUrl, '_blank');
 
-                // Try to open
-                if (tg && tg.openLink) {
-                    // Use Telegram WebApp method
-                    tg.openLink(solanaPayUrl);
-                    console.log('Opened via Telegram WebApp');
-                } else {
-                    // Direct redirect
-                    window.location.href = solanaPayUrl;
-                    console.log('Direct redirect');
+                if (!opened) {
+                    // Fallback: try direct URL
+                    window.location.href = phantomUrl;
                 }
 
-                // Show instructions after delay
                 setTimeout(() => {
-                    document.getElementById('status').textContent = 'Waiting for payment confirmation...';
-                    showSuccess();
+                    showStatus('Complete payment in Phantom, then return here and click "Verify Payment"');
                 }, 2000);
 
             } catch (error) {
-                console.error('Error opening Phantom:', error);
-                showError(`Failed to open Phantom: ${error.message}`);
+                console.error('Error:', error);
+                showError(`Error: ${error.message}`);
             }
         }
 
-        // Auto-open on page load
-        window.addEventListener('load', () => {
-            console.log('Page loaded, opening Phantom in 1 second...');
-            setTimeout(openPhantom, 1000);
-        });
+        // Build Solana Pay URL
+        function buildSolanaPayUrl() {
+            const params = new URLSearchParams({
+                recipient: CONFIG.recipient,
+                amount: CONFIG.amount,
+                label: 'CCoin Commission',
+                message: 'Airdrop Eligibility Payment',
+                memo: `CCoin-${CONFIG.telegramId}`
+            });
 
-        // Log for debugging
-        console.log('Telegram WebApp available:', !!tg);
-        console.log('User Agent:', navigator.userAgent);
+            return `solana:${CONFIG.recipient}?${params.toString()}`;
+        }
+
+        // Copy wallet address
+        function copyAddress() {
+            const textArea = document.createElement('textarea');
+            textArea.value = CONFIG.recipient;
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showStatus('✅ Wallet address copied! Open Phantom and paste it.');
+            } catch (err) {
+                showError('Failed to copy. Address: ' + CONFIG.recipient);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        // Verify payment
+        async function verifyPayment() {
+            try {
+                showStatus('🔍 Verifying payment on blockchain...');
+
+                const response = await fetch('/commission/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+                });
+
+                const data = await response.json();
+
+                if (data.verified) {
+                    showStatus('✅ Payment verified successfully!');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 2000);
+                } else {
+                    showStatus('⏳ ' + data.message);
+                }
+
+            } catch (error) {
+                console.error('Verification error:', error);
+                showError('Verification failed. Please try again.');
+            }
+        }
+
+        // Auto-open on page load (optional)
+        window.addEventListener('load', () => {
+            console.log('Page loaded. Config:', CONFIG);
+            // Don't auto-open, let user click button
+        });
     </script>
 </body>
 </html>
