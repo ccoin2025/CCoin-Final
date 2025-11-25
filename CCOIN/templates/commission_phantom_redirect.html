@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opening Phantom...</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        h1 { margin: 20px 0; }
+        p { opacity: 0.9; margin: 10px 0; }
+        .btn {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Opening Phantom Wallet...</h1>
+        <p>Please approve the transaction of {{ commission_amount }} SOL</p>
+        <p id="status">Redirecting...</p>
+        <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn" style="display:none;">Return to Bot</a>
+    </div>
+
+    <script src="https://unpkg.com/bs58@5.0.0/index.js"></script>
+    <script>
+        const CONFIG = {
+            dappPublicKey: '{{ dapp_public_key }}',
+            nonce: '{{ nonce }}',
+            payload: '{{ payload }}',
+            redirectUrl: '{{ redirect_url }}',
+            sessionId: '{{ session_id }}',
+            telegramId: '{{ telegram_id }}'
+        };
+
+        function openPhantom() {
+            const params = new URLSearchParams({
+                dapp_encryption_public_key: CONFIG.dappPublicKey,
+                nonce: CONFIG.nonce,
+                redirect_link: `${CONFIG.redirectUrl}?session=${CONFIG.sessionId}&telegram_id=${CONFIG.telegramId}`,
+                payload: CONFIG.payload
+            });
+
+            const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
+
+            console.log('Opening Phantom:', deeplink);
+            document.getElementById('status').textContent = 'Opening Phantom app...';
+
+            // Try to open Phantom
+            window.location.href = deeplink;
+
+            // Show return button after 3 seconds
+            setTimeout(() => {
+                document.getElementById('status').textContent = 'Complete the transaction in Phantom, then return here.';
+                document.getElementById('return-btn').style.display = 'inline-block';
+            }, 3000);
+        }
+
+        // Auto-open on page load
+        window.addEventListener('load', () => {
+            setTimeout(openPhantom, 500);
+        });
+    </script>
+</body>
+</html>
