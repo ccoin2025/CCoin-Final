@@ -7,7 +7,9 @@
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Pay Commission - CCoin</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
+        /* (all your original CSS preserved exactly) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -34,109 +36,29 @@
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
         .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
-
-        .info-box {
-            background: rgba(33, 150, 243, 0.2);
-            border: 1px solid rgba(33, 150, 243, 0.4);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .info-box h3 {
-            color: #ffd700;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        .info-box p {
-            line-height: 1.6;
-            margin-bottom: 10px;
-        }
-        .info-box ol {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-        .info-box li {
-            margin: 8px 0;
-            line-height: 1.5;
-        }
-
-        .commission-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 25px;
-            border-radius: 16px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        .amount {
-            font-size: 42px;
-            font-weight: bold;
-            color: #ffd700;
-            margin-bottom: 8px;
-            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
-        }
-        .fee-info {
-            font-size: 13px;
-            color: #90ee90;
-            margin-top: 12px;
-            padding: 8px;
-            background: rgba(144, 238, 144, 0.1);
-            border-radius: 8px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #ffd700, #ffed4e);
-            color: #000;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 50px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.3s ease;
-            margin: 10px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
-            text-decoration: none;
-            display: inline-block;
-        }
+        .info-box { background: rgba(33, 150, 243, 0.2); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: left; }
+        .info-box h3 { color: #ffd700; margin-bottom: 15px; text-align: center; }
+        .info-box p { line-height: 1.6; margin-bottom: 10px; }
+        .info-box ol { margin-left: 20px; margin-top: 10px; }
+        .info-box li { margin: 8px 0; line-height: 1.5; }
+        .commission-info { background: rgba(255, 255, 255, 0.1); padding: 25px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(255, 255, 255, 0.15); }
+        .amount { font-size: 42px; font-weight: bold; color: #ffd700; margin-bottom: 8px; text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3); }
+        .fee-info { font-size: 13px; color: #90ee90; margin-top: 12px; padding: 8px; background: rgba(144, 238, 144, 0.1); border-radius: 8px; }
+        .btn { background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000; border: none; padding: 16px 32px; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; transition: all 0.3s ease; margin: 10px 0; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3); text-decoration: none; display: inline-block; }
         .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5); }
         .btn:active { transform: translateY(-1px); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
         .return-btn { background: rgba(255, 255, 255, 0.2); color: white; box-shadow: none; }
         .return-btn:hover { background: rgba(255, 255, 255, 0.3); box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2); }
-        .verify-btn {
-            background: rgba(76, 175, 80, 0.3);
-            color: white;
-            margin-top: 5px;
-            display: none;
-        }
+        .verify-btn { background: rgba(76, 175, 80, 0.3); color: white; margin-top: 5px; display: none; }
         .verify-btn:hover { background: rgba(76, 175, 80, 0.5); }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 12px;
-            display: none;
-            font-size: 14px;
-            font-weight: 500;
-            animation: slideIn 0.3s ease;
-        }
+        .status { margin: 20px 0; padding: 15px; border-radius: 12px; display: none; font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .status.success { background: rgba(76, 175, 80, 0.25); color: #4caf50; border: 1px solid rgba(76, 175, 80, 0.4); display: block; }
         .status.error { background: rgba(244, 67, 54, 0.25); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.4); display: block; }
         .status.info { background: rgba(33, 150, 243, 0.25); color: #2196f3; border: 1px solid rgba(33, 150, 243, 0.4); display: block; }
-        .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
+        .spinner { border: 3px solid rgba(255, 255, 255, 0.3); border-top: 3px solid #fff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; margin-right: 10px; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
     </style>
@@ -164,9 +86,8 @@
                     <li>Click "I Understand" button below</li>
                     <li>Click "Pay with Phantom" to open your wallet</li>
                     <li>Approve the transaction in Phantom app</li>
-                    <li><strong>Return to this page after payment</strong></li>
-                    <li>Click "Check Payment Status" button</li>
-                    <li>Wait for blockchain confirmation</li>
+                    <li><strong>Payment will be verified automatically</strong></li>
+                    <li>You'll be redirected to success page</li>
                 </ol>
             </div>
             <button class="btn" onclick="showPhantomButton()">
@@ -187,10 +108,6 @@
 
         <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
     </div>
-
-    <!-- Libraries -->
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <script>
         const CONFIG = {
@@ -236,29 +153,13 @@
 
         // Check on page load
         window.addEventListener('load', async function () {
-            // Check for existing payment session
-            const paymentInitiated = localStorage.getItem('ccoin_payment_initiated');
-            if (paymentInitiated) {
-                const paymentTime = parseInt(paymentInitiated);
-                const now = Date.now();
-
-                if (now - paymentTime < 600000) { // 10 minutes
-                    showPhantomButton();
-                    showStatus('⏳ Checking payment status...', 'info');
-                    setButtonLoading(false);
-                    await autoCheckPayment();
-                    return;
-                }
-            }
-
-            // Check if already paid
             try {
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
 
                 if (data.commission_paid) {
                     showStatus('✅ Payment already completed!', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
+                    setTimeout(() => window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`, 2000);
                 }
             } catch (error) {
                 console.error('Status check error:', error);
@@ -273,7 +174,7 @@
                 if (isPhantomExtension()) {
                     await payWithExtension();
                 } else {
-                    await payWithDeeplink();
+                    await payWithSolanaPay();
                 }
             } catch (error) {
                 console.error('Payment error:', error);
@@ -282,10 +183,10 @@
             }
         }
 
-        // Method 1: Phantom Browser Extension
+        // Method 1: Phantom Browser Extension (Desktop)
         async function payWithExtension() {
             try {
-                showStatus('🔗 Connecting to Phantom extension...', 'info');
+                showStatus('🔗 Connecting to Phantom...', 'info');
 
                 const provider = window.solana;
                 await provider.connect();
@@ -328,97 +229,84 @@
             }
         }
 
-        // Method 2: Phantom Deeplink (Mobile/Telegram)
-        async function payWithDeeplink() {
+        // Method 2: Solana Pay (Mobile/Telegram) - REPLACED: uses server-side transaction + Phantom deeplink
+        async function payWithSolanaPay() {
             try {
-                showStatus('📱 Preparing deeplink...', 'info');
+                showStatus('📱 Preparing Phantom payment...', 'info');
 
-                // ✅ Fetch transaction from server (BASE64)
-                const res = await fetch("/commission/create_payment_session", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        telegram_id: CONFIG.telegramId,
-                        amount: CONFIG.commissionAmount,
-                        recipient: CONFIG.adminWallet
-                    })
+                // 1) Ask server to create an unsigned serialized transaction (base64) and session
+                const createRes = await fetch('/commission/create_payment_session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_id: CONFIG.telegramId })
                 });
 
-                if (!res.ok) {
-                    throw new Error('Failed to create payment session');
+                if (!createRes.ok) {
+                    const err = await createRes.text();
+                    throw new Error('Server error creating transaction: ' + err);
                 }
 
-                const data = await res.json();
-                if (!data.transaction) {
-                    throw new Error("Server did not return transaction");
+                const createData = await createRes.json();
+                const txBase64 = createData.transaction; // base64 encoded transaction
+                const sessionId = createData.session_id;
+
+                if (!txBase64 || !sessionId) {
+                    throw new Error('Invalid server response');
                 }
 
-                const txBase64 = data.transaction;
-                const sessionId = data.session_id;
-
-                console.log('Session created:', sessionId);
-
-                // ✅ Encode payload + redirect link
+                // 2) Build Phantom deeplink
                 const payload = encodeURIComponent(txBase64);
-                const callback = `${window.location.origin}/commission/success?telegram_id=${CONFIG.telegramId}`;
+                const callback = `${window.location.origin}/commission/phantom_callback?session=${encodeURIComponent(sessionId)}&telegram_id=${encodeURIComponent(CONFIG.telegramId)}`;
                 const redirect_link = encodeURIComponent(callback);
 
-                // ✅ Build Phantom deeplink
-                const deeplink =
-                    `https://phantom.app/ul/v1/signAndSendTransaction?` +
-                    `redirect_link=${redirect_link}&payload=${payload}`;
+                const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?redirect_link=${redirect_link}&payload=${payload}`;
 
-                console.log("DEEPLINK => ", deeplink);
-
-                showStatus('📱 Opening Phantom...', 'info');
+                console.log('DEEPLINK:', deeplink);
 
                 // Mark payment as initiated
                 localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
 
-                // ✅ Open in Telegram external browser
+                // 3) Open deeplink in external browser (preferred) or fallback
                 if (tg && tg.openLink) {
-                    tg.openLink(deeplink, { try_instant_view: false });
-                    console.log('Opened via Telegram WebApp');
+                    tg.openLink(deeplink, { tryBrowser: true });
                 } else {
-                    window.open(deeplink, "_blank");
-                    console.log('Opened via window.open');
+                    window.open(deeplink, '_blank');
                 }
 
-                // Show next instruction
+                // 4) Show instruction and start auto-check (short polling while user returns)
                 setTimeout(() => {
-                    showStatus('💡 After completing payment in Phantom, return here and click "Check Payment Status"', 'info');
+                    showStatus('💡 Complete payment in Phantom. After approval, you will be redirected back. Checking automatically...', 'info');
                     setButtonLoading(false);
-                }, 3000);
+                    startAutoCheck();
+                }, 2500);
 
             } catch (error) {
-                console.error('Deeplink error:', error);
-                throw new Error(`Failed to open Phantom: ${error.message}`);
+                console.error('SolanaPay flow error:', error);
+                showStatus('❌ ' + (error.message || 'Payment initialization failed'), 'error');
+                setButtonLoading(false);
             }
         }
 
-        // Check payment status (called by user or auto)
-        async function checkPayment() {
-            await verifyPaymentOnServer();
-        }
-
-        // Auto-check payment
-        async function autoCheckPayment() {
+        // Auto-check payment every 10 seconds
+        function startAutoCheck() {
             let attempts = 0;
-            const maxAttempts = 20; // 20 attempts over ~3 minutes
+            const maxAttempts = 30; // ~5 minutes
 
             const checkInterval = setInterval(async () => {
                 attempts++;
-                
+
                 try {
                     const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                     const data = await response.json();
 
                     if (data.commission_paid) {
                         clearInterval(checkInterval);
-                        showStatus('✅ Payment verified!', 'success');
+                        localStorage.removeItem('ccoin_payment_initiated');
+                        showStatus('✅ Payment verified! Redirecting...', 'success');
                         setTimeout(() => {
                             window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                        }, 1500);
+                        }, 1200);
+                        return;
                     }
                 } catch (error) {
                     console.error('Auto-check error:', error);
@@ -428,20 +316,25 @@
                     clearInterval(checkInterval);
                     showStatus('⏰ Auto-check stopped. Click "Check Payment Status" to verify manually.', 'info');
                 }
-            }, 10000); // Every 10 seconds
+            }, 10000);
+        }
+
+        // Manual check
+        async function checkPayment() {
+            await verifyPaymentOnServer();
         }
 
         // Verify payment on server
         async function verifyPaymentOnServer() {
             const btn = document.getElementById('verify-btn');
             const originalText = btn?.innerHTML || 'Check Payment Status';
-            
+
             try {
                 if (btn) {
                     btn.disabled = true;
                     btn.innerHTML = '<span class="spinner"></span> Verifying...';
                 }
-                
+
                 showStatus('🔍 Verifying payment on blockchain...', 'info');
 
                 const response = await fetch('/commission/verify', {
@@ -457,13 +350,13 @@
                 const data = await response.json();
 
                 if (data.verified) {
-                    showStatus('✅ Payment verified successfully! Redirecting...', 'success');
                     localStorage.removeItem('ccoin_payment_initiated');
+                    showStatus('✅ Payment verified! Redirecting...', 'success');
                     setTimeout(() => {
                         window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                    }, 2000);
+                    }, 1200);
                 } else {
-                    showStatus('⏳ ' + (data.message || 'Payment not found yet. Wait 10-30 seconds after payment, then try again.'), 'info');
+                    showStatus('⏳ ' + (data.message || 'Payment not found. Wait 10-30 seconds, then try again.'), 'info');
                     if (btn) {
                         btn.disabled = false;
                         btn.innerHTML = originalText;
