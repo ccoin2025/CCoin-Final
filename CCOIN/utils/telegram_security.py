@@ -125,7 +125,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.refresh(user)
         
         # Create Web App URL based on user status
-        base_url = os.getenv('APP_DOMAIN', 'https://ccoin-final.onrender.com')
+        base_url = os.getenv('APP_DOMAIN', 'https://ccoin.onrender.com')
         
         # اگر کاربر جدید است یا first_login=True است، به load برود
         if user.first_login:
