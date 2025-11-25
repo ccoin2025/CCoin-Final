@@ -441,6 +441,31 @@
             }
         }
 
+        async function verifyPayment() {
+            try {
+                showStatus('🔍 Verifying payment on blockchain...', 'info');
+        
+                const response = await fetch('/commission/verify', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({telegram_id: CONFIG.telegramId})
+                });
+
+                const data = await response.json();
+
+                if (data.verified) {
+                    showStatus(`✅ ${data.message}`, 'success');
+                    setTimeout(() => {
+                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+                    }, 2000);
+                } else {
+                    showStatus(`⏳ ${data.message}`, 'info');
+                }
+            } catch (error) {
+                showStatus(`❌ Verification error: ${error.message}`, 'error');
+            }
+        }
+
         // Confirm transaction on server (for Extension flow)
         async function confirmOnServer(signature) {
             try {
