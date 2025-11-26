@@ -81,34 +81,25 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="success-icon">✅</div>
-        <h1>Payment Successful!</h1>
-        <p>Your commission has been paid successfully. You are now eligible for the CCoin airdrop!</p>
-        <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">
-            Return to Bot
-        </a>
-        <p class="countdown">Redirecting in <span id="countdown">3</span> seconds...</p>
-    </div>
-
-    <script>
-        let seconds = 3;
-        const countdownEl = document.getElementById('countdown');
-        
-        const interval = setInterval(() => {
-            seconds--;
-            countdownEl.textContent = seconds;
-            
-            if (seconds <= 0) {
-                clearInterval(interval);
-                window.location.href = 'https://t.me/{{ bot_username }}';
-            }
-        }, 1000);
-
-        // همچنین اجازه بده کاربر خودش کلیک کنه
-        document.getElementById('return-btn').addEventListener('click', (e) => {
-            clearInterval(interval);
-        });
-    </script>
+  <div class="container">
+    <div class="success-icon">✅</div>
+    <h1>Payment Successful!</h1>
+    <p>Your commission has been paid successfully. You are now eligible for the CCoin airdrop!</p>
+    <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">Return to Bot</a>
+    <p class="countdown">Redirecting in <span id="countdown">3</span> seconds...</p>
+  </div>
+<script>
+let seconds = 3;
+const countdownEl = document.getElementById('countdown');
+const interval = setInterval(()=> {
+  seconds--;
+  countdownEl.textContent = seconds;
+  if (seconds <= 0) {
+    clearInterval(interval);
+    window.location.href = 'https://t.me/{{ bot_username }}';
+  }
+}, 1000);
+document.getElementById('return-btn').addEventListener('click', ()=> clearInterval(interval));
+</script>
 </body>
 </html>
