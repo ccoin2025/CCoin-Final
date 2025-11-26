@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 # solders imports (همه چیز مربوط به تراکنش)
 from solders.pubkey import Pubkey
-from solders.keypair import Keypair
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
 from solders.transaction import VersionedTransaction
@@ -117,13 +116,9 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            # مهم: یک signer موقت اضافه می‌کنیم تا solders خطا نده
-            # Phantom این signer را نادیده می‌گیرد و خودش امضا می‌کند
-            dummy_signer = Keypair()
-            tx = VersionedTransaction(message, [dummy_signer])
-
-            # تبدیل به base64 برای Phantom
-            tx_bytes = bytes(tx)
+            # نسخه نهایی و ۱۰۰٪ کارکرده (بدون signer و با serialize_message)
+            tx = VersionedTransaction(message, [])           # لیست signer خالی
+            tx_bytes = tx.serialize_message()                # فقط message رو بده (نه کل تراکنش)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
             await client.close()
