@@ -160,183 +160,96 @@
             from { width: 0%; }
             to { width: 100%; }
         }
-    </style>
+  </style>
 </head>
 <body>
-    <div class="container">
-        {% if success %}
-            <div class="icon success">✅</div>
-            <h1>Payment Successful!</h1>
-            <p class="message">{{ message or "Your commission payment has been confirmed. You're now eligible for the airdrop!" }}</p>
-            
-            {% if signature %}
-            <div class="signature-box">
-                <strong>Transaction Signature:</strong><br>
-                <a href="https://solscan.io/tx/{{ signature }}?cluster=mainnet" target="_blank" rel="noopener noreferrer">
-                    {{ signature[:8] }}...{{ signature[-8:] }}
-                </a>
-                <br><small>Click to view on Solscan</small>
-            </div>
-            {% endif %}
+  <div class="container">
+    {% if success %}
+      <div class="icon success">✅</div>
+      <h1>Payment Successful!</h1>
+      <p class="message">{{ message or "Your commission payment has been confirmed." }}</p>
+      {% if signature %}
+        <div class="signature-box">
+          <strong>Transaction Signature:</strong><br>
+          <a href="https://solscan.io/tx/{{ signature }}?cluster=mainnet" target="_blank">{{ signature[:8] }}...{{ signature[-8:] }}</a>
+        </div>
+      {% endif %}
+      <button class="btn" onclick="returnToBot()">🎉 Return to Telegram Bot</button>
+      <p class="timer" id="countdown">Redirecting in <span id="counter">5</span> seconds...</p>
 
-            <div class="progress-bar">
-                <div class="progress-bar-fill"></div>
-            </div>
+    {% elif error %}
+      <div class="icon error">❌</div>
+      <h1>Payment Failed</h1>
+      <p class="message">{{ error }}</p>
+      <button class="btn" onclick="retryPayment()">🔄 Try Again</button>
+      <button class="btn secondary" onclick="returnToBot()">← Return to Bot</button>
 
-            <button class="btn" onclick="returnToBot()">
-                🎉 Return to Telegram Bot
-            </button>
+    {% else %}
+      <div class="icon pending">⏳</div>
+      <h1>Processing Payment...</h1>
+      <p class="message">{{ message or "Verifying transaction on the blockchain. Please wait..." }}</p>
+      <div class="spinner"></div>
+      <button class="btn secondary" onclick="checkStatus()">🔍 Check Status Now</button>
+      <p class="timer">Auto-checking every 5 seconds...</p>
+    {% endif %}
+  </div>
 
-            <p class="timer" id="countdown">Redirecting in <span id="counter">5</span> seconds...</p>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+const CONFIG = {
+  telegramId: '{{ telegram_id }}',
+  botUsername: '{{ bot_username }}',
+  signature: '{{ signature }}' || null,
+  success: {{ 'true' if success else 'false' }},
+  error: {{ 'true' if error else 'false' }}
+};
 
-        {% elif error %}
-            <div class="icon error">❌</div>
-            <h1>Payment Failed</h1>
-            <p class="message">{{ error }}</p>
+let tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
 
-            <div class="status-details">
-                <h3>What happened?</h3>
-                <p>The payment could not be completed. This might be due to:</p>
-                <ul style="margin-left: 20px; text-align: left;">
-                    <li>Transaction was cancelled in Phantom</li>
-                    <li>Insufficient balance for fees</li>
-                    <li>Network congestion</li>
-                    <li>Transaction already used</li>
-                </ul>
-            </div>
+{% if success %}
+let countdown = 5;
+const counterEl = document.getElementById('counter');
+const timer = setInterval(()=> {
+  countdown--;
+  if (counterEl) counterEl.textContent = countdown;
+  if (countdown <= 0) {
+    clearInterval(timer);
+    returnToBot();
+  }
+}, 1000);
+{% endif %}
 
-            <button class="btn" onclick="retryPayment()">
-                🔄 Try Again
-            </button>
+{% if not success and not error %}
+let attempts = 0;
+const maxAttempts = 20;
+const intv = setInterval(async ()=> {
+  attempts++;
+  if (attempts > maxAttempts) {
+    clearInterval(intv);
+    window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`;
+    return;
+  }
+  await checkStatus();
+}, 5000);
+{% endif %}
 
-            <button class="btn secondary" onclick="returnToBot()">
-                ← Return to Bot
-            </button>
+async function checkStatus(){
+  try {
+    const res = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
+    const d = await res.json();
+    if (d.commission_paid) {
+      window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+    }
+  } catch(e){ console.error(e); }
+}
 
-        {% else %}
-            <div class="icon pending">⏳</div>
-            <h1>Processing Payment...</h1>
-            <p class="message">{{ message or "Your payment is being verified on the blockchain. Please wait..." }}</p>
-
-            <div class="spinner"></div>
-
-            <div class="status-details">
-                <h3>Verification in Progress</h3>
-                <p>We're confirming your transaction on the Solana blockchain. This typically takes a few seconds.</p>
-                <p><strong>Do not close this page.</strong></p>
-            </div>
-
-            <button class="btn secondary" onclick="checkStatus()">
-                🔍 Check Status Now
-            </button>
-
-            <p class="timer">Auto-checking every 5 seconds...</p>
-        {% endif %}
-    </div>
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <script>
-        const CONFIG = {
-            telegramId: '{{ telegram_id }}',
-            botUsername: '{{ bot_username }}',
-            signature: '{{ signature }}' || null,
-            success: {{ 'true' if success else 'false' }},
-            error: {{ 'true' if error else 'false' }}
-        };
-
-        let tg = window.Telegram?.WebApp;
-        if (tg) {
-            tg.ready();
-            tg.expand();
-        }
-
-        // Auto-redirect timer for success
-        {% if success %}
-        let countdown = 5;
-        const counterElement = document.getElementById('counter');
-        
-        const timer = setInterval(() => {
-            countdown--;
-            if (counterElement) {
-                counterElement.textContent = countdown;
-            }
-            
-            if (countdown <= 0) {
-                clearInterval(timer);
-                returnToBot();
-            }
-        }, 1000);
-        {% endif %}
-
-        // Auto-verify for pending state
-        {% if not success and not error %}
-        let verifyAttempts = 0;
-        const maxAttempts = 20;
-
-        const verifyInterval = setInterval(async () => {
-            verifyAttempts++;
-            
-            if (verifyAttempts > maxAttempts) {
-                clearInterval(verifyInterval);
-                window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`;
-                return;
-            }
-
-            await checkStatus();
-        }, 5000);
-        {% endif %}
-
-        async function checkStatus() {
-            try {
-                const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
-                const data = await response.json();
-
-                if (data.commission_paid) {
-                    // Payment confirmed!
-                    window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                }
-            } catch (error) {
-                console.error('Status check error:', error);
-            }
-        }
-
-        function returnToBot() {
-            const botUrl = `https://t.me/${CONFIG.botUsername}`;
-            
-            if (tg && tg.close) {
-                // Try to close the WebApp
-                tg.close();
-            } else if (tg && tg.openTelegramLink) {
-                // Open bot in Telegram
-                tg.openTelegramLink(botUrl);
-            } else {
-                // Fallback
-                window.location.href = botUrl;
-            }
-        }
-
-        function retryPayment() {
-            window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`;
-        }
-
-        // Parse URL params for additional data
-        const urlParams = new URLSearchParams(window.location.search);
-        const errorCode = urlParams.get('errorCode');
-        const errorMessage = urlParams.get('errorMessage');
-
-        if (errorCode && !CONFIG.error) {
-            // Phantom returned an error
-            console.error('Phantom error:', errorCode, errorMessage);
-        }
-
-        // Log callback event
-        console.log('Callback page loaded', {
-            success: CONFIG.success,
-            error: CONFIG.error,
-            telegram_id: CONFIG.telegramId,
-            signature: CONFIG.signature
-        });
-    </script>
+function returnToBot(){
+  const url = `https://t.me/${CONFIG.botUsername}`;
+  if (tg && tg.close) tg.close();
+  else window.location.href = url;
+}
+function retryPayment(){ window.location.href = `/commission/browser/pay?telegram_id=${CONFIG.telegramId}`; }
+</script>
 </body>
 </html>
