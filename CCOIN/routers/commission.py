@@ -1,59 +1,51 @@
+# routes/commission.py
 import os
 import time
 import secrets
-import json
 import base64
 import structlog
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+# solana-py (stable) imports
 from solana.rpc.async_api import AsyncClient
-from solana.rpc.api import Client as SyncClient
-from solana.rpc.commitment import Confirmed
-from solders.pubkey import Pubkey
-from solders.message import Message
-from solders.transaction import Transaction
-from solders.system_program import TransferParams, transfer
+from solana.publickey import PublicKey
+from solana.transaction import Transaction
+from solana.system_program import TransferParams, transfer
 
-# Project imports - adjust paths if needed
+# project imports - adjust to your project layout
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
 
 logger = structlog.get_logger(__name__)
-
-router = APIRouter()
+router = APIRouter()  # NO prefix here (main includes with prefix="/commission")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# In-memory caches - lightweight session store (TTL)
-memory_cache = {}            # key -> (value, expiry_timestamp)
-phantom_sessions = {}        # session_id -> session_data
+# Simple in-memory session store (TTL)
+_session_store = {}  # session_id -> {telegram_id, amount, recipient, wallet_address, created_at}
 
+def _set_session(session_id: str, data: dict, ttl: int = 600):
+    _session_store[session_id] = {
+        "data": data,
+        "expires_at": time.time() + ttl
+    }
 
-def _get_from_cache(key: str):
-    v = memory_cache.get(key)
-    if not v:
+def _get_session(session_id: str):
+    s = _session_store.get(session_id)
+    if not s:
         return None
-    value, expiry = v
-    if time.time() < expiry:
-        return value
-    # expired
-    memory_cache.pop(key, None)
-    return None
+    if time.time() > s["expires_at"]:
+        _session_store.pop(session_id, None)
+        return None
+    return s["data"]
 
-
-def _set_in_cache(key: str, value, ttl: int):
-    memory_cache[key] = (value, time.time() + ttl)
-
-
-def _clear_cache(key: str):
-    memory_cache.pop(key, None)
-
+def _pop_session(session_id: str):
+    return _session_store.pop(session_id, None)
 
 # -------------------------
 # Browser page (render)
@@ -122,38 +114,42 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
         session_id = secrets.token_urlsafe(32)
 
-        # Build unsigned transaction using solders
-        connection = AsyncClient(SOLANA_RPC)
+        # Build unsigned Transaction using solana-py Transaction()
+        client = AsyncClient(SOLANA_RPC)
         try:
-            blockhash_resp = await connection.get_latest_blockhash()
+            # get latest blockhash
+            blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
 
-            from_pubkey = Pubkey.from_string(user.wallet_address)
-            to_pubkey = Pubkey.from_string(recipient)
+            from_pubkey = PublicKey(user.wallet_address)
+            to_pubkey = PublicKey(recipient)
             lamports = int(amount * 1_000_000_000)
 
-            ix = transfer(
-                TransferParams(
-                    from_pubkey=from_pubkey,
-                    to_pubkey=to_pubkey,
-                    lamports=lamports
+            tx = Transaction()
+            tx.add(
+                transfer(
+                    TransferParams(
+                        from_pubkey=from_pubkey,
+                        to_pubkey=to_pubkey,
+                        lamports=lamports
+                    )
                 )
             )
 
-            message = Message.new_with_blockhash([ix], from_pubkey, recent_blockhash)
-            tx = Transaction.new_unsigned(message)
+            # set blockhash and fee_payer (fee_payer should be user wallet; Phantom will sign)
+            tx.recent_blockhash = recent_blockhash
+            tx.fee_payer = from_pubkey
 
-            # Serialize as wire bytes and base64 encode
-            wire_bytes = bytes(tx)
-            tx_base64 = base64.b64encode(wire_bytes).decode("utf-8")
+            # serialize transaction (wire format)
+            tx_bytes = tx.serialize()  # solana-py method: returns bytes
+            tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
-            await connection.close()
+            await client.close()
         except Exception as e:
-            await connection.close()
-            logger.error("Failed to create transaction", extra={"error": str(e)})
+            await client.close()
+            logger.error("Transaction creation failed", extra={"error": str(e)}, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
 
-        # Save session (10 minutes)
         session_data = {
             "telegram_id": telegram_id,
             "amount": amount,
@@ -161,8 +157,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
             "wallet_address": user.wallet_address,
             "created_at": datetime.utcnow().isoformat()
         }
-        phantom_sessions[session_id] = session_data
-        _set_in_cache(f"phantom_session_{session_id}", session_data, ttl=600)
+        _set_session(session_id, session_data, ttl=600)
 
         logger.info("Payment session created", extra={"session_id": session_id, "telegram_id": telegram_id})
         return {"success": True, "session_id": session_id, "transaction": tx_base64, "expires_in": 600}
@@ -175,14 +170,15 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
 
 # -------------------------
-# Phantom callback
+# Phantom callback (render)
 # -------------------------
 @router.get("/phantom_callback", response_class=HTMLResponse)
 async def phantom_callback(request: Request):
     """
     Phantom redirect target.
-    Common successful redirect contains: ?session=<id>&signature=<txsig>
-    Some flows return encrypted payload (phantom_encryption_public_key/nonce/data).
+    Successful redirect example:
+      /commission/phantom_callback?session=<id>&signature=<txsig>&telegram_id=...
+    Or Phantom may return errorCode & errorMessage on failure.
     """
     params = dict(request.query_params)
     logger.info("Phantom callback", extra={"params": params})
@@ -191,7 +187,7 @@ async def phantom_callback(request: Request):
     signature = params.get("signature")
     telegram_id = params.get("telegram_id")
 
-    # If Phantom returned an error
+    # Phantom error
     if params.get("errorCode") or params.get("errorMessage"):
         err = params.get("errorMessage") or f"Phantom error {params.get('errorCode')}"
         return templates.TemplateResponse("commission_callback.html", {
@@ -202,10 +198,12 @@ async def phantom_callback(request: Request):
             "bot_username": BOT_USERNAME
         })
 
-    # If signature present -> show processing & schedule verification (client will call verify_signature)
     if signature and session:
-        # store signature temporarily
-        _set_in_cache(f"phantom_sig_{session}", signature, ttl=3600)
+        # store signature in session (short TTL)
+        s = _get_session(session)
+        if s:
+            s["signature"] = signature
+            _set_session(session, s, ttl=3600)
         return templates.TemplateResponse("commission_callback.html", {
             "request": request,
             "success": None,
@@ -215,17 +213,7 @@ async def phantom_callback(request: Request):
             "signature": signature
         })
 
-    # Encrypted flow (if you implemented encryption)
-    if params.get("phantom_encryption_public_key") and params.get("nonce") and params.get("data"):
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": None,
-            "message": "Processing encrypted response...",
-            "telegram_id": telegram_id,
-            "bot_username": BOT_USERNAME
-        })
-
-    # Default: nothing useful
+    # default
     return templates.TemplateResponse("commission_callback.html", {
         "request": request,
         "success": None,
@@ -236,7 +224,7 @@ async def phantom_callback(request: Request):
 
 
 # -------------------------
-# Verify signature (called by client after callback)
+# Verify signature (explicit verification)
 # -------------------------
 @router.post("/verify_signature", response_class=JSONResponse)
 async def verify_signature(request: Request, db: Session = Depends(get_db)):
@@ -253,16 +241,13 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         if not telegram_id or not session_id or not signature:
             raise HTTPException(status_code=400, detail="Missing parameters")
 
-        session_key = f"phantom_session_{session_id}"
-        session_data = _get_from_cache(session_key) or phantom_sessions.get(session_id)
+        session_data = _get_session(session_id)
         if not session_data:
             raise HTTPException(status_code=400, detail="Invalid or expired session")
 
-        # Simple check: session telegram_id matches
         if session_data.get("telegram_id") != telegram_id:
             raise HTTPException(status_code=400, detail="Session does not belong to telegram_id")
 
-        # Query on-chain for the signature
         client = AsyncClient(SOLANA_RPC)
         try:
             tx_resp = await client.get_transaction(signature, encoding="jsonParsed", max_supported_transaction_version=0)
@@ -270,56 +255,50 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
                 await client.close()
                 return {"verified": False, "message": "Transaction not found on chain (yet)"}
 
-            # Inspect transaction to confirm transfer from user's wallet to admin wallet and amount
+            # parsed tx verification
             expected_lamports = int(float(session_data.get("amount", COMMISSION_AMOUNT)) * 1_000_000_000)
             user_wallet = session_data.get("wallet_address")
             admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
 
-            # navigate parsed JSON to instructions
+            # try robustly to read instructions
+            instructions = []
             try:
                 parsed_msg = tx_resp.value.transaction.transaction.message
-                # Some RPCs return jsonParsed under different shapes; try robust access:
-                # We look into tx_resp.value.transaction.transaction.message.instructions
                 instructions = getattr(parsed_msg, "instructions", []) or []
             except Exception:
-                # fallback to raw json parsed
+                # fallback to raw dict
                 instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
 
             found = False
-            found_sig = None
             for ix in instructions:
-                parsed = getattr(ix, "parsed", None) or ix.get("parsed") if isinstance(ix, dict) else None
+                parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
                 if isinstance(parsed, dict) and parsed.get("type") == "transfer":
                     info = parsed.get("info", {})
                     source = info.get("source")
                     destination = info.get("destination")
                     lamports = info.get("lamports", 0)
                     if source == user_wallet and destination == admin_addr:
-                        # small tolerance
                         if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
                             found = True
-                            found_sig = signature
                             break
 
             await client.close()
 
             if found:
-                # mark in DB
                 user = db.query(User).filter(User.telegram_id == telegram_id).first()
                 if not user:
                     raise HTTPException(status_code=404, detail="User not found")
 
                 if not user.commission_paid:
                     user.commission_paid = True
-                    user.commission_transaction_hash = found_sig
+                    user.commission_transaction_hash = signature
                     user.commission_payment_date = datetime.utcnow()
                     db.commit()
 
                 # cleanup session
-                _clear_cache(session_key)
-                phantom_sessions.pop(session_id, None)
-                logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": found_sig})
-                return {"verified": True, "signature": found_sig}
+                _pop_session(session_id)
+                logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": signature})
+                return {"verified": True, "signature": signature}
 
             return {"verified": False, "message": "Transaction does not match expected transfer"}
 
@@ -336,7 +315,7 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
 
 
 # -------------------------
-# Fallback verify (scan recent txs) — preserves your original behavior
+# Fallback verify (scan recent txs)
 # -------------------------
 @router.post("/verify", response_class=JSONResponse)
 async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
@@ -362,16 +341,15 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
 
         connection = AsyncClient(SOLANA_RPC)
         try:
-            user_pubkey = Pubkey.from_string(user.wallet_address)
+            user_pubkey = PublicKey(user.wallet_address)
             logger.info("Scanning recent transactions", extra={"user_wallet": user.wallet_address})
 
-            signatures_resp = await connection.get_signatures_for_address(user_pubkey, limit=30)
+            signatures_resp = await connection.get_signatures_for_address(user_pubkey, limit=40)
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
 
             if signatures_resp.value:
                 for sig_info in signatures_resp.value:
                     sig = str(sig_info.signature)
-                    # skip if already used
                     existing_user = db.query(User).filter(User.commission_transaction_hash == sig).first()
                     if existing_user:
                         continue
@@ -380,7 +358,7 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                     if not tx_resp.value:
                         continue
 
-                    # try to read parsed instructions
+                    instructions = []
                     try:
                         parsed_msg = tx_resp.value.transaction.transaction.message
                         instructions = getattr(parsed_msg, "instructions", []) or []
