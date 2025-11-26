@@ -214,8 +214,8 @@
             // 1) Request server to prepare a base64 TX
             const create = await fetch("/commission/create_payment_session", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({telegram_id: CONFIG.telegramId})
             });
 
             const data = await create.json();
@@ -224,29 +224,32 @@
                 throw new Error(data.error || "Failed to create transaction");
             }
 
-            const txBase64 = encodeURIComponent(data.transaction_base64);
+            // ✔ Correct key name
+            const txBase64 = encodeURIComponent(data.transaction);
             const sessionId = data.session_id;
 
             // 2) Build callback URL
-            const callback = `${window.location.origin}/commission/phantom_callback`
-                + `?session=${sessionId}`
-                + `&telegram_id=${CONFIG.telegramId}`;
+            const callback =
+                `${window.location.origin}/commission/phantom_callback` +
+                `?session=${sessionId}` +
+                `&telegram_id=${CONFIG.telegramId}`;
 
-            const redirect_link = encodeURIComponent(callback);
+            // ✔ Single encode is correct
+            const redirectLink = encodeURIComponent(callback);
 
-            // 3) Build Phantom deeplink (standard)
+            // 3) Build Phantom deeplink (correct order)
             const deeplink =
                 `https://phantom.app/ul/v1/signAndSendTransaction` +
-                `?redirect_link=${redirect_link}` +
-                `&payload=${txBase64}`;
+                `?payload=${txBase64}` +
+                `&redirect_link=${redirectLink}`;
 
             console.log("DEEPLINK:", deeplink);
 
             showStatus("📱 Opening Phantom...", "info");
 
-            // 4) Open Phantom properly (Telegram safe)
+            // 4) Open Phantom properly
             if (tg?.openLink) {
-                tg.openLink(deeplink, { tryBrowser: true });
+                tg.openLink(deeplink, {tryBrowser: true});
             } else {
                 window.location.href = deeplink;
             }
@@ -257,6 +260,7 @@
             setButtonLoading(false);
         }
     }
+
 
     // Phantom callback handler (user returns from Phantom)
     window.addEventListener("load", async () => {
