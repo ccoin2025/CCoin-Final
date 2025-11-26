@@ -11,8 +11,6 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 # solders imports (همه چیز مربوط به تراکنش)
-from solders.transaction import VersionedTransaction
-from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
@@ -117,11 +115,10 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            dummy_keypair = Keypair()
+            raw_bytes = bytes(message)
 
-            tx = VersionedTransaction(message, [dummy_keypair])
+            versioned_bytes = b"\x00" + b"\x01" + raw_bytes[1:]
 
-            serialized_message = bytes(tx.message)                     # ← این بایت‌ها با 0x01 شروع می‌شن (Legacy)
             tx_base64 = base64.b64encode(versioned_message).decode("utf-8")
             
             
