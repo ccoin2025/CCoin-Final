@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
-from solders.transaction import VersionedTransaction
 
 # فقط برای RPC client
 from solana.rpc.async_api import AsyncClient
@@ -117,7 +116,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
             )
 
             # نسخه نهایی و ۱۰۰٪ کارکرده (بدون signer و با serialize_message)
-            tx_bytes = message.serialize()                    # مستقیم از message!
+            tx_bytes = bytes(message)                    # مستقیم از message!
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
             
