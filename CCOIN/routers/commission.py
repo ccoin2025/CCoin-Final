@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 # solders imports (همه چیز مربوط به تراکنش)
+from solders.transaction import VersionedTransaction
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
@@ -115,10 +116,10 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            # نسخه نهایی و ۱۰۰٪ کارکرده (بدون signer و با serialize_message)
-            tx_bytes = bytes(message)                    # مستقیم از message!
-            tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
-
+            serialized_message = bytes(message)
+            
+            tx_base64 = base64.b64encode(serialized_message).decode("utf-8")  
+            
             
             await client.close()
         except Exception as e:
