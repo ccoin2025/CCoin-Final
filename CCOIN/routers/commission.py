@@ -118,7 +118,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
             # نسخه نهایی و ۱۰۰٪ کارکرده (بدون signer و با serialize_message)
             tx = VersionedTransaction(message, [])           # لیست signer خالی
-            tx_bytes = tx.serialize_message()                # فقط message رو بده (نه کل تراکنش)
+            tx_bytes = tx.message.serialize()
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
             await client.close()
