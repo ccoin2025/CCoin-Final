@@ -27,7 +27,7 @@ from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNA
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/commission")
+router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
 # In-memory caches - lightweight session store (TTL)
