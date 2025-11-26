@@ -228,7 +228,7 @@ async function handlePayment(){
     const redirectLink = encodeURIComponent(callback);
 
     // === CORRECTION: payload first, then redirect_link
-    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?payload=${txBase64}&redirect_link=${redirectLink}`;
+    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?payload=${txBase64}&redirect_link=${redirectLink}&cluster=mainnet-beta`;
 
     console.log('DEEPLINK:', deeplink);
 
