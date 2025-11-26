@@ -13,6 +13,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 # solders imports (فقط چیزهای لازم – بدون Keypair و VersionedTransaction)
+from solders.transaction import VersionedTransaction
+from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
@@ -117,11 +119,16 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            # نسخه نهایی و اصلاح‌شده (بدون Keypair، بدون VersionedTransaction)
-            # تبدیل Legacy Message (شروع با 0x01) به Versioned Message (شروع با 0x00) با 1 signer
-            raw_bytes = bytes(message)
-            versioned_bytes = b"\x00" + b"\x01" + raw_bytes[1:]
-            tx_base64 = base64.b64encode(versioned_bytes).decode("utf-8")
+            # ساخت یک Keypair با همان pubkey کاربر (این ترفند جادویی است!)
+            # solders اجازه می‌ده Keypair از pubkey بسازیم بدون private key
+            dummy_signer = Keypair.from_bytes(bytes.fromhex("00" * 32) + bytes(from_pubkey))
+
+            # حالا solders خطای mismatch نمی‌ده چون pubkey مطابقت داره
+            tx = VersionedTransaction(message, [dummy_signer])
+            
+            # فقط message رو می‌فرستیم (نه کل تراکنش)
+            serialized_message = tx.serialize_message()
+            tx_base64 = base64.b64encode(serialized_message).decode("utf-8")
             
             await client.close()
         except Exception as e:
