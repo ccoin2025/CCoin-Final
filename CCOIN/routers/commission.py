@@ -116,8 +116,8 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            serialized_message = bytes(message)
-            
+            tx = VersionedTransaction(message, [])
+            serialized_message = bytes(tx.message)
             tx_base64 = base64.b64encode(serialized_message).decode("utf-8")  
             
             
