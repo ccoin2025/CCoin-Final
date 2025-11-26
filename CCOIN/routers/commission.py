@@ -1,4 +1,3 @@
-# CCOIN/routers/commission.py
 import os
 import time
 import secrets
@@ -11,13 +10,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-# solders برای تراکنش و کلیدها
+# solders imports (همه چیز مربوط به تراکنش)
 from solders.pubkey import Pubkey
+from solders.keypair import Keypair
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
 from solders.transaction import VersionedTransaction
 
-# solana فقط برای RPC client
+# فقط برای RPC client
 from solana.rpc.async_api import AsyncClient
 
 # project imports
@@ -29,7 +29,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# Session store در مموری (TTL دار)
+# Session ذخیره موقت در حافظه
 _SESSION_STORE = {}
 
 def _set_session(session_id: str, data: dict, ttl: int = 600):
@@ -47,15 +47,10 @@ def _pop_session(session_id: str):
 
 
 @router.get("/browser/pay", response_class=HTMLResponse)
-async def commission_browser_pay(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID"),
-    db: Session = Depends(get_db)
-):
+async def commission_browser_pay(request: Request, telegram_id: str = Query(...), db: Session = Depends(get_db)):
     logger.info("Render commission browser pay", extra={"telegram_id": telegram_id})
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        logger.warning("User not found", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.commission_paid:
@@ -68,7 +63,7 @@ async def commission_browser_pay(
         })
 
     if not user.wallet_address:
-        raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
+        raise HTTPException(status_code=400, detail="Wallet not connected")
 
     return templates.TemplateResponse("commission_browser_pay.html", {
         "request": request,
@@ -94,10 +89,8 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
         if user.commission_paid:
             return JSONResponse({"success": False, "error": "Commission already paid"}, status_code=400)
-
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
 
@@ -105,7 +98,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
         client = AsyncClient(SOLANA_RPC)
 
         try:
-            # دریافت آخرین blockhash
+            # آخرین بلاک‌هش
             blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
 
@@ -113,16 +106,10 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
             to_pubkey = Pubkey.from_string(recipient)
             lamports = int(amount * 1_000_000_000)
 
-            # ساخت Instruction ساده انتقال
-            instruction = transfer(
-                TransferParams(
-                    from_pubkey=from_pubkey,
-                    to_pubkey=to_pubkey,
-                    lamports=lamports
-                )
-            )
+            # ساخت دستور انتقال
+            instruction = transfer(TransferParams(from_pubkey=from_pubkey, to_pubkey=to_pubkey, lamports=lamports))
 
-            # ساخت MessageV0 (جدید و سازگار با Phantom)
+            # ساخت MessageV0
             message = MessageV0.try_compile(
                 payer=from_pubkey,
                 instructions=[instruction],
@@ -130,10 +117,12 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            # ساخت VersionedTransaction (بدون کلید امضا — Phantom امضا می‌کنه)
-            tx = VersionedTransaction(message, [])
+            # مهم: یک signer موقت اضافه می‌کنیم تا solders خطا نده
+            # Phantom این signer را نادیده می‌گیرد و خودش امضا می‌کند
+            dummy_signer = Keypair()
+            tx = VersionedTransaction(message, [dummy_signer])
 
-            # سریالایز به bytes و سپس base64
+            # تبدیل به base64 برای Phantom
             tx_bytes = bytes(tx)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
@@ -143,6 +132,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
             logger.error("Transaction creation failed", extra={"error": str(e)}, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
 
+        # ذخیره سشن
         session_data = {
             "telegram_id": telegram_id,
             "amount": amount,
@@ -174,33 +164,17 @@ async def phantom_callback(request: Request):
     if params.get("errorCode") or params.get("errorMessage"):
         err = params.get("errorMessage") or f"Phantom error {params.get('errorCode')}"
         return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": False,
-            "error": err,
-            "telegram_id": telegram_id,
-            "bot_username": BOT_USERNAME
-        })
-
-    if signature and session:
-        s = _get_session(session)
-        if s:
-            s["signature"] = signature
-            _set_session(session, s, ttl=3600)
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": None,
-            "message": "Transaction submitted. Verifying...",
-            "telegram_id": telegram_id,
-            "bot_username": BOT_USERNAME,
-            "signature": signature
+            "request": request, "success": False, "error": err,
+            "telegram_id": telegram_id, "bot_username": BOT_USERNAME
         })
 
     return templates.TemplateResponse("commission_callback.html", {
         "request": request,
-        "success": None,
-        "message": "No callback data received. If you completed payment, click 'Check Status'.",
+        "success": None if not signature else True,
+        "message": "Transaction submitted. Verifying..." if signature else "Waiting for signature…",
         "telegram_id": telegram_id,
-        "bot_username": BOT_USERNAME
+        "bot_username": BOT_USERNAME,
+        "signature": signature or ""
     })
 
 
@@ -216,69 +190,39 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Missing parameters")
 
         session_data = _get_session(session_id)
-        if not session_data:
-            raise HTTPException(status_code=400, detail="Invalid or expired session")
-
-        if session_data.get("telegram_id") != telegram_id:
-            raise HTTPException(status_code=400, detail="Session does not belong to telegram_id")
+        if not session_data or session_data.get("telegram_id") != telegram_id:
+            raise HTTPException(status_code=400, detail="Invalid session")
 
         client = AsyncClient(SOLANA_RPC)
-        try:
-            tx_resp = await client.get_transaction(signature, encoding="jsonParsed", max_supported_transaction_version=0)
-            if not tx_resp.value:
-                await client.close()
-                return {"verified": False, "message": "Transaction not found on chain (yet)"}
+        tx_resp = await client.get_transaction(signature, encoding="jsonParsed", max_supported_transaction_version=0)
+        await client.close()
 
-            expected_lamports = int(float(session_data.get("amount", COMMISSION_AMOUNT)) * 1_000_000_000)
-            user_wallet = session_data.get("wallet_address")
-            admin_addr = str(ADMIN_WALLET) if not isinstance(ADMIN_WALLET, str) else ADMIN_WALLET
+        if not tx_resp.value:
+            return {"verified": False, "message": "Not found yet"}
 
-            instructions = []
-            try:
-                parsed_msg = tx_resp.value.transaction.transaction.message
-                instructions = getattr(parsed_msg, "instructions", []) or []
-            except Exception:
-                instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+        # بررسی انتقال
+        expected = int(float(session_data.get("amount", COMMISSION_AMOUNT)) * 1_000_000_000)
+        user_wallet = session_data.get("wallet_address")
+        admin_addr = str(ADMIN_WALLET)
 
-            found = False
-            for ix in instructions:
-                parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
-                if isinstance(parsed, dict) and parsed.get("type") == "transfer":
-                    info = parsed.get("info", {})
-                    source = info.get("source")
-                    destination = info.get("destination")
-                    lamports = info.get("lamports", 0)
-                    if source == user_wallet and destination == admin_addr:
-                        if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
-                            found = True
-                            break
+        instructions = tx_resp.value.transaction.transaction.message.instructions
+        for ix in instructions:
+            p = ix.parsed
+            if p and p.get("type") == "transfer" and p["info"].get("source") == user_wallet and p["info"].get("destination") == admin_addr:
+                lamports = p["info"]["lamports"]
+                if int(expected * 0.98) <= lamports <= int(expected * 1.02):
+                    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+                    if user and not user.commission_paid:
+                        user.commission_paid = True
+                        user.commission_transaction_hash = signature
+                        user.commission_payment_date = datetime.utcnow()
+                        db.commit()
+                    _pop_session(session_id)
+                    return {"verified": True, "signature": signature}
 
-            await client.close()
-
-            if found:
-                user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                if user and not user.commission_paid:
-                    user.commission_paid = True
-                    user.commission_transaction_hash = signature
-                    user.commission_payment_date = datetime.utcnow()
-                    db.commit()
-
-                _pop_session(session_id)
-                logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": signature})
-                return {"verified": True, "signature": signature}
-
-            return {"verified": False, "message": "Transaction does not match expected transfer"}
-
-        except Exception as e:
-            await client.close()
-            logger.error("verify_signature RPC error", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"verified": False, "message": "Transfer not matching"}
+    except:
+        raise HTTPException(status_code=500)
 
 
 # بقیه endpoint ها (verify, success, check_status) دقیقاً مثل قبل بدون تغییر
