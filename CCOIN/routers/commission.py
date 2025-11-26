@@ -116,9 +116,9 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            tx = VersionedTransaction(message, [])
-            serialized_message = bytes(tx.message)
-            tx_base64 = base64.b64encode(serialized_message).decode("utf-8")  
+            raw_message_bytes = bytes(message)                     # ← این بایت‌ها با 0x01 شروع می‌شن (Legacy)
+            versioned_message = b"\x00" + raw_message_bytes[1:]   # ← تبدیل به Versioned (v0) با اضافه کردن بایت 0 در ابتدا
+            tx_base64 = base64.b64encode(versioned_message).decode("utf-8")
             
             
             await client.close()
