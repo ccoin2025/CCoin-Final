@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 # solders imports (همه چیز مربوط به تراکنش)
 from solders.transaction import VersionedTransaction
+from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
@@ -116,8 +117,11 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
 
-            raw_message_bytes = bytes(message)                     # ← این بایت‌ها با 0x01 شروع می‌شن (Legacy)
-            versioned_message = b"\x00" + raw_message_bytes[1:]   # ← تبدیل به Versioned (v0) با اضافه کردن بایت 0 در ابتدا
+            dummy_keypair = Keypair()
+
+            tx = VersionedTransaction(message, [dummy_keypair])
+
+            serialized_message = bytes(tx.message)                     # ← این بایت‌ها با 0x01 شروع می‌شن (Legacy)
             tx_base64 = base64.b64encode(versioned_message).decode("utf-8")
             
             
