@@ -788,25 +788,26 @@
 
         function openCommissionPayment() {
             closeCommissionModal();
-            
-            if (!telegramId) {
-                showToast('Error: User information not found', 'error');
+
+            const telegram_id = telegramId || '{{ request.session.get("telegram_id") }}';
+
+            if (!telegram_id) {
+                showToast('Error: Telegram ID not found', 'error');
                 return;
             }
 
-            showToast('Redirecting to payment page...', 'info');
-            
-            const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
-            
-            try {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.openLink(commissionUrl);
-                } else {
-                    window.open(commissionUrl, '_blank');
+            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
+
+            console.log('🔗 Opening commission payment in external browser:', commissionUrl);
+
+            if (tg && typeof tg.openLink === 'function') {
+                 tg.openLink(commissionUrl, {try_instant_view: false});
+                showToast('Opening payment page in external browser...', 'info');
+            } else {
+                const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
+                if (!newWindow) {
+                    showToast('Please allow pop-ups for this site', 'error');
                 }
-            } catch (error) {
-                console.error('Error opening commission payment:', error);
-                window.location.href = commissionUrl;
             }
         }
 
