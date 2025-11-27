@@ -12,11 +12,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 # solana-py (نسخهٔ پروژه‌ات)
-from solders.message import Message
 from solana.rpc.async_api import AsyncClient
-from solana.publickey import PublicKey
-from solana.transaction import Transaction
-from solana.system_program import TransferParams, transfer
+from solders.pubkey import Pubkey
+from solders.keypair import Keypair
+from solders.system_program import TransferParams, transfer
+from solders.transaction import Transaction
+from solders.message import Message
+import base58
+
 
 # project imports - مطمئن شو این مسیرها با پروژه‌ات همخوانی دارد
 from CCOIN.database import get_db
@@ -88,10 +91,6 @@ async def commission_browser_pay(
 # -------------------------
 @router.post("/create_payment_session", response_class=JSONResponse)
 async def create_payment_session(request: Request, db: Session = Depends(get_db)):
-    """
-    Body JSON: { "telegram_id": "...", "amount": optional, "recipient": optional }
-    Returns: { success: True, session_id: "...", transaction: "<base64>", expires_in: 600 }
-    """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
@@ -119,10 +118,12 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
             blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
 
-            from_pubkey = PublicKey(user.wallet_address)
-            to_pubkey = PublicKey(recipient)
+            # ✅ اصلاح شده: استفاده از Pubkey.from_string
+            from_pubkey = Pubkey.from_string(user.wallet_address)
+            to_pubkey = Pubkey.from_string(recipient)
             lamports = int(amount * 1_000_000_000)
 
+            # ✅ ساخت transfer instruction
             transfer_ix = transfer(
                 TransferParams(
                     from_pubkey=from_pubkey,
@@ -130,14 +131,20 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                     lamports=lamports
                 )
             )
-            # ساخت Message
+
+            # ✅ ساخت Message
             message = Message.new_with_blockhash(
                 [transfer_ix],
                 from_pubkey,
                 recent_blockhash
             )
-            # ساخت Transaction
+
+            # ✅ ساخت Transaction
             tx = Transaction.new_unsigned(message)
+            
+            # ✅ Serialize transaction
+            tx_bytes = bytes(tx)
+            tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
             await client.close()
         except Exception as e:
@@ -162,7 +169,6 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
     except Exception as e:
         logger.error("create_payment_session error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # -------------------------
 # Phantom callback (render)
@@ -327,7 +333,7 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
 
         client = AsyncClient(SOLANA_RPC)
         try:
-            user_pubkey = PublicKey(user.wallet_address)
+            user_pubkey = Pubkey.from_string(user.wallet_address)
             logger.info("Scanning recent transactions", extra={"user_wallet": user.wallet_address})
 
             signatures_resp = await client.get_signatures_for_address(user_pubkey, limit=40)
