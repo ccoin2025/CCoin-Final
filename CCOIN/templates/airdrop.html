@@ -766,6 +766,21 @@
                 showToast('Error disconnecting wallet', 'error');
             }
         }
+        
+        function checkCommissionRequirements() {
+            if (userStatuses.commission_paid) {
+                showToast('✅ Commission already paid!', 'success');
+                return false; // جلوگیری از باز شدن لینک
+            }
+
+            if (!userStatuses.wallet_connected) {
+                showToast('⚠️ Please connect your wallet first', 'error');
+                return false; // جلوگیری از باز شدن لینک
+            }
+
+            showToast('Opening in external browser...', 'info');
+            return true; // اجازه باز شدن لینک
+        }
 
         function handleCommissionPayment() {
             console.log('Commission button clicked', userStatuses);
