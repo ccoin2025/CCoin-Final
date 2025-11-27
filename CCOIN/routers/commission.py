@@ -40,7 +40,6 @@
     </script>
 
     <style>
-        /* استایل منوی کشویی کیف پول - فقط دکمه‌های Change و Disconnect */
         .wallet-dropdown {
             position: relative;
             display: inline-block;
