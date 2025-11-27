@@ -482,15 +482,10 @@
             </div>
 
             <div id="pay-commission" class="task-box">
-                <a href="/commission/browser/pay?telegram_id={{ request.session.get('telegram_id') }}"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   class="task-button"
-                   id="commission-button"
-                   onclick="return checkCommissionRequirements()">
+                <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
                     <span class="left-text" id="commission-button-text">Pay for Commission</span>
                     <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
-                </a>
+                </button>
             </div>
         </div>
 
@@ -766,7 +761,7 @@
                 showToast('Error disconnecting wallet', 'error');
             }
         }
-        
+
 
         function handleCommissionPayment() {
             console.log('Commission button clicked', userStatuses);
