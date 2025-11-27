@@ -784,25 +784,12 @@
 
             const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
 
-            console.log('🔗 Opening commission URL:', commissionUrl);
+            console.log('🔗 Redirecting to:', commissionUrl);
 
-            // ✅ روش 1: استفاده از openTelegramLink (بهترین روش)
-            if (tg && typeof tg.openTelegramLink === 'function') {
-                tg.openTelegramLink(commissionUrl);
-                showToast('Opening in browser...', 'info');
-                return;
-            }
-
-            // ✅ روش 2: استفاده از openLink با تنظیمات مناسب
-            if (tg && typeof tg.openLink === 'function') {
-                tg.openLink(commissionUrl);
-                showToast('Opening in browser...', 'info');
-                return;
-            }
-
-            // ✅ روش 3: Fallback - تغییر مستقیم location
+            // ✅ تغییر مستقیم URL - این باعث می‌شود صفحه در مرورگر پیش‌فرض سیستم باز شود
             window.location.href = commissionUrl;
         }
+        
         function openCommissionPayment() {
             closeCommissionModal();
 
