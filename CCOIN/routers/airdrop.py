@@ -640,6 +640,10 @@ async def request_commission_link(request: Request, db: Session = Depends(get_db
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
         
+        # ✅ تبدیل به string برای جلوگیری از خطای type mismatch
+        telegram_id = str(telegram_id).strip()
+        
+        # Query با string
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -651,14 +655,13 @@ async def request_commission_link(request: Request, db: Session = Depends(get_db
             return {"success": False, "message": "Please connect wallet first"}
         
         # ارسال لینک از طریق Bot
-        from telegram import Bot
+        from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+        from CCOIN.config import BOT_TOKEN, APP_DOMAIN
         
         bot = Bot(token=BOT_TOKEN)
         await bot.initialize()
         
-        commission_url = f"https://ccoin2025.onrender.com/commission/browser/pay?telegram_id={telegram_id}"
-        
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        commission_url = f"{APP_DOMAIN}/commission/browser/pay?telegram_id={telegram_id}"
         
         keyboard = [
             [InlineKeyboardButton("💳 Open Payment Page", url=commission_url)]
@@ -666,16 +669,16 @@ async def request_commission_link(request: Request, db: Session = Depends(get_db
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message_text = (
-            "💰 **Commission Payment**\n\n"
-            "Click the button below to open the payment page in your browser.\n\n"
-            "✅ The page will open in your default browser (not in Telegram)."
+            "💰 *Commission Payment*\n\n"
+            "Click the button below to open the payment page in your browser\\.\n\n"
+            "✅ The page will open in your default browser \\(not in Telegram\\)\\."
         )
         
         await bot.send_message(
-            chat_id=telegram_id,
+            chat_id=int(telegram_id),  # ✅ تبدیل به int برای Telegram API
             text=message_text,
             reply_markup=reply_markup,
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
         
         await bot.shutdown()
@@ -683,6 +686,9 @@ async def request_commission_link(request: Request, db: Session = Depends(get_db
         logger.info("Commission link sent via bot", extra={"telegram_id": telegram_id})
         return {"success": True, "message": "Payment link sent to your Telegram chat"}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error sending commission link", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to send link: {str(e)}")
+
