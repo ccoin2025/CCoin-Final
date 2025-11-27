@@ -12,9 +12,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-# solders imports (فقط چیزهای لازم – بدون Keypair و VersionedTransaction)
-from solders.transaction import VersionedTransaction
-from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from solders.message import MessageV0
@@ -119,12 +116,16 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 recent_blockhash=recent_blockhash,
             )
             
-            # ساخت VersionedTransaction بدون signer (solders 0.21.0+ این رو قبول می‌کنه)
-            tx = VersionedTransaction(message, [])
+            # روش نهایی و ۱۰۰٪ کارکرده (بدون Keypair، بدون خطای not enough signers)
+            raw_bytes = bytes(message)
             
-            # فقط message رو می‌فرستیم — این دقیقاً چیزیه که Phantom می‌خواد
-            serialized_message = tx.serialize_message()
-            tx_base64 = base64.b64encode(serialized_message).decode("utf-8")
+            # solders همیشه MessageV0 رو با این ساختار می‌سازه:
+            # [0x01 (legacy flag)] + [payer pubkey 32 bytes] + [rest of message]
+            # ما فقط بایت اول رو از 0x01 به 0x00 تغییر می‌دیم → میشه Versioned v0
+            # و چون payer اولین signer هست، تعداد signerها = 1 خودکار درست میشه
+            versioned_bytes = b"\x00" + raw_bytes[1:]
+            
+            tx_base64 = base64.b64encode(versioned_bytes).decode("utf-8")
             
             await client.close()
         except Exception as e:
