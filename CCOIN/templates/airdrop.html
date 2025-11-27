@@ -763,7 +763,7 @@
         }
 
 
-        function handleCommissionPayment() {
+        async function handleCommissionPayment() {
             console.log('Commission button clicked', userStatuses);
 
             if (userStatuses.commission_paid) {
@@ -783,17 +783,34 @@
                 return;
             }
 
-            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
+            try {
+                showToast('Sending payment link...', 'info');
 
-            console.log('🔗 Opening commission URL:', commissionUrl);
+                // ✅ درخواست ارسال لینک از طریق Bot
+                const response = await fetch('/airdrop/request_commission_link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({telegram_id: telegram_id})
+                });
 
-            // ✅ استفاده از window.open با _system (برای باز شدن در مرورگر سیستم)
-            if (window.open(commissionUrl, '_system') === null) {
-                // اگر _system کار نکرد، از _blank استفاده کن
-                window.open(commissionUrl, '_blank', 'noopener,noreferrer,location=yes');
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Payment link sent to your Telegram chat! Check your messages.', 'success');
+
+                    // نمایش یک alert دوستانه
+                    if (tg && tg.showAlert) {
+                        tg.showAlert('Payment link sent to your chat! Please check your Telegram messages and click the button to open the payment page in your browser.');
+                    }
+                } else {
+                    showToast('❌ ' + (data.message || 'Failed to send link'), 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('❌ Error sending payment link', 'error');
             }
-
-            showToast('Opening payment page...', 'info');
         }
 
         function openCommissionPayment() {
