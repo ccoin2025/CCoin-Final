@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-# ✅ اصلاح شده: استفاده از solders به جای solana.publickey
+from solders.message import Message
 from solana.rpc.async_api import AsyncClient
 from solders.pubkey import Pubkey
 from solders.keypair import Keypair
@@ -134,13 +134,21 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 )
             )
 
-            # set blockhash and fee payer
-            tx.recent_blockhash = recent_blockhash
-            tx.fee_payer = from_pubkey
-
-            # serialize transaction
-            tx_bytes = tx.serialize()
-            tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
+            transfer_ix = transfer(
+                TransferParams(
+                    from_pubkey=from_pubkey,
+                    to_pubkey=to_pubkey,
+                    lamports=lamports
+                )  
+            )
+            # ساخت Message
+            message = Message.new_with_blockhash(
+                [transfer_ix],
+                from_pubkey,
+                recent_blockhash
+            )
+            # ساخت Transaction
+            tx = Transaction.new_unsigned(message)
 
             await client.close()
         except Exception as e:
