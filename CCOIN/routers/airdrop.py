@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import get_current_user
-from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL
+from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL, BOT_TOKEN
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 from datetime import datetime, timezone
@@ -626,3 +626,63 @@ async def verify_commission_manual(request: Request, db: Session = Depends(get_d
     except Exception as e:
         logger.error("Manual verification error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.post("/request_commission_link")
+async def request_commission_link(request: Request, db: Session = Depends(get_db)):
+    """
+    ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
+    """
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.commission_paid:
+            return {"success": False, "message": "Commission already paid"}
+        
+        if not user.wallet_connected:
+            return {"success": False, "message": "Please connect wallet first"}
+        
+        # ارسال لینک از طریق Bot
+        from telegram import Bot
+        
+        bot = Bot(token=BOT_TOKEN)
+        await bot.initialize()
+        
+        commission_url = f"https://ccoin2025.onrender.com/commission/browser/pay?telegram_id={telegram_id}"
+        
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        keyboard = [
+            [InlineKeyboardButton("💳 Open Payment Page", url=commission_url)]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = (
+            "💰 **Commission Payment**\n\n"
+            "Click the button below to open the payment page in your browser.\n\n"
+            "✅ The page will open in your default browser (not in Telegram)."
+        )
+        
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await bot.shutdown()
+        
+        logger.info("Commission link sent via bot", extra={"telegram_id": telegram_id})
+        return {"success": True, "message": "Payment link sent to your Telegram chat"}
+        
+    except Exception as e:
+        logger.error("Error sending commission link", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
