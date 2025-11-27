@@ -1,418 +1,899 @@
-# routes/commission.py
-import os
-import time
-import secrets
-import base64
-import structlog
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
-
-from solders.message import Message
-from solana.rpc.async_api import AsyncClient
-from solders.pubkey import Pubkey
-from solders.keypair import Keypair
-from solders.system_program import TransferParams, transfer
-from solders.transaction import Transaction
-
-# project imports
-from CCOIN.database import get_db
-from CCOIN.models.user import User
-from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
-
-logger = structlog.get_logger(__name__)
-router = APIRouter()
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
-
-# ساده‌سازی: session های پرداخت در مموری (TTL)
-_SESSION_STORE = {}
-
-def _set_session(session_id: str, data: dict, ttl: int = 600):
-    _SESSION_STORE[session_id] = {"data": data, "expires_at": time.time() + ttl}
-
-def _get_session(session_id: str):
-    ent = _SESSION_STORE.get(session_id)
-    if not ent:
-        return None
-    if time.time() > ent["expires_at"]:
-        _SESSION_STORE.pop(session_id, None)
-        return None
-    return ent["data"]
-
-def _pop_session(session_id: str):
-    return _SESSION_STORE.pop(session_id, None)
-
-# -------------------------
-# Render payment page
-# -------------------------
-@router.get("/browser/pay", response_class=HTMLResponse)
-async def commission_browser_pay(
-    request: Request,
-    telegram_id: str = Query(..., description="Telegram user ID"),
-    db: Session = Depends(get_db)
-):
-    logger.info("Render commission browser pay", extra={"telegram_id": telegram_id})
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        logger.warning("User not found", extra={"telegram_id": telegram_id})
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.commission_paid:
-        return templates.TemplateResponse("commission_success.html", {
-            "request": request,
-            "telegram_id": telegram_id,
-            "success_message": "Commission already paid!",
-            "already_paid": True,
-            "bot_username": BOT_USERNAME
-        })
-
-    if not user.wallet_address:
-        raise HTTPException(status_code=400, detail="Wallet not connected. Please connect your wallet first.")
-
-    return templates.TemplateResponse("commission_browser_pay.html", {
-        "request": request,
-        "telegram_id": telegram_id,
-        "commission_amount": COMMISSION_AMOUNT,
-        "admin_wallet": ADMIN_WALLET,
-        "bot_username": BOT_USERNAME,
-        "solana_rpc": SOLANA_RPC
-    })
-
-# -------------------------
-# Create payment session
-# -------------------------
-@router.post("/create_payment_session", response_class=JSONResponse)
-async def create_payment_session(request: Request, db: Session = Depends(get_db)):
-    """
-    Body JSON: { "telegram_id": "...", "amount": optional, "recipient": optional }
-    Returns: { success: True, session_id: "...", transaction: "<base64>", expires_in: 600 }
-    """
-    try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        amount = float(body.get("amount", COMMISSION_AMOUNT))
-        recipient = body.get("recipient", ADMIN_WALLET)
-
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Missing telegram_id")
-
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        if user.commission_paid:
-            return JSONResponse({"success": False, "error": "Commission already paid"}, status_code=400)
-
-        if not user.wallet_address:
-            raise HTTPException(status_code=400, detail="Wallet not connected")
-
-        session_id = secrets.token_urlsafe(32)
-
-        client = AsyncClient(SOLANA_RPC)
-        try:
-            # get latest blockhash
-            blockhash_resp = await client.get_latest_blockhash()
-            recent_blockhash = blockhash_resp.value.blockhash
-
-            # ✅ اصلاح شده: استفاده از Pubkey.from_string
-            from_pubkey = Pubkey.from_string(user.wallet_address)
-            to_pubkey = Pubkey.from_string(recipient)
-            lamports = int(amount * 1_000_000_000)
-
-            tx = Transaction()
-            # add transfer instruction
-            tx.add(
-                transfer(
-                    TransferParams(
-                        from_pubkey=from_pubkey,
-                        to_pubkey=to_pubkey,
-                        lamports=lamports
-                    )
-                )
-            )
-
-            transfer_ix = transfer(
-                TransferParams(
-                    from_pubkey=from_pubkey,
-                    to_pubkey=to_pubkey,
-                    lamports=lamports
-                )  
-            )
-            # ساخت Message
-            message = Message.new_with_blockhash(
-                [transfer_ix],
-                from_pubkey,
-                recent_blockhash
-            )
-            # ساخت Transaction
-            tx = Transaction.new_unsigned(message)
-
-            await client.close()
-        except Exception as e:
-            await client.close()
-            logger.error("Transaction creation failed", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
-
-        session_data = {
-            "telegram_id": telegram_id,
-            "amount": amount,
-            "recipient": recipient,
-            "wallet_address": user.wallet_address,
-            "created_at": datetime.utcnow().isoformat()
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="csrf-token" content="{{ request.session.csrf_token }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
+    <title>CCoin Airdrop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/airdrop.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        if (typeof bs58 === 'undefined') {
+            window.bs58 = {
+                encode: function (data) {
+                    return btoa(String.fromCharCode.apply(null, data));
+                },
+                decode: function (str) {
+                    return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+                }
+            };
         }
-        _set_session(session_id, session_data, ttl=600)
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
+    <script>
+        window.ensureBS58 = function () {
+            if (typeof bs58 !== 'undefined') {
+                window.bs58 = bs58;
+                return true;
+            }
+            if (typeof window.bs58 !== 'undefined') {
+                return true;
+            }
+            console.warn('BS58 library not available, using fallback');
+            return false;
+        };
+    </script>
 
-        logger.info("Payment session created", extra={"session_id": session_id, "telegram_id": telegram_id})
-        return {"success": True, "session_id": session_id, "transaction": tx_base64, "expires_in": 600}
+    <style>
+        /* استایل منوی کشویی کیف پول - فقط دکمه‌های Change و Disconnect */
+        .wallet-dropdown {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("create_payment_session error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        .wallet-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #1a1a1a;
+            min-width: 100%;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.3);
+            z-index: 9999;
+            border-radius: 10px;
+            border: 2px solid #333;
+            top: calc(100% + 2px);
+            left: 0;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            margin-top: 0;
+        }
 
-# -------------------------
-# Phantom callback
-# -------------------------
-@router.get("/phantom_callback", response_class=HTMLResponse)
-async def phantom_callback(request: Request):
-    """
-    Phantom redirect target
-    """
-    params = dict(request.query_params)
-    logger.info("Phantom callback", extra={"params": params})
+        .wallet-dropdown-content.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
 
-    session = params.get("session")
-    signature = params.get("signature")
-    telegram_id = params.get("telegram_id")
+        .wallet-info-dropdown {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            color: #fff;
+        }
 
-    # phantom error
-    if params.get("errorCode") or params.get("errorMessage"):
-        err = params.get("errorMessage") or f"Phantom error {params.get('errorCode')}"
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": False,
-            "error": err,
-            "telegram_id": telegram_id,
-            "bot_username": BOT_USERNAME
-        })
+        .wallet-actions-dropdown {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
 
-    if signature and session:
-        s = _get_session(session)
-        if s:
-            s["signature"] = signature
-            _set_session(session, s, ttl=3600)
-        return templates.TemplateResponse("commission_callback.html", {
-            "request": request,
-            "success": None,
-            "message": "Transaction submitted. Verifying...",
-            "telegram_id": telegram_id,
-            "bot_username": BOT_USERNAME,
-            "signature": signature
-        })
+        .wallet-action-btn {
+            background: #2d2d2d;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
 
-    return templates.TemplateResponse("commission_callback.html", {
-        "request": request,
-        "success": None,
-        "message": "No callback data received. If you completed payment, click 'Check Status'.",
-        "telegram_id": telegram_id,
-        "bot_username": BOT_USERNAME
-    })
+        .wallet-action-btn:hover {
+            background: #3c3c3c;
+            transform: translateY(-1px);
+        }
 
-# -------------------------
-# Verify signature
-# -------------------------
-@router.post("/verify_signature", response_class=JSONResponse)
-async def verify_signature(request: Request, db: Session = Depends(get_db)):
-    """
-    Body: { telegram_id, session_id, signature }
-    """
-    try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        session_id = body.get("session_id")
-        signature = body.get("signature")
+        .disconnect-btn {
+            background: #dc3545 !important;
+        }
 
-        if not telegram_id or not session_id or not signature:
-            raise HTTPException(status_code=400, detail="Missing parameters")
+        .disconnect-btn:hover {
+            background: #c82333 !important;
+        }
 
-        session_data = _get_session(session_id)
-        if not session_data:
-            raise HTTPException(status_code=400, detail="Invalid or expired session")
+        .wallet-connect-button {
+            position: relative;
+        }
 
-        if session_data.get("telegram_id") != telegram_id:
-            raise HTTPException(status_code=400, detail="Session does not belong to telegram_id")
+        .wallet-status-indicator {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 14px;
+            height: 14px;
+            background: #28a745;
+            border-radius: 50%;
+            display: none;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px #28a745;
+        }
 
-        client = AsyncClient(SOLANA_RPC)
-        try:
-            tx_resp = await client.get_transaction(signature, encoding="jsonParsed", max_supported_transaction_version=0)
-            if not tx_resp.value:
-                await client.close()
-                return {"verified": False, "message": "Transaction not found on chain (yet)"}
+        .wallet-status-indicator.connected {
+            display: block;
+            animation: pulse 2s infinite;
+        }
 
-            expected_lamports = int(float(session_data.get("amount", COMMISSION_AMOUNT)) * 1_000_000_000)
-            user_wallet = session_data.get("wallet_address")
-            admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+            }
+        }
 
-            # robust instruction reading
-            instructions = []
-            try:
-                parsed_msg = tx_resp.value.transaction.transaction.message
-                instructions = getattr(parsed_msg, "instructions", []) or []
-            except Exception:
-                instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+        .task-button.wallet-connected {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border-color: #28a745 !important;
+        }
 
-            found = False
-            for ix in instructions:
-                parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
-                if isinstance(parsed, dict) and parsed.get("type") == "transfer":
-                    info = parsed.get("info", {})
-                    source = info.get("source")
-                    destination = info.get("destination")
-                    lamports = info.get("lamports", 0)
-                    if source == user_wallet and destination == admin_addr:
-                        if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
-                            found = True
-                            break
+        .task-button.wallet-connected .left-text,
+        .task-button.wallet-connected #wallet-button-text {
+            color: #ffffff !important;
+        }
 
-            await client.close()
+        .task-button.commission-paid .right-icon,
+        .task-button.tasks-completed .right-icon,
+        .task-button.friends-invited .right-icon,
+        .task-button.wallet-connected .right-icon {
+            color: #28a745 !important;
+        }
 
-            if found:
-                user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                if not user:
-                    raise HTTPException(status_code=404, detail="User not found")
+        .task-box.completed {
+            border-color: #28a745;
+        }
 
-                if not user.commission_paid:
-                    user.commission_paid = True
-                    user.commission_transaction_hash = signature
-                    user.commission_payment_date = datetime.utcnow()
-                    db.commit()
+        .task-box.completed .task-button {
+            background: rgba(40, 167, 69, 0.1);
+        }
 
-                _pop_session(session_id)
-                logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": signature})
-                return {"verified": True, "signature": signature}
+        .fa-check {
+            color: #28a745;
+            font-weight: bold;
+        }
 
-            return {"verified": False, "message": "Transaction does not match expected transfer"}
+        .task-box {
+            margin-bottom: 15px;
+            position: relative;
+        }
 
-        except Exception as e:
-            await client.close()
-            logger.error("verify_signature RPC error", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+        .wallet-dropdown {
+            z-index: 10;
+        }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        .wallet-dropdown-content {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+        }
 
-# -------------------------
-# Fallback verify (scan recent txs)
-# -------------------------
-@router.post("/verify", response_class=JSONResponse)
-async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
-    try:
-        body = await request.json()
-        telegram_id = body.get("telegram_id")
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Missing telegram_id")
+        .task-box:has(.wallet-dropdown) {
+            z-index: 10;
+        }
 
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        .task-box:not(:has(.wallet-dropdown)) {
+            z-index: 1;
+        }
 
-        if user.commission_paid:
-            return {"success": True, "verified": True, "already_paid": True, "message": "Payment already confirmed"}
+        .task-button.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
 
-        if not user.wallet_address:
-            raise HTTPException(status_code=400, detail="Wallet not connected")
+        .task-button.loading .right-icon {
+            animation: spin 1s linear infinite;
+        }
 
-        client = AsyncClient(SOLANA_RPC)
-        try:
-            # ✅ اصلاح شده: استفاده از Pubkey.from_string
-            user_pubkey = Pubkey.from_string(user.wallet_address)
-            logger.info("Scanning recent transactions", extra={"user_wallet": user.wallet_address})
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
 
-            signatures_resp = await client.get_signatures_for_address(user_pubkey, limit=40)
-            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            max-width: 300px;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
 
-            if signatures_resp.value:
-                for sig_info in signatures_resp.value:
-                    sig = str(sig_info.signature)
-                    existing_user = db.query(User).filter(User.commission_transaction_hash == sig).first()
-                    if existing_user:
-                        continue
+        .toast.show {
+            transform: translateX(0);
+        }
 
-                    tx_resp = await client.get_transaction(sig, encoding="jsonParsed", max_supported_transaction_version=0)
-                    if not tx_resp.value:
-                        continue
+        .toast-success {
+            background: #28a745;
+        }
 
-                    instructions = []
-                    try:
-                        parsed_msg = tx_resp.value.transaction.transaction.message
-                        instructions = getattr(parsed_msg, "instructions", []) or []
-                    except Exception:
-                        instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+        .toast-error {
+            background: #dc3545;
+        }
 
-                    for ix in instructions:
-                        parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
-                        if isinstance(parsed, dict) and parsed.get("type") == "transfer":
-                            info = parsed.get("info", {})
-                            if info.get("source") == user.wallet_address and info.get("destination") == ADMIN_WALLET:
-                                lamports = info.get("lamports", 0)
-                                if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
-                                    user.commission_paid = True
-                                    user.commission_transaction_hash = sig
-                                    user.commission_payment_date = datetime.utcnow()
-                                    db.commit()
-                                    await client.close()
-                                    return {"success": True, "verified": True, "signature": sig}
+        .toast-info {
+            background: #007bff;
+        }
 
-            await client.close()
-            return {"success": False, "verified": False, "message": "No valid payment found"}
+        .phantom-modal {
+            display: none;
+            position: fixed;
+            z-index: 10001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+        }
 
-        except Exception as e:
-            await client.close()
-            logger.error("Scan error", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=str(e))
+        .phantom-modal.show {
+            display: flex;
+        }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("verify error", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        .phantom-modal-content {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 2px solid #AB9FF2;
+        }
 
-# -------------------------
-# Check status endpoint
-# -------------------------
-@router.get("/check_status", response_class=JSONResponse)
-async def check_commission_status(
-    telegram_id: str = Query(...),
-    db: Session = Depends(get_db)
-):
-    """Check if user has paid commission"""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {
-        "commission_paid": user.commission_paid,
-        "transaction_hash": user.commission_transaction_hash if user.commission_paid else None
-    }
+        .phantom-modal-content h3 {
+            color: #fff;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
 
-# -------------------------
-# Success page
-# -------------------------
-@router.get("/success", response_class=HTMLResponse)
-async def commission_success(
-    request: Request,
-    telegram_id: str = Query(...)
-):
-    """Success page after payment"""
-    return templates.TemplateResponse("commission_success.html", {
-        "request": request,
-        "telegram_id": telegram_id,
-        "bot_username": BOT_USERNAME
-    })
+        .phantom-modal-content p {
+            color: #ccc;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .phantom-modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .phantom-modal-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .phantom-modal-btn.primary {
+            background: linear-gradient(135deg, #AB9FF2, #7B68EE);
+            color: white;
+        }
+
+        .phantom-modal-btn.primary:hover {
+            background: linear-gradient(135deg, #9A8CF1, #6A5ACD);
+            transform: translateY(-2px);
+        }
+
+        .phantom-modal-btn.secondary {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+        }
+
+        .phantom-modal-btn.secondary:hover {
+            background: #444;
+        }
+
+        .commission-modal {
+            display: none;
+            position: fixed;
+            z-index: 10001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .commission-modal.show {
+            display: flex;
+        }
+
+        .commission-modal-content {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 2px solid #ffa500;
+        }
+
+        .congratulations-message {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            animation: celebrateGlow 2s ease-in-out infinite alternate;
+            border: 2px solid #28a745;
+        }
+
+        .task-button.tasks-completed,
+        .task-button.friends-invited,
+        .task-button.commission-paid,
+        .task-button.wallet-connected {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border: 1px solid #28a745 !important;
+        }
+
+        .task-button.tasks-completed .right-icon,
+        .task-button.friends-invited .right-icon,
+        .task-button.commission-paid .right-icon,
+        .task-button.wallet-connected .right-icon {
+            color: #28a745 !important;
+        }
+
+        @keyframes celebrateGlow {
+            from {
+                box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            }
+            to {
+                box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+            }
+        }
+
+        .congratulations-message h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .congratulations-message p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 480px) {
+            .wallet-actions-dropdown {
+                flex-direction: column;
+            }
+
+            .task-box {
+                margin-bottom: 12px;
+            }
+
+            .toast {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+
+            .phantom-modal-content {
+                padding: 20px;
+                margin: 20px;
+            }
+
+            .phantom-modal-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="box">
+            <div class="countdown">
+                <span id="days">00</span>d :
+                <span id="hours">00</span>h :
+                <span id="minutes">00</span>m :
+                <span id="seconds">00</span>s
+            </div>
+            <div class="token-value">
+                <p>1 CCoin = $ 0.02</p>
+            </div>
+        </div>
+
+        <div class="airdrop-criteria">
+            <h2>Airdrop Criteria</h2>
+
+            <div id="task-completion" class="task-box">
+                <button onclick="handleTaskCompletion()" class="task-button">
+                    <span class="left-text">Tasks Completion</span>
+                    <i class="fas fa-chevron-right right-icon" id="tasks-icon"></i>
+                </button>
+            </div>
+
+            <div id="inviting-friends" class="task-box">
+                <button onclick="handleInviteCheck()" class="task-button">
+                    <span class="left-text">Inviting Friends</span>
+                    <i class="fas fa-chevron-right right-icon" id="friends-icon"></i>
+                </button>
+            </div>
+
+            <div id="connect-wallet" class="task-box">
+                <div class="wallet-dropdown">
+                    <button onclick="handleWalletConnection()" class="task-button wallet-connect-button">
+                        <span class="left-text" id="wallet-button-text">Connect Wallet</span>
+                        <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
+                        <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
+                    </button>
+
+                    <div class="wallet-dropdown-content" id="wallet-dropdown-content">
+                        <div class="wallet-info-dropdown">
+                            <div class="wallet-actions-dropdown">
+                                <button class="wallet-action-btn" onclick="changeWallet()">
+                                    <i class="fas fa-exchange-alt"></i> Change
+                                </button>
+                                <button class="wallet-action-btn disconnect-btn" onclick="disconnectWallet()">
+                                    <i class="fas fa-unlink"></i> Disconnect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pay-commission" class="task-box">
+                <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
+                    <span class="left-text" id="commission-button-text">Pay for Commission</span>
+                    <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="claim-section">
+            <button class="claim-btn" id="claimBtn" disabled>
+                Complete All Tasks to Claim
+            </button>
+        </div>
+
+        <div class="footer-icons">
+            <a href="/leaders" class="footer-btn">
+                <i class="fas fa-medal"></i>
+                <span>Leaders</span>
+            </a>
+            <a href="/friends" class="footer-btn">
+                <i class="fas fa-user-friends"></i>
+                <span>Friends</span>
+            </a>
+            <a href="/home" class="footer-btn">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
+            <a href="/earn" class="footer-btn">
+                <i class="fas fa-coins"></i>
+                <span>Earn</span>
+            </a>
+            <a href="/airdrop" class="footer-btn active">
+                <i class="fas fa-gift"></i>
+                <span>Airdrop</span>
+            </a>
+        </div>
+
+        <div id="phantomModal" class="phantom-modal">
+            <div class="phantom-modal-content">
+                <h3>Open Phantom Wallet</h3>
+                <p>You will be redirected to Phantom Wallet to connect your wallet.</p>
+                <div class="phantom-modal-buttons">
+                    <button class="phantom-modal-btn primary" onclick="openPhantomWallet()">
+                        Open Phantom
+                    </button>
+                    <button class="phantom-modal-btn secondary" onclick="closePhantomModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="commissionModal" class="commission-modal">
+            <div class="commission-modal-content">
+                <h3>💰 Pay Commission</h3>
+                <p>Complete your commission payment to unlock airdrop eligibility.</p>
+                <div class="phantom-modal-buttons">
+                    <button class="phantom-modal-btn primary" onclick="openCommissionPayment()">
+                        Pay Commission
+                    </button>
+                    <button class="phantom-modal-btn secondary" onclick="closeCommissionModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentWalletAddress = '{{ user_wallet_address if user_wallet_address else "" }}';
+        let userStatuses = {
+            tasks_completed: {{ tasks_completed|lower }},
+            friends_invited: {{ invited|lower }},
+            wallet_connected: {{ wallet_connected|lower }},
+            commission_paid: {{ commission_paid|lower }}
+        };
+
+        // Telegram WebApp Initialization
+        const tg = window.Telegram ? window.Telegram.WebApp : null;
+        const telegramId = tg ? tg.initDataUnsafe.user?.id : null;
+
+        // Get CSRF token from meta tag
+        function getCsrfToken() {
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            return metaTag ? metaTag.getAttribute('content') : '';
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, initializing...');
+            
+            initializeCountdown();
+            updateTaskStatuses();
+            
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('wallet-dropdown-content');
+                const walletButton = document.querySelector('.wallet-connect-button');
+                
+                if (!walletButton.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        });
+
+        function initializeCountdown() {
+            const countDownDate = new Date("2026-02-17T23:59:59").getTime();
+            
+            const timer = setInterval(function() {
+                const now = new Date().getTime();
+                const distance = countDownDate - now;
+
+                if (distance < 0) {
+                    clearInterval(timer);
+                    document.getElementById("days").innerHTML = "00";
+                    document.getElementById("hours").innerHTML = "00";
+                    document.getElementById("minutes").innerHTML = "00";
+                    document.getElementById("seconds").innerHTML = "00";
+                    return;
+                }
+
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                document.getElementById("days").innerHTML = String(days).padStart(2, '0');
+                document.getElementById("hours").innerHTML = String(hours).padStart(2, '0');
+                document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
+                document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
+            }, 1000);
+        }
+
+        function updateTaskStatuses() {
+            if (userStatuses.tasks_completed) {
+                markTaskAsCompleted('task-completion', 'tasks-icon', 'Tasks Completed');
+            }
+
+            if (userStatuses.friends_invited) {
+                markTaskAsCompleted('inviting-friends', 'friends-icon', 'Friends Invited');
+            }
+
+            if (userStatuses.wallet_connected && currentWalletAddress) {
+                markWalletAsConnected();
+            }
+
+            if (userStatuses.commission_paid) {
+                markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
+            }
+
+            checkAllTasksCompletion();
+        }
+
+        function markTaskAsCompleted(taskId, iconId, text) {
+            const taskBox = document.getElementById(taskId);
+            const button = taskBox.querySelector('.task-button');
+            const icon = document.getElementById(iconId);
+            const leftText = button.querySelector('.left-text');
+
+            taskBox.classList.add('completed');
+            button.classList.add('tasks-completed');
+            icon.className = 'fas fa-check right-icon';
+            leftText.textContent = text;
+        }
+
+        function markWalletAsConnected() {
+            const taskBox = document.getElementById('connect-wallet');
+            const button = taskBox.querySelector('.task-button');
+            const icon = document.getElementById('wallet-icon');
+            const buttonText = document.getElementById('wallet-button-text');
+            const statusIndicator = document.getElementById('wallet-status-indicator');
+
+            taskBox.classList.add('completed');
+            button.classList.add('wallet-connected');
+            icon.className = 'fas fa-check right-icon';
+            statusIndicator.classList.add('connected');
+            
+            const shortAddress = currentWalletAddress.slice(0, 6) + '...' + currentWalletAddress.slice(-4);
+            buttonText.textContent = `Connected: ${shortAddress}`;
+        }
+
+        function handleTaskCompletion() {
+            window.location.href = '/earn';
+        }
+
+        function handleInviteCheck() {
+            window.location.href = '/friends';
+        }
+
+        function handleWalletConnection() {
+            if (userStatuses.wallet_connected && currentWalletAddress) {
+                const dropdown = document.getElementById('wallet-dropdown-content');
+                dropdown.classList.toggle('show');
+            } else {
+                showPhantomModal();
+            }
+        }
+
+        function showPhantomModal() {
+            const modal = document.getElementById('phantomModal');
+            modal.classList.add('show');
+        }
+
+        function closePhantomModal() {
+            const modal = document.getElementById('phantomModal');
+            modal.classList.remove('show');
+        }
+
+        function openPhantomWallet() {
+            closePhantomModal();
+            
+            if (!telegramId) {
+                showToast('Error: User information not found', 'error');
+                return;
+            }
+
+            showToast('Redirecting to wallet...', 'info');
+            
+            const walletUrl = `/wallet/browser/connect?telegram_id=${telegramId}`;
+            
+            try {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.openLink(walletUrl);
+                } else {
+                    window.open(walletUrl, '_blank');
+                }
+            } catch (error) {
+                console.error('Error opening wallet:', error);
+                window.location.href = walletUrl;
+            }
+        }
+
+        function changeWallet() {
+            const dropdown = document.getElementById('wallet-dropdown-content');
+            dropdown.classList.remove('show');
+            showPhantomModal();
+        }
+
+        async function disconnectWallet() {
+            const dropdown = document.getElementById('wallet-dropdown-content');
+            dropdown.classList.remove('show');
+            
+            try {
+                const response = await fetch('/airdrop/connect_wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        wallet: ""
+                    })
+                });
+
+                if (response.ok) {
+                    currentWalletAddress = '';
+                    userStatuses.wallet_connected = false;
+                    
+                    const taskBox = document.getElementById('connect-wallet');
+                    const button = taskBox.querySelector('.task-button');
+                    const icon = document.getElementById('wallet-icon');
+                    const buttonText = document.getElementById('wallet-button-text');
+                    const statusIndicator = document.getElementById('wallet-status-indicator');
+
+                    taskBox.classList.remove('completed');
+                    button.classList.remove('wallet-connected');
+                    icon.className = 'fas fa-chevron-right right-icon';
+                    statusIndicator.classList.remove('connected');
+                    buttonText.textContent = 'Connect Wallet';
+                    
+                    showToast('Wallet disconnected', 'success');
+                    checkAllTasksCompletion();
+                } else {
+                    throw new Error('Failed to disconnect wallet');
+                }
+            } catch (error) {
+                console.error('Error disconnecting wallet:', error);
+                showToast('Error disconnecting wallet', 'error');
+            }
+        }
+
+
+        function handleCommissionPayment() {
+            console.log('Commission button clicked', userStatuses);
+
+            if (userStatuses.commission_paid) {
+                showToast('✅ Commission already paid!', 'success');
+                return;
+            }
+
+            if (!userStatuses.wallet_connected) {
+                showToast('⚠️ Please connect your wallet first', 'error');
+                return;
+            }
+
+            const telegram_id = telegramId || '{{ request.session.get("telegram_id") }}';
+
+            if (!telegram_id) {
+                showToast('Error: Telegram ID not found', 'error');
+                return;
+            }
+
+            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
+
+            console.log('🔗 Opening commission URL:', commissionUrl);
+
+            // ✅ استفاده از window.open با _system (برای باز شدن در مرورگر سیستم)
+            if (window.open(commissionUrl, '_system') === null) {
+                // اگر _system کار نکرد، از _blank استفاده کن
+                window.open(commissionUrl, '_blank', 'noopener,noreferrer,location=yes');
+            }
+
+            showToast('Opening payment page...', 'info');
+        }
+
+        function openCommissionPayment() {
+            closeCommissionModal();
+
+            const telegram_id = telegramId || '{{ request.session.get("telegram_id") }}';
+
+            if (!telegram_id) {
+                showToast('Error: Telegram ID not found', 'error');
+                return;
+            }
+
+            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
+
+            console.log('🔗 Opening commission payment in external browser:', commissionUrl);
+
+            if (tg && typeof tg.openLink === 'function') {
+                 tg.openLink(commissionUrl, {try_instant_view: false});
+                showToast('Opening payment page in external browser...', 'info');
+            } else {
+                const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
+                if (!newWindow) {
+                    showToast('Please allow pop-ups for this site', 'error');
+                }
+            }
+        }
+
+        function checkAllTasksCompletion() {
+            const allCompleted = userStatuses.tasks_completed && 
+                               userStatuses.friends_invited && 
+                               userStatuses.wallet_connected && 
+                               userStatuses.commission_paid;
+
+            const claimBtn = document.getElementById('claimBtn');
+
+            if (allCompleted) {
+                claimBtn.innerHTML = '🎉 Congratulations! You have completed all tasks and are eligible to receive tokens!';
+                claimBtn.disabled = false;
+                claimBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                claimBtn.style.color = 'white';
+                claimBtn.style.cursor = 'pointer';
+                claimBtn.onclick = claimAirdrop;
+            } else {
+                claimBtn.innerHTML = 'Complete All Tasks to Claim';
+                claimBtn.disabled = true;
+                claimBtn.style.background = '#e0e7ff';
+                claimBtn.style.color = '#9ca3af';
+                claimBtn.style.cursor = 'not-allowed';
+            }
+        }
+
+        function claimAirdrop() {
+            showToast('🎉 Congratulations! Your airdrop claim has been registered!', 'success');
+        }
+
+        function showToast(message, type = 'info') {
+            const existingToasts = document.querySelectorAll('.toast');
+            existingToasts.forEach(toast => toast.remove());
+
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        async function checkCommissionStatus() {
+            if (!userStatuses.commission_paid && userStatuses.wallet_connected) {
+                try {
+                    const response = await fetch(`/commission/check_status?telegram_id=${telegramId}`, {
+                        headers: {
+                            'X-CSRF-Token': getCsrfToken()
+                        }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.commission_paid && !userStatuses.commission_paid) {
+                        userStatuses.commission_paid = true;
+                        markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
+                        checkAllTasksCompletion();
+                        showToast('✅ Commission payment confirmed!', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error checking commission status:', error);
+                }
+            }
+        }
+
+        setInterval(checkCommissionStatus, 10000);
+    </script>
+</body>
+</html>
