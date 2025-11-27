@@ -482,10 +482,15 @@
             </div>
 
             <div id="pay-commission" class="task-box">
-                <button onclick="handleCommissionPayment()" class="task-button" id="commission-button">
+                <a href="/commission/browser/pay?telegram_id={{ request.session.get('telegram_id') }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="task-button"
+                   id="commission-button"
+                   onclick="return checkCommissionRequirements()">
                     <span class="left-text" id="commission-button-text">Pay for Commission</span>
                     <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
-                </button>
+                </a>
             </div>
         </div>
 
