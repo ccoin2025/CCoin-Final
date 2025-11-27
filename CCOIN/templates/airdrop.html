@@ -763,29 +763,40 @@
         }
 
         function handleCommissionPayment() {
-            if (!userStatuses.wallet_connected) {
-                showToast('Please connect your wallet first', 'error');
-                return;
-            }
-            
+            console.log('Commission button clicked', userStatuses);
+
+            // بررسی اینکه آیا کمیشن قبلاً پرداخت شده
             if (userStatuses.commission_paid) {
-                showToast('Commission has already been paid', 'info');
+                showToast('✅ Commission already paid!', 'success');
                 return;
             }
-            
-            showCommissionModal();
-        }
 
-        function showCommissionModal() {
-            const modal = document.getElementById('commissionModal');
-            modal.classList.add('show');
-        }
+            if (!userStatuses.wallet_connected) {
+                showToast('⚠️ Please connect your wallet first', 'error');
+                return;
+            }
 
-        function closeCommissionModal() {
-            const modal = document.getElementById('commissionModal');
-            modal.classList.remove('show');
-        }
+            const telegram_id = telegramId || '{{ request.session.get("telegram_id") }}';
 
+            if (!telegram_id) {
+                showToast('Error: Telegram ID not found', 'error');
+                return;
+            }
+
+            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
+
+            console.log('🔗 Opening commission payment directly in external browser:', commissionUrl);
+
+            if (tg && typeof tg.openLink === 'function') {
+                tg.openLink(commissionUrl, {try_instant_view: false});
+                showToast('Opening payment page...', 'info');
+            } else {
+                const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
+                if (!newWindow) {
+                    showToast('Please allow pop-ups for this site', 'error');
+                }
+            }
+        }
         function openCommissionPayment() {
             closeCommissionModal();
 
