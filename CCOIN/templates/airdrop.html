@@ -767,20 +767,6 @@
             }
         }
         
-        function checkCommissionRequirements() {
-            if (userStatuses.commission_paid) {
-                showToast('✅ Commission already paid!', 'success');
-                return false; // جلوگیری از باز شدن لینک
-            }
-
-            if (!userStatuses.wallet_connected) {
-                showToast('⚠️ Please connect your wallet first', 'error');
-                return false; // جلوگیری از باز شدن لینک
-            }
-
-            showToast('Opening in external browser...', 'info');
-            return true; // اجازه باز شدن لینک
-        }
 
         function handleCommissionPayment() {
             console.log('Commission button clicked', userStatuses);
@@ -804,19 +790,15 @@
 
             const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
 
-            console.log('🔗 Creating external link for:', commissionUrl);
+            console.log('🔗 Opening commission URL:', commissionUrl);
 
-            // ✅ ساخت یک لینک invisible و کلیک روی آن
-            const link = document.createElement('a');
-            link.href = commissionUrl;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // ✅ استفاده از window.open با _system (برای باز شدن در مرورگر سیستم)
+            if (window.open(commissionUrl, '_system') === null) {
+                // اگر _system کار نکرد، از _blank استفاده کن
+                window.open(commissionUrl, '_blank', 'noopener,noreferrer,location=yes');
+            }
 
-            showToast('Opening in external browser...', 'info');
+            showToast('Opening payment page...', 'info');
         }
 
         function openCommissionPayment() {
