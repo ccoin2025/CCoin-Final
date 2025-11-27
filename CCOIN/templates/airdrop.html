@@ -776,17 +776,17 @@
                 return;
             }
 
-            const telegram_id = telegramId || '{{ request.session.get("telegram_id") }}';
+            // ✅ دریافت telegram_id به صورت string
+            const telegram_id = String(telegramId || '{{ request.session.get("telegram_id") }}');
 
-            if (!telegram_id) {
+            if (!telegram_id || telegram_id === 'undefined') {
                 showToast('Error: Telegram ID not found', 'error');
                 return;
             }
 
             try {
-                showToast('Sending payment link...', 'info');
+                showToast('📤 Sending payment link to your Telegram...', 'info');
 
-                // ✅ درخواست ارسال لینک از طریق Bot
                 const response = await fetch('/airdrop/request_commission_link', {
                     method: 'POST',
                     headers: {
@@ -797,19 +797,23 @@
 
                 const data = await response.json();
 
-                if (data.success) {
-                    showToast('✅ Payment link sent to your Telegram chat! Check your messages.', 'success');
+                if (response.ok && data.success) {
+                    showToast('✅ Check your Telegram messages!', 'success');
 
-                    // نمایش یک alert دوستانه
-                    if (tg && tg.showAlert) {
-                        tg.showAlert('Payment link sent to your chat! Please check your Telegram messages and click the button to open the payment page in your browser.');
+                    // نمایش popup در Telegram
+                    if (tg && tg.showPopup) {
+                        tg.showPopup({
+                            title: '✅ Link Sent!',
+                            message: 'Payment link has been sent to your Telegram chat. Please check your messages and click the button to pay.',
+                            buttons: [{type: 'close'}]
+                        });
                     }
                 } else {
                     showToast('❌ ' + (data.message || 'Failed to send link'), 'error');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                showToast('❌ Error sending payment link', 'error');
+                showToast('❌ Error: ' + error.message, 'error');
             }
         }
 
