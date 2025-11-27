@@ -765,7 +765,6 @@
         function handleCommissionPayment() {
             console.log('Commission button clicked', userStatuses);
 
-            // بررسی اینکه آیا کمیشن قبلاً پرداخت شده
             if (userStatuses.commission_paid) {
                 showToast('✅ Commission already paid!', 'success');
                 return;
@@ -785,17 +784,24 @@
 
             const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegram_id}`;
 
-            console.log('🔗 Opening commission payment directly in external browser:', commissionUrl);
+            console.log('🔗 Opening commission URL:', commissionUrl);
 
-            if (tg && typeof tg.openLink === 'function') {
-                tg.openLink(commissionUrl, {try_instant_view: false});
-                showToast('Opening payment page...', 'info');
-            } else {
-                const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
-                if (!newWindow) {
-                    showToast('Please allow pop-ups for this site', 'error');
-                }
+            // ✅ روش 1: استفاده از openTelegramLink (بهترین روش)
+            if (tg && typeof tg.openTelegramLink === 'function') {
+                tg.openTelegramLink(commissionUrl);
+                showToast('Opening in browser...', 'info');
+                return;
             }
+
+            // ✅ روش 2: استفاده از openLink با تنظیمات مناسب
+            if (tg && typeof tg.openLink === 'function') {
+                tg.openLink(commissionUrl);
+                showToast('Opening in browser...', 'info');
+                return;
+            }
+
+            // ✅ روش 3: Fallback - تغییر مستقیم location
+            window.location.href = commissionUrl;
         }
         function openCommissionPayment() {
             closeCommissionModal();
