@@ -118,17 +118,13 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 address_lookup_table_accounts=[],
                 recent_blockhash=recent_blockhash,
             )
-
-            # روش نهایی و ۱۰۰٪ کارکرده در سال ۲۰۲۵ (تست شده روی ۱۰۰+ دستگاه)
-            # تبدیل MessageV0 به Versioned Message با 1 signer (بدون استفاده از Keypair)
-            raw_bytes = bytes(message)                                    # شروع با 0x01 (Legacy)
             
-            # ساخت هدر درست برای Versioned Transaction v0 با دقیقاً ۱ signer
-            # هدر: [0x00 (version)] + [0x01 (تعداد signerها)] + [pubkey payer] + [بقیه message بدون بایت اول]
-            header = b"\x00" + b"\x01" + bytes(from_pubkey)
-            versioned_bytes = header + raw_bytes[33:]  # 33 = 1 (flag) + 32 (pubkey)
+            # ساخت VersionedTransaction بدون signer (solders 0.21.0+ این رو قبول می‌کنه)
+            tx = VersionedTransaction(message, [])
             
-            tx_base64 = base64.b64encode(versioned_bytes).decode("utf-8")
+            # فقط message رو می‌فرستیم — این دقیقاً چیزیه که Phantom می‌خواد
+            serialized_message = tx.serialize_message()
+            tx_base64 = base64.b64encode(serialized_message).decode("utf-8")
             
             await client.close()
         except Exception as e:
