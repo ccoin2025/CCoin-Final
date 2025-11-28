@@ -1,15 +1,3 @@
-/* --------------------------------------------------------------------
-   Combined JavaScript (00001.js + inline <script> from HTML)
-   File: airdrop.js
-   Notes:
-   - To avoid accidental function name collisions, the original 00001.js
-     functions were namespaced with `main_` prefixes.
-   - The inline HTML script functions are kept with their original names
-     because the HTML uses onclick="..." attributes that rely on those globals.
-   - This file also includes a small BS58 fallback to ensure code doesn't throw
-     if the external CDN is unavailable.
-   -------------------------------------------------------------------- */
-
 /* ---------- BS58 fallback (moved from inline) ---------- */
 if (typeof bs58 === 'undefined') {
     window.bs58 = {
