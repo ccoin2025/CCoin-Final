@@ -572,14 +572,14 @@
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Page loaded, initializing...');
-            
+
             initializeCountdown();
             updateTaskStatuses();
-            
+
             document.addEventListener('click', function(event) {
                 const dropdown = document.getElementById('wallet-dropdown-content');
                 const walletButton = document.querySelector('.wallet-connect-button');
-                
+
                 if (!walletButton.contains(event.target)) {
                     dropdown.classList.remove('show');
                 }
@@ -588,7 +588,7 @@
 
         function initializeCountdown() {
             const countDownDate = new Date("2026-02-17T23:59:59").getTime();
-            
+
             const timer = setInterval(function() {
                 const now = new Date().getTime();
                 const distance = countDownDate - now;
@@ -657,7 +657,7 @@
             button.classList.add('wallet-connected');
             icon.className = 'fas fa-check right-icon';
             statusIndicator.classList.add('connected');
-            
+
             const shortAddress = currentWalletAddress.slice(0, 6) + '...' + currentWalletAddress.slice(-4);
             buttonText.textContent = `Connected: ${shortAddress}`;
         }
@@ -691,16 +691,16 @@
 
         function openPhantomWallet() {
             closePhantomModal();
-            
+
             if (!telegramId) {
                 showToast('Error: User information not found', 'error');
                 return;
             }
 
             showToast('Redirecting to wallet...', 'info');
-            
+
             const walletUrl = `/wallet/browser/connect?telegram_id=${telegramId}`;
-            
+
             try {
                 if (window.Telegram && window.Telegram.WebApp) {
                     window.Telegram.WebApp.openLink(walletUrl);
@@ -722,7 +722,7 @@
         async function disconnectWallet() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             dropdown.classList.remove('show');
-            
+
             try {
                 const response = await fetch('/airdrop/connect_wallet', {
                     method: 'POST',
@@ -738,7 +738,7 @@
                 if (response.ok) {
                     currentWalletAddress = '';
                     userStatuses.wallet_connected = false;
-                    
+
                     const taskBox = document.getElementById('connect-wallet');
                     const button = taskBox.querySelector('.task-button');
                     const icon = document.getElementById('wallet-icon');
@@ -750,7 +750,7 @@
                     icon.className = 'fas fa-chevron-right right-icon';
                     statusIndicator.classList.remove('connected');
                     buttonText.textContent = 'Connect Wallet';
-                    
+
                     showToast('Wallet disconnected', 'success');
                     checkAllTasksCompletion();
                 } else {
@@ -767,12 +767,12 @@
                 showToast('Please connect your wallet first', 'error');
                 return;
             }
-            
+
             if (userStatuses.commission_paid) {
                 showToast('Commission has already been paid', 'info');
                 return;
             }
-            
+
             showCommissionModal();
         }
 
@@ -788,32 +788,27 @@
 
         function openCommissionPayment() {
             closeCommissionModal();
-            
+
             if (!telegramId) {
                 showToast('Error: User information not found', 'error');
                 return;
             }
 
-            showToast('Redirecting to payment page...', 'info');
-            
             const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
-            
-            try {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.openLink(commissionUrl);
-                } else {
-                    window.open(commissionUrl, '_blank');
-                }
-            } catch (error) {
-                console.error('Error opening commission payment:', error);
-                window.location.href = commissionUrl;
+
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.openLink(commissionUrl, {tryBrowser: true});
+            } else {
+                window.open(commissionUrl, '_blank');
             }
+
+            showToast('Opening payment page in external browser...', 'info');
         }
 
         function checkAllTasksCompletion() {
-            const allCompleted = userStatuses.tasks_completed && 
-                               userStatuses.friends_invited && 
-                               userStatuses.wallet_connected && 
+            const allCompleted = userStatuses.tasks_completed &&
+                               userStatuses.friends_invited &&
+                               userStatuses.wallet_connected &&
                                userStatuses.commission_paid;
 
             const claimBtn = document.getElementById('claimBtn');
@@ -845,7 +840,7 @@
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             toast.textContent = message;
-            
+
             document.body.appendChild(toast);
 
             setTimeout(() => {
@@ -869,7 +864,7 @@
                         }
                     });
                     const data = await response.json();
-                    
+
                     if (data.commission_paid && !userStatuses.commission_paid) {
                         userStatuses.commission_paid = true;
                         markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
