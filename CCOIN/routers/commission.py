@@ -18,6 +18,7 @@ from solders.keypair import Keypair
 from solders.system_program import TransferParams, transfer
 from solders.transaction import Transaction
 from solders.message import Message
+from solders.hash import Hash
 import base58
 
 
@@ -114,7 +115,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
         client = AsyncClient(SOLANA_RPC)
         try:
-            # ✅ دریافت آخرین blockhash
+            # دریافت blockhash
             blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
             
@@ -123,60 +124,56 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 "telegram_id": telegram_id
             })
 
-            # ✅ تبدیل آدرس‌ها به Pubkey
+            # تبدیل آدرس‌ها
             from_pubkey = Pubkey.from_string(user.wallet_address)
             to_pubkey = Pubkey.from_string(recipient)
             lamports = int(amount * 1_000_000_000)
 
-            logger.info("Transaction parameters", extra={
-                "from": str(from_pubkey),
-                "to": str(to_pubkey),
-                "lamports": lamports,
-                "sol_amount": amount
-            })
-
-            # ✅ ساخت transfer instruction
-            transfer_ix = transfer(
-                TransferParams(
-                    from_pubkey=from_pubkey,
-                    to_pubkey=to_pubkey,
-                    lamports=lamports
-                )
+            # ✅ روش جایگزین: ساخت دستی transaction
+            from solders.instruction import Instruction, AccountMeta
+            from solders.message import Message
+            from solders.transaction import Transaction
+            
+            # ساخت instruction به صورت دستی
+            # System Program ID: 11111111111111111111111111111111
+            system_program_id = Pubkey.from_string("11111111111111111111111111111111")
+            
+            # Transfer instruction data
+            # 0: instruction type (2 = transfer)
+            # 1-8: lamports (little-endian u64)
+            instruction_data = bytearray([2])  # Transfer instruction
+            instruction_data.extend(lamports.to_bytes(8, 'little'))
+            
+            accounts = [
+                AccountMeta(pubkey=from_pubkey, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=to_pubkey, is_signer=False, is_writable=True),
+            ]
+            
+            transfer_instruction = Instruction(
+                program_id=system_program_id,
+                accounts=accounts,
+                data=bytes(instruction_data)
             )
 
-            # ✅ CRITICAL FIX: استفاده از VersionedMessage
-            from solders.message import MessageV0
-            from solders.hash import Hash
-            
-            # تبدیل recent_blockhash به Hash
-            if isinstance(recent_blockhash, Hash):
-                blockhash_hash = recent_blockhash
-            else:
-                blockhash_hash = Hash.from_string(str(recent_blockhash))
-
-            # ✅ ساخت Message با MessageV0
-            message = MessageV0.try_compile(
+            # ساخت message
+            message = Message.new_with_blockhash(
+                instructions=[transfer_instruction],
                 payer=from_pubkey,
-                instructions=[transfer_ix],
-                address_lookup_table_accounts=[],
-                recent_blockhash=blockhash_hash
+                blockhash=recent_blockhash
             )
 
-            # ✅ ساخت VersionedTransaction
-            from solders.transaction import VersionedTransaction
-            
-            tx = VersionedTransaction(message, [])
-            
-            # ✅ Serialize کردن - روش صحیح
+            # ساخت transaction
+            tx = Transaction.new_unsigned(message)
+
+            # Serialize
             tx_bytes = bytes(tx)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
             
-            logger.info("Transaction serialized", extra={
+            logger.info("Transaction created (manual method)", extra={
                 "telegram_id": telegram_id,
                 "tx_base64_length": len(tx_base64),
                 "tx_bytes_length": len(tx_bytes),
-                "first_50_chars": tx_base64[:50],
-                "last_50_chars": tx_base64[-50:] if len(tx_base64) > 50 else "N/A"
+                "first_100_chars": tx_base64[:100]
             })
 
             await client.close()
@@ -202,10 +199,9 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
         }
         _set_session(session_id, session_data, ttl=600)
 
-        logger.info("Payment session created successfully", extra={
+        logger.info("Payment session created", extra={
             "session_id": session_id,
-            "telegram_id": telegram_id,
-            "expires_in": 600
+            "telegram_id": telegram_id
         })
         
         return {
@@ -218,7 +214,7 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("create_payment_session unexpected error", extra={
+        logger.error("create_payment_session error", extra={
             "error": str(e),
             "error_type": type(e).__name__
         }, exc_info=True)
