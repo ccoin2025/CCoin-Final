@@ -171,9 +171,14 @@
     </div>
 
     <div id="phantomSection" style="display:none">
-      <button class="btn" id="pay-btn" onclick="handlePayment()">
-        <span id="btn-text">💳 Pay with Phantom</span>
+      <button class="btn" id="pay-btn-mobile" onclick="handlePaymentDeeplink()">
+        <span id="btn-text-mobile">📱 Pay with Phantom (Mobile)</span>
       </button>
+      
+      <button class="btn" id="pay-btn-desktop" onclick="handlePaymentProvider()">
+        <span id="btn-text-desktop">🌐 Pay with Phantom (Browser)</span>
+      </button>
+      
       <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()" style="display:none">✅ Check Payment Status</button>
     </div>
 
@@ -221,31 +226,117 @@ function showStatus(msg, type='info') {
   el.style.display = 'block';
 }
 
-function setButtonLoading(state) {
-  const btn = document.getElementById('pay-btn');
-  const btnText = document.getElementById('btn-text');
+function setButtonLoading(buttonId, state, textId) {
+  const btn = document.getElementById(buttonId);
+  const btnText = document.getElementById(textId);
   const verifyBtn = document.getElementById('verify-btn');
   if (state) {
     btn.disabled = true;
     btnText.innerHTML = '<span class="spinner"></span> Processing...';
   } else {
     btn.disabled = false;
-    btnText.innerHTML = '💳 Pay with Phantom';
     verifyBtn.style.display = 'block';
   }
 }
 
-async function handlePaymentWithProvider() {
+// ============================================
+// روش 1: استفاده از Phantom Deeplink (موبایل)
+// ============================================
+async function handlePaymentDeeplink(){
+  try {
+    setButtonLoading('pay-btn-mobile', true, 'btn-text-mobile');
+    showStatus('🔄 Preparing transaction...', 'info');
+    debugLog('Starting payment process (Deeplink)');
+
+    const create = await fetch("/commission/create_payment_session", {
+      method: "POST",
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ 
+        telegram_id: CONFIG.telegramId,
+        amount: CONFIG.commissionAmount,
+        recipient: CONFIG.adminWallet
+      })
+    });
+
+    const data = await create.json();
+    debugLog('Server response:', data);
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to create transaction');
+    }
+
+    const transaction = data.transaction;
+    const sessionId = data.session_id;
+
+    if (!transaction || !sessionId) {
+      throw new Error('Invalid server response: missing transaction or session_id');
+    }
+
+    // ✅ ساخت callback URL
+    const baseUrl = window.location.origin;
+    const redirectUrl = `${baseUrl}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
+    
+    debugLog('Transaction length:', transaction.length);
+    debugLog('Redirect URL:', redirectUrl);
+
+    // ✅ ساخت Phantom Deeplink با URLSearchParams
+    const params = new URLSearchParams();
+    params.append('dapp_encryption_public_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+    params.append('nonce', sessionId.substring(0, 24));
+    params.append('redirect_link', redirectUrl);
+    params.append('payload', transaction);
+
+    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
+    
+    debugLog('Deeplink created, length:', deeplink.length);
+
+    showStatus('📱 Opening Phantom Wallet...', 'info');
+
+    // ✅ باز کردن Phantom
+    setTimeout(() => {
+      if (tg && tg.openLink) {
+        debugLog('Opening via Telegram WebApp');
+        tg.openLink(deeplink, { try_instant_view: false });
+      } else {
+        debugLog('Opening via window.location');
+        window.location.href = deeplink;
+      }
+    }, 100);
+
+    // نمایش دکمه verify
+    setTimeout(() => {
+      setButtonLoading('pay-btn-mobile', false, 'btn-text-mobile');
+      document.getElementById('btn-text-mobile').innerHTML = '📱 Pay with Phantom (Mobile)';
+      document.getElementById('verify-btn').style.display = 'block';
+      showStatus('💡 After approving in Phantom, the page will reload. You can also click "Check Payment Status".', 'info');
+    }, 3000);
+
+  } catch (err) {
+    console.error('Payment error:', err);
+    debugLog('ERROR:', { message: err.message, stack: err.stack });
+    showStatus('❌ ' + (err.message || 'Payment initialization failed'), 'error');
+    setButtonLoading('pay-btn-mobile', false, 'btn-text-mobile');
+    document.getElementById('btn-text-mobile').innerHTML = '📱 Pay with Phantom (Mobile)';
+  }
+}
+
+// ============================================
+// روش 2: استفاده از Phantom Provider API (دسکتاپ)
+// ============================================
+async function handlePaymentProvider() {
   try {
     // بررسی وجود Phantom
     const phantom = window.solana;
     
     if (!phantom || !phantom.isPhantom) {
-      throw new Error('Please install Phantom wallet extension first!');
+      showStatus('❌ Phantom wallet not detected! Please install Phantom extension or use Mobile option.', 'error');
+      debugLog('Phantom not found');
+      return;
     }
 
-    setButtonLoading(true);
+    setButtonLoading('pay-btn-desktop', true, 'btn-text-desktop');
     showStatus('🔄 Connecting to Phantom...', 'info');
+    debugLog('Starting payment process (Provider API)');
 
     // اتصال به wallet
     const resp = await phantom.connect();
@@ -266,24 +357,27 @@ async function handlePaymentWithProvider() {
     });
 
     const data = await create.json();
+    debugLog('Server response:', data);
+
     if (!data.success) {
-      throw new Error(data.error);
+      throw new Error(data.error || 'Failed to create transaction');
     }
 
-    // Decode transaction از base64
+    // ✅ Decode transaction از base64
     const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+    debugLog('Transaction decoded, length:', txBuffer.length);
     
-    showStatus('📝 Please approve transaction in Phantom...', 'info');
+    showStatus('📝 Please approve the transaction in Phantom...', 'info');
 
-    // ارسال تراکنش
+    // ✅ ارسال تراکنش
     const { signature } = await phantom.signAndSendTransaction({
       message: txBuffer
     });
 
-    debugLog('Transaction sent:', signature);
-    showStatus('🔍 Verifying transaction...', 'info');
+    debugLog('Transaction sent, signature:', signature);
+    showStatus('🔍 Verifying transaction on blockchain...', 'info');
 
-    // Verify کردن
+    // ✅ Verify کردن
     const verify = await fetch('/commission/verify_signature', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -295,8 +389,10 @@ async function handlePaymentWithProvider() {
     });
 
     const result = await verify.json();
+    debugLog('Verification result:', result);
+
     if (result.verified) {
-      showStatus('✅ Payment verified! Redirecting...', 'success');
+      showStatus('✅ Payment verified successfully! Redirecting...', 'success');
       setTimeout(() => {
         window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
       }, 2000);
@@ -306,12 +402,16 @@ async function handlePaymentWithProvider() {
 
   } catch (err) {
     console.error('Payment error:', err);
-    debugLog('ERROR:', err);
-    showStatus('❌ ' + err.message, 'error');
-    setButtonLoading(false);
+    debugLog('ERROR:', { message: err.message, name: err.name });
+    showStatus('❌ ' + (err.message || 'Payment failed'), 'error');
+    setButtonLoading('pay-btn-desktop', false, 'btn-text-desktop');
+    document.getElementById('btn-text-desktop').innerHTML = '🌐 Pay with Phantom (Browser)';
   }
 }
+
+// ============================================
 // بررسی دستی وضعیت پرداخت
+// ============================================
 async function checkPayment(){
   try {
     showStatus('🔍 Checking payment status...', 'info');
@@ -337,7 +437,9 @@ async function checkPayment(){
   }
 }
 
-// ✅ بهبود یافته: مدیریت خودکار callback از Phantom
+// ============================================
+// مدیریت خودکار callback از Phantom
+// ============================================
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
 
@@ -349,7 +451,11 @@ window.addEventListener('load', async () => {
     const errorMessage = params.get('errorMessage') || 'Unknown error';
     debugLog('Phantom returned error:', { errorCode, errorMessage });
     showStatus(`❌ Phantom Error: ${decodeURIComponent(errorMessage)} (Code: ${errorCode})`, 'error');
-    setButtonLoading(false);
+    
+    // نمایش دکمه verify در صورت خطا
+    document.getElementById('phantomSection').style.display = 'block';
+    document.getElementById('instructionsSection').style.display = 'none';
+    document.getElementById('verify-btn').style.display = 'block';
     return;
   }
 
@@ -382,18 +488,24 @@ window.addEventListener('load', async () => {
         }, 2000);
       } else {
         showStatus(`⚠️ ${result.message || 'Verification failed. Click "Check Payment Status" to retry.'}`, 'error');
+        document.getElementById('phantomSection').style.display = 'block';
+        document.getElementById('instructionsSection').style.display = 'none';
         document.getElementById('verify-btn').style.display = 'block';
       }
     } catch (e) {
       console.error('Verification error:', e);
       debugLog('Verification ERROR:', e.message);
       showStatus('❌ Failed to verify transaction. Click "Check Payment Status" to retry.', 'error');
+      document.getElementById('phantomSection').style.display = 'block';
+      document.getElementById('instructionsSection').style.display = 'none';
       document.getElementById('verify-btn').style.display = 'block';
     }
   }
 });
 
-// Auto-check payment status every 5 seconds if verify button is visible
+// ============================================
+// Auto-check هر 5 ثانیه
+// ============================================
 let autoCheckInterval = null;
 const verifyBtn = document.getElementById('verify-btn');
 const observer = new MutationObserver((mutations) => {
@@ -425,6 +537,12 @@ const observer = new MutationObserver((mutations) => {
 });
 
 observer.observe(verifyBtn, { attributes: true });
+
+debugLog('Page initialized', {
+  telegram_id: CONFIG.telegramId,
+  has_telegram_webapp: !!tg,
+  has_phantom: !!(window.solana && window.solana.isPhantom)
+});
 </script>
 </body>
 </html>
