@@ -127,7 +127,7 @@
 
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
-        
+
         .debug-info {
             background: rgba(0, 0, 0, 0.3);
             padding: 10px;
@@ -178,7 +178,7 @@
     </div>
 
     <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
-    
+
     <div id="debug-info" class="debug-info"></div>
   </div>
 
@@ -191,9 +191,9 @@ const CONFIG = {
 };
 
 let tg = window.Telegram?.WebApp;
-if (tg) { 
-  tg.ready(); 
-  tg.expand(); 
+if (tg) {
+  tg.ready();
+  tg.expand();
 }
 
 // Debug logging
@@ -244,7 +244,7 @@ async function handlePayment(){
     const create = await fetch("/commission/create_payment_session", {
       method: "POST",
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         telegram_id: CONFIG.telegramId,
         amount: CONFIG.commissionAmount,
         recipient: CONFIG.adminWallet
@@ -258,7 +258,6 @@ async function handlePayment(){
       throw new Error(data.error || 'Failed to create transaction');
     }
 
-    // ✅ اصلاح شده: استفاده از نام صحیح پارامتر
     const transaction = data.transaction;
     const sessionId = data.session_id;
 
@@ -266,49 +265,60 @@ async function handlePayment(){
       throw new Error('Invalid server response: missing transaction or session_id');
     }
 
-    // ✅ اصلاح شده: ساخت callback URL با تمام پارامترهای لازم
+    // ✅ CRITICAL FIX: ساخت صحیح Phantom Deeplink
+    // طبق مستندات رسمی Phantom:
+    // https://docs.phantom.app/developer-powertools/deep-links/provider-methods/signandsendtransaction
+
     const baseUrl = window.location.origin;
-    const callbackUrl = `${baseUrl}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
-    
-    debugLog('Callback URL:', callbackUrl);
+    const redirectUrl = `${baseUrl}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
 
-    // ✅ اصلاح شده: ساخت Phantom Deeplink با ترتیب و نام پارامترهای صحیح
-    // طبق مستندات Phantom: https://docs.phantom.app/integrations/deeplinks-ios-and-android
-    const params = new URLSearchParams({
-      dapp_encryption_public_key: 'PLACEHOLDER', // Phantom این را نادیده می‌گیرد اگر transaction از قبل امضا شده باشد
-      nonce: sessionId.substring(0, 24), // 24 character nonce
-      redirect_link: callbackUrl,
-      payload: transaction
-    });
+    debugLog('Transaction (first 100 chars):', transaction.substring(0, 100));
+    debugLog('Redirect URL:', redirectUrl);
 
+    // ✅ روش صحیح: استفاده از URLSearchParams برای encoding مناسب
+    const params = new URLSearchParams();
+    params.append('dapp_encryption_public_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='); // 32-byte dummy key (base64)
+    params.append('nonce', sessionId.substring(0, 24)); // 24-character nonce
+    params.append('redirect_link', redirectUrl);
+    params.append('payload', transaction); // transaction در base64
+
+    // ✅ ساخت deeplink نهایی
     const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
-    
-    debugLog('Deeplink generated (first 200 chars):', deeplink.substring(0, 200));
 
-    showStatus('📱 Opening Phantom...', 'info');
+    debugLog('Deeplink length:', deeplink.length);
+    debugLog('Deeplink (first 300 chars):', deeplink.substring(0, 300));
 
-    // ✅ باز کردن Phantom با روش صحیح
-    if (tg && tg.openLink) {
-      debugLog('Opening via Telegram WebApp');
-      tg.openLink(deeplink, { try_instant_view: false });
-    } else if (window.TelegramWebviewProxy) {
-      debugLog('Opening via TelegramWebviewProxy');
-      window.TelegramWebviewProxy.postEvent('web_app_open_link', JSON.stringify({ url: deeplink }));
-    } else {
-      debugLog('Opening via window.location');
-      window.location.href = deeplink;
-    }
+    showStatus('📱 Opening Phantom Wallet...', 'info');
+
+    // ✅ باز کردن Phantom
+    setTimeout(() => {
+      if (tg && tg.openLink) {
+        debugLog('Opening via Telegram WebApp.openLink');
+        tg.openLink(deeplink, { try_instant_view: false });
+      } else if (window.TelegramWebviewProxy) {
+        debugLog('Opening via TelegramWebviewProxy');
+        window.TelegramWebviewProxy.postEvent('web_app_open_link', JSON.stringify({ url: deeplink }));
+      } else {
+        debugLog('Opening via window.open');
+        // تلاش برای باز کردن در پنجره جدید
+        const newWindow = window.open(deeplink, '_blank');
+        if (!newWindow) {
+          debugLog('Popup blocked, using window.location');
+          window.location.href = deeplink;
+        }
+      }
+    }, 100);
 
     // نمایش دکمه verify بعد از 3 ثانیه
     setTimeout(() => {
       setButtonLoading(false);
       document.getElementById('verify-btn').style.display = 'block';
-      showStatus('💡 After approving in Phantom, the page should reload automatically. If not, click "Check Payment Status".', 'info');
+      showStatus('💡 After approving in Phantom, return here and wait for verification. You can also click "Check Payment Status".', 'info');
     }, 3000);
 
   } catch (err) {
     console.error('Payment error:', err);
-    debugLog('ERROR:', err.message);
+    debugLog('ERROR:', { message: err.message, stack: err.stack });
     showStatus('❌ ' + (err.message || 'Payment initialization failed'), 'error');
     setButtonLoading(false);
   }
@@ -319,12 +329,12 @@ async function checkPayment(){
   try {
     showStatus('🔍 Checking payment status...', 'info');
     debugLog('Manual payment check started');
-    
+
     const resp = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
     const data = await resp.json();
-    
+
     debugLog('Payment status:', data);
-    
+
     if (data.commission_paid) {
       showStatus('✅ Payment confirmed! Redirecting...', 'success');
       setTimeout(() => {
@@ -343,9 +353,9 @@ async function checkPayment(){
 // ✅ بهبود یافته: مدیریت خودکار callback از Phantom
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
-  
+
   debugLog('Page loaded with params:', Object.fromEntries(params));
-  
+
   // بررسی خطاهای Phantom
   if (params.has('errorCode') || params.has('errorMessage')) {
     const errorCode = params.get('errorCode');
@@ -355,12 +365,12 @@ window.addEventListener('load', async () => {
     setButtonLoading(false);
     return;
   }
-  
+
   // بررسی موفقیت تراکنش
   if (params.has('signature') && params.has('session')) {
     const signature = params.get('signature');
     const session = params.get('session');
-    
+
     debugLog('Transaction signature received:', signature);
     showStatus('🔍 Verifying transaction on blockchain...', 'info');
 
@@ -374,10 +384,10 @@ window.addEventListener('load', async () => {
           signature: signature
         })
       });
-      
+
       const result = await verify.json();
       debugLog('Verification result:', result);
-      
+
       if (result.verified) {
         showStatus('✅ Payment Verified Successfully! Redirecting...', 'success');
         setTimeout(() => {
