@@ -235,16 +235,30 @@ function setButtonLoading(state) {
   }
 }
 
-async function handlePayment(){
+async function handlePaymentWithProvider() {
   try {
-    setButtonLoading(true);
-    showStatus('🔄 Preparing transaction...', 'info');
-    debugLog('Starting payment process');
+    // بررسی وجود Phantom
+    const phantom = window.solana;
+    
+    if (!phantom || !phantom.isPhantom) {
+      throw new Error('Please install Phantom wallet extension first!');
+    }
 
+    setButtonLoading(true);
+    showStatus('🔄 Connecting to Phantom...', 'info');
+
+    // اتصال به wallet
+    const resp = await phantom.connect();
+    const publicKey = resp.publicKey.toString();
+    
+    debugLog('Connected to Phantom:', publicKey);
+    showStatus('🔄 Preparing transaction...', 'info');
+
+    // دریافت transaction از سرور
     const create = await fetch("/commission/create_payment_session", {
       method: "POST",
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+      body: JSON.stringify({ 
         telegram_id: CONFIG.telegramId,
         amount: CONFIG.commissionAmount,
         recipient: CONFIG.adminWallet
@@ -252,78 +266,51 @@ async function handlePayment(){
     });
 
     const data = await create.json();
-    debugLog('Server response:', data);
-
     if (!data.success) {
-      throw new Error(data.error || 'Failed to create transaction');
+      throw new Error(data.error);
     }
 
-    const transaction = data.transaction;
-    const sessionId = data.session_id;
+    // Decode transaction از base64
+    const txBuffer = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+    
+    showStatus('📝 Please approve transaction in Phantom...', 'info');
 
-    if (!transaction || !sessionId) {
-      throw new Error('Invalid server response: missing transaction or session_id');
+    // ارسال تراکنش
+    const { signature } = await phantom.signAndSendTransaction({
+      message: txBuffer
+    });
+
+    debugLog('Transaction sent:', signature);
+    showStatus('🔍 Verifying transaction...', 'info');
+
+    // Verify کردن
+    const verify = await fetch('/commission/verify_signature', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        telegram_id: CONFIG.telegramId,
+        session_id: data.session_id,
+        signature: signature
+      })
+    });
+
+    const result = await verify.json();
+    if (result.verified) {
+      showStatus('✅ Payment verified! Redirecting...', 'success');
+      setTimeout(() => {
+        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+      }, 2000);
+    } else {
+      throw new Error(result.message || 'Verification failed');
     }
-
-    // ✅ CRITICAL FIX: ساخت صحیح Phantom Deeplink
-    // طبق مستندات رسمی Phantom:
-    // https://docs.phantom.app/developer-powertools/deep-links/provider-methods/signandsendtransaction
-
-    const baseUrl = window.location.origin;
-    const redirectUrl = `${baseUrl}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
-
-    debugLog('Transaction (first 100 chars):', transaction.substring(0, 100));
-    debugLog('Redirect URL:', redirectUrl);
-
-    // ✅ روش صحیح: استفاده از URLSearchParams برای encoding مناسب
-    const params = new URLSearchParams();
-    params.append('dapp_encryption_public_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='); // 32-byte dummy key (base64)
-    params.append('nonce', sessionId.substring(0, 24)); // 24-character nonce
-    params.append('redirect_link', redirectUrl);
-    params.append('payload', transaction); // transaction در base64
-
-    // ✅ ساخت deeplink نهایی
-    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
-
-    debugLog('Deeplink length:', deeplink.length);
-    debugLog('Deeplink (first 300 chars):', deeplink.substring(0, 300));
-
-    showStatus('📱 Opening Phantom Wallet...', 'info');
-
-    // ✅ باز کردن Phantom
-    setTimeout(() => {
-      if (tg && tg.openLink) {
-        debugLog('Opening via Telegram WebApp.openLink');
-        tg.openLink(deeplink, { try_instant_view: false });
-      } else if (window.TelegramWebviewProxy) {
-        debugLog('Opening via TelegramWebviewProxy');
-        window.TelegramWebviewProxy.postEvent('web_app_open_link', JSON.stringify({ url: deeplink }));
-      } else {
-        debugLog('Opening via window.open');
-        // تلاش برای باز کردن در پنجره جدید
-        const newWindow = window.open(deeplink, '_blank');
-        if (!newWindow) {
-          debugLog('Popup blocked, using window.location');
-          window.location.href = deeplink;
-        }
-      }
-    }, 100);
-
-    // نمایش دکمه verify بعد از 3 ثانیه
-    setTimeout(() => {
-      setButtonLoading(false);
-      document.getElementById('verify-btn').style.display = 'block';
-      showStatus('💡 After approving in Phantom, return here and wait for verification. You can also click "Check Payment Status".', 'info');
-    }, 3000);
 
   } catch (err) {
     console.error('Payment error:', err);
-    debugLog('ERROR:', { message: err.message, stack: err.stack });
-    showStatus('❌ ' + (err.message || 'Payment initialization failed'), 'error');
+    debugLog('ERROR:', err);
+    showStatus('❌ ' + err.message, 'error');
     setButtonLoading(false);
   }
 }
-
 // بررسی دستی وضعیت پرداخت
 async function checkPayment(){
   try {
