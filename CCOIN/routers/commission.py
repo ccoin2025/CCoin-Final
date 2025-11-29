@@ -114,14 +114,26 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
         client = AsyncClient(SOLANA_RPC)
         try:
-            # get latest blockhash
+            # ✅ دریافت آخرین blockhash
             blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
+            
+            logger.info("Blockhash received", extra={
+                "blockhash": str(recent_blockhash),
+                "telegram_id": telegram_id
+            })
 
-            # ✅ اصلاح شده: استفاده از Pubkey.from_string
+            # ✅ تبدیل آدرس‌ها به Pubkey
             from_pubkey = Pubkey.from_string(user.wallet_address)
             to_pubkey = Pubkey.from_string(recipient)
             lamports = int(amount * 1_000_000_000)
+
+            logger.info("Transaction parameters", extra={
+                "from": str(from_pubkey),
+                "to": str(to_pubkey),
+                "lamports": lamports,
+                "sol_amount": amount
+            })
 
             # ✅ ساخت transfer instruction
             transfer_ix = transfer(
@@ -132,44 +144,76 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 )
             )
 
-            # ✅ ساخت Message
+            # ✅ ساخت Message با blockhash
             message = Message.new_with_blockhash(
                 [transfer_ix],
                 from_pubkey,
                 recent_blockhash
             )
 
-            # ✅ ساخت Transaction
+            # ✅ ساخت Transaction (unsigned)
             tx = Transaction.new_unsigned(message)
-            
-            # ✅ Serialize transaction
+
+            # ✅ CRITICAL: Serialize به صورت base64 برای Phantom
+            # Phantom انتظار دارد transaction را به صورت base64-encoded bytes دریافت کند
             tx_bytes = bytes(tx)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
+            
+            # ✅ IMPORTANT: همچنین به صورت base58 هم تست کنید (برخی wallet ها این را ترجیح می‌دهند)
+            # اما Phantom معمولاً base64 را می‌خواهد
+            
+            logger.info("Transaction serialized", extra={
+                "telegram_id": telegram_id,
+                "tx_base64_length": len(tx_base64),
+                "tx_bytes_length": len(tx_bytes),
+                "first_50_chars": tx_base64[:50]
+            })
 
             await client.close()
+            
         except Exception as e:
             await client.close()
-            logger.error("Transaction creation failed", extra={"error": str(e)}, exc_info=True)
+            logger.error("Transaction creation failed", extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "telegram_id": telegram_id
+            }, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
 
+        # ذخیره session
         session_data = {
             "telegram_id": telegram_id,
             "amount": amount,
             "recipient": recipient,
             "wallet_address": user.wallet_address,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.utcnow().isoformat(),
+            "transaction_base64": tx_base64,
+            "blockhash": str(recent_blockhash)
         }
         _set_session(session_id, session_data, ttl=600)
 
-        logger.info("Payment session created", extra={"session_id": session_id, "telegram_id": telegram_id})
-        return {"success": True, "session_id": session_id, "transaction": tx_base64, "expires_in": 600}
+        logger.info("Payment session created successfully", extra={
+            "session_id": session_id,
+            "telegram_id": telegram_id,
+            "expires_in": 600
+        })
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "transaction": tx_base64,
+            "expires_in": 600
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("create_payment_session error", extra={"error": str(e)}, exc_info=True)
+        logger.error("create_payment_session unexpected error", extra={
+            "error": str(e),
+            "error_type": type(e).__name__
+        }, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 # -------------------------
 # Phantom callback (render)
 # -------------------------
