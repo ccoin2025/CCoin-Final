@@ -1,489 +1,384 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pay Commission - CCoin</title>
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png" sizes="512x512">
-    <link rel="apple-touch-icon" href="/static/images/icon-512x512.png">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            border-radius: 24px;
-            padding: 40px 30px;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-            max-width: 500px;
-            width: 100%;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .logo { font-size: 64px; margin-bottom: 20px; animation: pulse 2s ease-in-out infinite; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        h1 { margin-bottom: 10px; font-size: 28px; font-weight: 700; }
-        .subtitle { font-size: 14px; opacity: 0.9; margin-bottom: 30px; }
-        
-        /* Info Box for Instructions */
-        .info-box {
-            background: rgba(33, 150, 243, 0.2);
-            border: 1px solid rgba(33, 150, 243, 0.4);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .info-box h3 {
-            color: #ffd700;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        .info-box p {
-            line-height: 1.6;
-            margin-bottom: 10px;
-        }
-        .info-box ol {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-        .info-box li {
-            margin: 8px 0;
-            line-height: 1.5;
-        }
-        
-        .commission-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 25px;
-            border-radius: 16px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        .amount {
-            font-size: 42px;
-            font-weight: bold;
-            color: #ffd700;
-            margin-bottom: 8px;
-            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
-        }
-        .fee-info {
-            font-size: 13px;
-            color: #90ee90;
-            margin-top: 12px;
-            padding: 8px;
-            background: rgba(144, 238, 144, 0.1);
-            border-radius: 8px;
-        }
-        .btn {
-            background: linear-gradient(135deg, #ffd700, #ffed4e);
-            color: #000;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 50px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.3s ease;
-            margin: 10px 0;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5); }
-        .btn:active { transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-        .return-btn { background: rgba(255, 255, 255, 0.2); color: white; box-shadow: none; }
-        .return-btn:hover { background: rgba(255, 255, 255, 0.3); box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2); }
-        .verify-btn {
-            background: rgba(76, 175, 80, 0.3);
-            color: white;
-            margin-top: 5px;
-            display: none;
-        }
-        .verify-btn:hover { background: rgba(76, 175, 80, 0.5); }
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 12px;
-            display: none;
-            font-size: 14px;
-            font-weight: 500;
-            animation: slideIn 0.3s ease;
-        }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        .status.success { background: rgba(76, 175, 80, 0.25); color: #4caf50; border: 1px solid rgba(76, 175, 80, 0.4); display: block; }
-        .status.error { background: rgba(244, 67, 54, 0.25); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.4); display: block; }
-        .status.info { background: rgba(33, 150, 243, 0.25); color: #2196f3; border: 1px solid rgba(33, 150, 243, 0.4); display: block; }
-        .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        #instructionsSection { display: block; }
-        #phantomSection { display: none; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>پرداخت کمیسیون — CCOIN (Mobile)</title>
+  <meta name="description" content="پرداخت کمیسیون برای دریافت ایردراپ — Mobile" />
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/images/icon-192x192.png">
+  <style>
+    /* MOBILE-FIRST STYLES (compact & readable) */
+    :root{
+      --bg1: linear-gradient(180deg,#0f1724 0%,#071024 100%);
+      --card: rgba(255,255,255,0.04);
+      --accent: #ffd700;
+      --muted: rgba(255,255,255,0.6);
+      --success: #4caf50;
+      --danger: #f44336;
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;
+      padding:20px;
+      background:var(--bg1);
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+    }
+    .wrap{
+      width:100%;
+      max-width:460px;
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      padding:18px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.6);
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    .logo{font-size:44px;text-align:center;margin-bottom:8px}
+    h1{font-size:20px;margin:6px 0;text-align:center}
+    p.lead{text-align:center;color:var(--muted);font-size:13px;margin:6px 0 14px}
+    .card{
+      background:var(--card);
+      border-radius:12px;
+      padding:14px;
+      margin-bottom:14px;
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    .amount{
+      font-weight:700;font-size:28px;color:var(--accent);text-align:center;margin-bottom:6px;
+    }
+    .small{font-size:12px;color:var(--muted);text-align:center}
+    .btn{
+      display:block;
+      width:100%;
+      border-radius:999px;
+      padding:12px 14px;
+      font-weight:700;
+      font-size:15px;
+      border:none;
+      background:linear-gradient(90deg,var(--accent),#ffd54a);
+      color:#000;
+      text-align:center;
+      box-shadow:0 6px 18px rgba(0,0,0,0.45);
+      margin-top:10px;
+    }
+    .btn.secondary{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff;
+      box-shadow:none;margin-top:8px;
+    }
+    .status{
+      margin-top:12px;padding:10px;border-radius:10px;font-size:13px;text-align:center;display:none;
+    }
+    .status.info{background:rgba(33,150,243,0.08);color:#90caf9;border:1px solid rgba(33,150,243,0.06)}
+    .status.success{background:rgba(76,175,80,0.08);color:var(--success);border:1px solid rgba(76,175,80,0.06)}
+    .status.error{background:rgba(244,67,54,0.06);color:var(--danger);border:1px solid rgba(244,67,54,0.06)}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+    .row{display:flex;gap:8px}
+    .store-links{display:flex;gap:6px;justify-content:center;margin-top:8px}
+    .store-links a{font-size:12px;color:var(--muted);text-decoration:none}
+    /* ensure large tap targets on old phones */
+    button, a.btn{min-height:48px}
+    /* small screens */
+    @media (max-width:360px){
+      .amount{font-size:24px}
+      h1{font-size:18px}
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">💰</div>
-        <h1>Commission Payment</h1>
-        <p class="subtitle">Complete your payment to unlock the airdrop</p>
+  <div class="wrap" role="main" aria-labelledby="title">
+    <div class="logo">💰</div>
+    <h1 id="title">پرداخت کمیسیون — CCOIN</h1>
+    <p class="lead">پرداخت از طریق کیف موبایل (Phantom یا هر کیف پشتیبان Solana Pay). فقط موبایل پشتیبانی می‌شود.</p>
 
-        <div class="commission-info">
-            <div class="amount">{{ commission_amount }} SOL</div>
-            <div class="fee-info">Network fees may apply</div>
-        </div>
-
-        <div id="status" class="status"></div>
-
-        <!-- بخش توضیحات -->
-        <div id="instructionsSection">
-            <div class="info-box">
-                <h3>📋 Payment Instructions</h3>
-                <p><strong>Dear User,</strong></p>
-                <p>Please follow these steps carefully:</p>
-                <ol>
-                    <li>Click "I Understand" button below</li>
-                    <li>Complete the transaction in Phantom wallet</li>
-                    <li><strong>Return to this page after payment</strong></li>
-                    <li>Click "Check Payment Status" button</li>
-                    <li>Wait for confirmation</li>
-                    <li>Restart the app after successful verification</li>
-                </ol>
-            </div>
-            <button class="btn" onclick="showPhantomButton()">
-                ✅ I Understand
-            </button>
-        </div>
-
-        <!-- بخش Phantom -->
-        <div id="phantomSection">
-            <button class="btn" id="pay-btn" onclick="handlePayment()">
-                <span id="btn-text">💳 Pay with Phantom</span>
-            </button>
-
-            <button class="btn verify-btn" id="verify-btn" onclick="checkPayment()">
-                ✅ Check Payment Status
-            </button>
-        </div>
-
-        <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
+    <div class="card">
+      <div class="amount" id="amountDisplay">— SOL</div>
+      <div class="small" id="feeNote">کارمزد شبکه ممکن است اعمال شود</div>
     </div>
 
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <div id="controls">
+      <button id="payBtn" class="btn">پرداخت و بازگشت به کیف</button>
+      <button id="checkBtn" class="btn secondary" style="display:none">بررسی وضعیت پرداخت</button>
+      <div id="status" class="status info" role="status">آماده پرداخت</div>
 
-    <script>
-        const CONFIG = {
-            telegramId: '{{ telegram_id }}',
-            commissionAmount: parseFloat('{{ commission_amount }}'),
-            adminWallet: '{{ admin_wallet }}',
-            botUsername: '{{ bot_username }}',
-            rpcUrl: '{{ solana_rpc }}'
-        };
+      <div class="hint" id="hint">برای شروع دکمه «پرداخت» را بزنید — پس از پرداخت به این صفحه بازگردید یا روی «بررسی وضعیت پرداخت» بزنید.</div>
 
-        const isPhantomExtension = () => window.solana && window.solana.isPhantom;
+      <div class="store-links" id="storeLinks" style="display:none">
+        <a id="phantomStore" target="_blank" rel="noopener">نصب Phantom</a>
+        <a id="otherWallets" target="_blank" rel="noopener">کیف/مرورگر دیگر</a>
+      </div>
+    </div>
 
-        function showPhantomButton() {
-            document.getElementById('instructionsSection').style.display = 'none';
-            document.getElementById('phantomSection').style.display = 'block';
-        }
+  </div>
 
-        function showStatus(message, type) {
-            document.getElementById('status').innerHTML = message;
-            document.getElementById('status').className = `status ${type}`;
-        }
+<script>
+/*
+  Mobile-only Solana Pay flow (frontend)
+  Assumptions:
+  - Server endpoints:
+    POST /commission/create_session
+      body: { amount, telegram_id }
+      returns: { paymentUrl, reference }  // reference = base58 string (publicKey)
+    POST /commission/verify
+      body: { reference, signature? }
+      returns: { success: bool, payment_found: bool, signature?: string, details?: {} }
 
-        function setButtonLoading(loading) {
-            const btn = document.getElementById('pay-btn');
-            const btnText = document.getElementById('btn-text');
-            const verifyBtn = document.getElementById('verify-btn');
+  - The server when creating session:
+    * generates a unique reference publicKey (eg solana_web3.Keypair().publicKey.toBase58())
+    * constructs a Solana Pay URL:
+      solana:<RECIPIENT>?amount=<AMOUNT>&reference=<REFERENCE>&label=<LABEL>&message=<MSG>&redirect_url=<CALLBACK_URL>
+    * returns that URL.
 
-            if (loading) {
-                btn.disabled = true;
-                btnText.innerHTML = '<span class="spinner"></span> Processing...';
-            } else {
-                btn.disabled = false;
-                btnText.innerHTML = '💳 Pay with Phantom';
-                verifyBtn.style.display = 'block';
-            }
-        }
+  - Verification should be reference-based: server searches transactions containing that reference key in instructions or memo.
 
-        window.addEventListener('load', async function() {
-            // Check if payment was initiated
-            if (localStorage.getItem('ccoin_payment_initiated')) {
-                const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
-                const now = Date.now();
+  - Replace template tokens in server render: telegram_id, amount, bot_username, create_session_url, verify_url
+*/
 
-                // If less than 5 minutes passed
-                if (now - paymentTime < 300000) {
-                    showPhantomButton();
-                    showStatus('⏳ Checking payment...', 'info');
-                    setButtonLoading(false);
+const CONFIG = {
+  telegramId: '{{ telegram_id }}',
+  amount: parseFloat('{{ commission_amount }}') || null,
+  botUsername: '{{ bot_username }}',
+  createSessionUrl: '/commission/create_session',
+  verifyUrl: '/commission/verify',
+  // play store / app store links (fallback)
+  phantomIOS: 'https://apps.apple.com/app/phantom-solana-wallet/id1567076344',
+  phantomAndroid: 'https://play.google.com/store/apps/details?id=com.phantom',
+  // optional friendly label/message
+  label: 'CCoin Commission',
+  message: 'Airdrop commission for C-Coin miniapp'
+};
 
-                    // Start auto-check
-                    await autoCheckPayment();
-                    return;
-                }
-            }
+// MOBILE DETECTION (very permissive)
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || navigator.vendor || window.opera);
 
-            // Check previous payment status
-            try {
-                const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
-                const data = await response.json();
+const amountDisplay = document.getElementById('amountDisplay');
+const payBtn = document.getElementById('payBtn');
+const checkBtn = document.getElementById('checkBtn');
+const statusEl = document.getElementById('status');
+const hintEl = document.getElementById('hint');
+const storeLinks = document.getElementById('storeLinks');
+const phantomStore = document.getElementById('phantomStore');
+const otherWallets = document.getElementById('otherWallets');
 
-                if (data.commission_paid) {
-                    showStatus('✅ Payment already completed!', 'success');
-                    setTimeout(() => window.location.href = `https://t.me/${CONFIG.botUsername}`, 2000);
-                }
-            } catch (error) {
-                console.error('Status check error:', error);
-            }
-        });
+function showStatus(msg, type='info') {
+  statusEl.textContent = msg;
+  statusEl.className = `status ${type}`;
+  statusEl.style.display = 'block';
+}
 
-        async function handlePayment() {
-            try {
-                setButtonLoading(true);
-                showStatus('🔄 Preparing payment...', 'info');
+function hideStatus() {
+  statusEl.style.display = 'none';
+}
 
-                if (isPhantomExtension()) {
-                    await payWithExtension();
-                } else {
-                    await payWithSolanaPay();
-                }
-            } catch (error) {
-                console.error('Payment error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
-                setButtonLoading(false);
-            }
-        }
+function enableCheckButton(show=true) {
+  if (show) {
+    checkBtn.style.display = 'block';
+  } else {
+    checkBtn.style.display = 'none';
+  }
+}
 
-        async function payWithExtension() {
-            try {
-                showStatus('🔗 Connecting to Phantom...', 'info');
+// Populate amount
+if (CONFIG.amount) {
+  amountDisplay.textContent = CONFIG.amount + ' SOL';
+} else {
+  amountDisplay.textContent = '— SOL';
+  // still allow; createSession should validate
+}
 
-                const provider = window.solana;
-                await provider.connect();
-                const userPublicKey = provider.publicKey;
+// On load: handle return from wallet
+window.addEventListener('load', async () => {
+  // If the URL has tx / transaction / signature param (wallet redirect)
+  const params = new URLSearchParams(window.location.search);
+  const tx = params.get('tx') || params.get('transaction') || params.get('signature') || params.get('transactionSignature');
 
-                showStatus('📝 Creating transaction...', 'info');
+  // If there is a reference param on URL (some wallets include), capture it
+  const referenceFromURL = params.get('reference') || params.get('ref');
 
-                const connection = new solanaWeb3.Connection(CONFIG.rpcUrl, 'confirmed');
-                const transaction = new solanaWeb3.Transaction();
+  if (tx || referenceFromURL) {
+    showStatus('🔎 دریافت اطلاعات تراکنش... در حال بررسی روی سرور', 'info');
+    // attempt to verify on server (prefer signature if available)
+    const payload = {
+      telegram_id: CONFIG.telegramId,
+      signature: tx || undefined,
+      reference: referenceFromURL || undefined
+    };
+    try {
+      const resp = await fetch(CONFIG.verifyUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (data && data.success && data.payment_found) {
+        showStatus('✅ پرداخت تأیید شد — آماده ادامه', 'success');
+        enableCheckButton(false);
+        // redirect to success route after short delay
+        setTimeout(() => {
+          window.location.href = `/commission/success?telegram_id=${encodeURIComponent(CONFIG.telegramId)}`;
+        }, 1200);
+        return;
+      } else {
+        showStatus('⚠️ تراکنش یافت نشد یا هنوز بسته نشده — لطفاً چند لحظه صبر کنید و سپس «بررسی وضعیت پرداخت» را بزنید.', 'error');
+        enableCheckButton(true);
+      }
+    } catch (e) {
+      console.error('verify error', e);
+      showStatus('❌ خطا در ارتباط با سرور. اتصال اینترنت خود را بررسی کنید.', 'error');
+      enableCheckButton(true);
+    }
+    return;
+  }
 
-                transaction.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
-                transaction.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }));
-                transaction.add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: userPublicKey,
-                        toPubkey: new solanaWeb3.PublicKey(CONFIG.adminWallet),
-                        lamports: Math.floor(CONFIG.commissionAmount * solanaWeb3.LAMPORTS_PER_SOL)
-                    })
-                );
+  // If page previously initiated payment, show check
+  if (localStorage.getItem('ccoin_payment_session')) {
+    showStatus('⏳ پرداخت در حال انتظار — روی «بررسی وضعیت پرداخت» بزنید یا تا زمان برگشت کیف صبر کنید.', 'info');
+    enableCheckButton(true);
+  } else {
+    showStatus('آماده پرداخت — دکمه پرداخت را فشار دهید', 'info');
+    enableCheckButton(false);
+  }
 
-                const { blockhash } = await connection.getLatestBlockhash('finalized');
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = userPublicKey;
+  // show store links if on mobile and no wallet detected
+  if (isMobile) {
+    phantomStore.href = CONFIG.phantomIOS; // we'll change by platform below
+    otherWallets.href = 'https://solanapay.com/'; // generic info
+    storeLinks.style.display = 'flex';
+    if (/Android/i.test(navigator.userAgent)) {
+      phantomStore.href = CONFIG.phantomAndroid;
+      phantomStore.textContent = 'Phantom (Play Store)';
+    } else {
+      phantomStore.href = CONFIG.phantomIOS;
+      phantomStore.textContent = 'Phantom (App Store)';
+    }
+    otherWallets.textContent = 'درباره Solana Pay';
+  } else {
+    // Not mobile — show message
+    showStatus('این صفحه صرفاً برای دستگاه‌های موبایل طراحی شده — لطفاً از گوشی همراه استفاده کنید.', 'error');
+    payBtn.disabled = true;
+  }
+});
 
-                showStatus('✍️ Please approve in Phantom...', 'info');
+// Create payment session on server and redirect
+async function startPayment() {
+  if (!isMobile) {
+    showStatus('این صفحه فقط برای موبایل طراحی شده.', 'error');
+    return;
+  }
+  showStatus('⏳ در حال آماده‌سازی درخواست پرداخت...', 'info');
+  payBtn.disabled = true;
 
-                const signed = await provider.signAndSendTransaction(transaction);
-                const signature = signed.signature;
+  try {
+    const resp = await fetch(CONFIG.createSessionUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        amount: CONFIG.amount,
+        telegram_id: CONFIG.telegramId,
+        label: CONFIG.label,
+        message: CONFIG.message,
+        return_url: window.location.href // ask server to set redirect_url to this page or a callback endpoint
+      })
+    });
+    const data = await resp.json();
+    if (!data || !data.paymentUrl || !data.reference) {
+      throw new Error('پاسخ نامعتبر از سرور');
+    }
 
-                showStatus('⏳ Confirming transaction...', 'info');
+    // Save session info locally so we can show check button after redirect if wallet doesn't callback
+    localStorage.setItem('ccoin_payment_session', JSON.stringify({
+      reference: data.reference,
+      created_at: Date.now()
+    }));
 
-                await connection.confirmTransaction(signature, 'confirmed');
-                await confirmOnServer(signature);
+    showStatus('🚀 در حال باز کردن کیف — پس از پرداخت به این صفحه بازگردید.', 'info');
+    enableCheckButton(true);
 
-            } catch (error) {
-                if (error.message && error.message.includes('User rejected')) {
-                    throw new Error('Payment cancelled by user');
-                }
-                throw error;
-            }
-        }
+    // Try to open the payment URL (solana: or https link) — mobile wallets should handle it.
+    // Use window.location to open; for better compatibility, try location.assign then fallback.
+    // Some wallets expect a universal link (https), some accept solana: scheme.
+    // Server should prefer returning a universal https link (preferred) or solana: URL.
 
-        async function payWithSolanaPay() {
-            showStatus('📱 Opening Phantom app...', 'info');
+    // attempt direct redirect
+    window.location.href = data.paymentUrl;
 
-            const recipient = CONFIG.adminWallet;
-            const amount = CONFIG.commissionAmount;
-            const label = encodeURIComponent('CCoin Commission');
-            const message = encodeURIComponent('Airdrop Commission Payment');
+    // As fallback: if it doesn't open (after timeout), show instructions to install Phantom.
+    setTimeout(() => {
+      showStatus('⚠️ اگر کیف باز نشد، آن را نصب کنید یا دوباره تلاش کنید. لینک نصب در پایین موجود است.', 'error');
+      payBtn.disabled = false;
+    }, 2500);
 
-            const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}`;
+  } catch (err) {
+    console.error('startPayment error', err);
+    showStatus('❌ خطا در ایجاد درخواست پرداخت: ' + (err.message || err), 'error');
+    payBtn.disabled = false;
+    enableCheckButton(true);
+  }
+}
 
-            localStorage.setItem('ccoin_payment_initiated', Date.now());
+// Manual check payment (by reference)
+async function checkPayment() {
+  const sessionRaw = localStorage.getItem('ccoin_payment_session');
+  if (!sessionRaw) {
+    showStatus('هیچ تراکنشی در حال انتظار نیست. ابتدا پرداخت را شروع کنید.', 'error');
+    return;
+  }
+  const session = JSON.parse(sessionRaw);
+  showStatus('🔎 بررسی تراکنش روی شبکه...', 'info');
+  checkBtn.disabled = true;
 
-            window.location.href = solanaPayUrl;
+  try {
+    const resp = await fetch(CONFIG.verifyUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        telegram_id: CONFIG.telegramId,
+        reference: session.reference
+      })
+    });
+    const data = await resp.json();
+    if (data && data.success && data.payment_found) {
+      showStatus('✅ پرداخت تأیید شد — در حال بازگشت به ربات...', 'success');
+      localStorage.removeItem('ccoin_payment_session');
+      setTimeout(() => {
+        window.location.href = `/commission/success?telegram_id=${encodeURIComponent(CONFIG.telegramId)}`;
+      }, 1000);
+    } else {
+      showStatus('❌ پرداخت هنوز یافت نشد — چند لحظه دیگر تلاش کنید.', 'error');
+      checkBtn.disabled = false;
+    }
+  } catch (err) {
+    console.error('checkPayment error', err);
+    showStatus('❌ خطا در بررسی پرداخت. اتصال به سرور را بررسی کنید.', 'error');
+    checkBtn.disabled = false;
+  }
+}
 
-            setTimeout(() => {
-                showStatus('📱 After completing payment in Phantom, return here and click "Check Payment Status".', 'info');
-                setButtonLoading(false);
-            }, 3000);
-        }
+// Event bindings
+payBtn.addEventListener('click', startPayment);
+checkBtn.addEventListener('click', checkPayment);
 
-        let checkAttempts = 0;
-        const maxCheckAttempts = 5; // محدودیت 5 بار
-
-        async function autoCheckPayment() {
-            let attempts = 0;
-            const maxAttempts = 20;
-
-            const checkInterval = setInterval(async () => {
-                attempts++;
-
-                if (checkAttempts >= maxCheckAttempts) {
-                    clearInterval(checkInterval);
-                    showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
-                    setButtonLoading(false);
-                    return;
-                }
-
-                try {
-                    checkAttempts++;
-                    
-                    const response = await fetch('/commission/verify_payment_auto', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ telegram_id: CONFIG.telegramId })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.max_attempts_reached) {
-                        clearInterval(checkInterval);
-                        showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
-                        setButtonLoading(false);
-                        return;
-                    }
-
-                    if (data.success && data.payment_found) {
-                        clearInterval(checkInterval);
-                        localStorage.removeItem('ccoin_payment_initiated');
-                        checkAttempts = 0;
-                        showStatus('✅ Payment confirmed!', 'success');
-                        setTimeout(() => {
-                            window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                        }, 1500);
-                        return;
-                    }
-
-                    if (attempts >= maxAttempts) {
-                        clearInterval(checkInterval);
-                        const remaining = data.attempts_remaining || 0;
-                        showStatus(`⏳ Payment not detected yet. ${remaining} attempts remaining. Please click "Check Payment Status".`, 'info');
-                        setButtonLoading(false);
-                    } else {
-                        const remaining = data.attempts_remaining || 0;
-                        showStatus(`⏳ Checking... (${attempts}/${maxAttempts}) - ${remaining} server attempts remaining`, 'info');
-                    }
-
-                } catch (error) {
-                    console.error('Auto-check error:', error);
-                    if (attempts >= maxAttempts) {
-                        clearInterval(checkInterval);
-                        setButtonLoading(false);
-                    }
-                }
-            }, 3000);
-        }
-
-        async function checkPayment() {
-            if (checkAttempts >= maxCheckAttempts) {
-                showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
-                return;
-            }
-
-            try {
-                showStatus('🔍 Checking payment...', 'info');
-                document.getElementById('verify-btn').disabled = true;
-
-                checkAttempts++;
-
-                const response = await fetch('/commission/verify_payment_auto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_id: CONFIG.telegramId })
-                });
-
-                const data = await response.json();
-
-                if (data.max_attempts_reached) {
-                    showStatus('⚠️ Maximum verification attempts reached. Please wait 2 minutes and refresh the page.', 'error');
-                    return;
-                }
-
-                if (data.success && data.payment_found) {
-                    localStorage.removeItem('ccoin_payment_initiated');
-                    checkAttempts = 0;
-                    showStatus('✅ Payment confirmed! Redirecting...', 'success');
-                    setTimeout(() => {
-                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                    }, 1500);
-                } else {
-                    const remaining = data.attempts_remaining || 0;
-                    showStatus(`❌ Payment not detected. ${remaining} attempts remaining. Please wait 30 seconds and try again.`, 'info');
-                    
-                    setTimeout(() => {
-                        document.getElementById('verify-btn').disabled = false;
-                    }, 30000); // 30 seconds wait
-                }
-
-            } catch (error) {
-                console.error('Check error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
-                document.getElementById('verify-btn').disabled = false;
-            }
-        }
-
-        async function confirmOnServer(signature) {
-            try {
-                const response = await fetch('/commission/verify_payment_auto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_id: CONFIG.telegramId,
-                        signature: signature
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.payment_found) {
-                    localStorage.removeItem('ccoin_payment_initiated');
-                    showStatus('✅ Payment confirmed!', 'success');
-                    setTimeout(() => {
-                        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
-                    }, 1500);
-                } else {
-                    showStatus('⏳ Payment pending. Click "Check Payment Status" after a moment.', 'info');
-                    setButtonLoading(false);
-                }
-            } catch (error) {
-                console.error('Server confirmation error:', error);
-                showStatus('⚠️ Please click "Check Payment Status" to verify.', 'info');
-                setButtonLoading(false);
-            }
-        }
-    </script>
+// Accessibility: allow retry after 10 minutes if stuck
+setInterval(() => {
+  const sessionRaw = localStorage.getItem('ccoin_payment_session');
+  if (!sessionRaw) return;
+  const session = JSON.parse(sessionRaw);
+  const age = Date.now() - session.created_at;
+  // if older than 10 minutes, clear
+  if (age > 10 * 60 * 1000) {
+    localStorage.removeItem('ccoin_payment_session');
+    showStatus('نشست پرداخت منقضی شد، لطفاً دوباره تلاش کنید.', 'info');
+    payBtn.disabled = false;
+    checkBtn.disabled = false;
+    enableCheckButton(false);
+  }
+}, 30 * 1000);
+</script>
 </body>
 </html>
