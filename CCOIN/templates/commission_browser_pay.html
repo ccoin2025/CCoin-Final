@@ -127,6 +127,19 @@
 
         #instructionsSection { display: block; }
         #phantomSection { display: none; }
+        
+        .debug-info {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 11px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .debug-info.show { display: block; }
   </style>
 </head>
 <body>
@@ -165,16 +178,36 @@
     </div>
 
     <a href="https://t.me/{{ bot_username }}" class="btn return-btn">← Return to Bot</a>
+    
+    <div id="debug-info" class="debug-info"></div>
   </div>
 
 <script>
 const CONFIG = {
   telegramId: '{{ telegram_id }}',
-  botUsername: '{{ bot_username }}'
+  botUsername: '{{ bot_username }}',
+  commissionAmount: {{ commission_amount }},
+  adminWallet: '{{ admin_wallet }}'
 };
 
 let tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) { 
+  tg.ready(); 
+  tg.expand(); 
+}
+
+// Debug logging
+function debugLog(message, data = null) {
+  const debugEl = document.getElementById('debug-info');
+  const timestamp = new Date().toLocaleTimeString();
+  let logMsg = `[${timestamp}] ${message}`;
+  if (data) {
+    logMsg += '\n' + JSON.stringify(data, null, 2);
+  }
+  debugEl.textContent += logMsg + '\n\n';
+  debugEl.classList.add('show');
+  console.log(message, data);
+}
 
 function showPhantomButton() {
   document.getElementById('instructionsSection').style.display = 'none';
@@ -206,80 +239,130 @@ async function handlePayment(){
   try {
     setButtonLoading(true);
     showStatus('🔄 Preparing transaction...', 'info');
+    debugLog('Starting payment process');
 
     const create = await fetch("/commission/create_payment_session", {
       method: "POST",
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ telegram_id: CONFIG.telegramId })
+      body: JSON.stringify({ 
+        telegram_id: CONFIG.telegramId,
+        amount: CONFIG.commissionAmount,
+        recipient: CONFIG.adminWallet
+      })
     });
 
     const data = await create.json();
-    console.log('create_payment_session response:', data);
+    debugLog('Server response:', data);
 
     if (!data.success) {
       throw new Error(data.error || 'Failed to create transaction');
     }
 
-    // === CORRECTION: use data.transaction (server returns "transaction")
-    const txBase64 = encodeURIComponent(data.transaction);
+    // ✅ اصلاح شده: استفاده از نام صحیح پارامتر
+    const transaction = data.transaction;
     const sessionId = data.session_id;
 
-    const callback = `${window.location.origin}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
-    const redirectLink = encodeURIComponent(callback);
+    if (!transaction || !sessionId) {
+      throw new Error('Invalid server response: missing transaction or session_id');
+    }
 
-    // === CORRECTION: payload first, then redirect_link
-    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?payload=${txBase64}&redirect_link=${redirectLink}&cluster=mainnet-beta`;
+    // ✅ اصلاح شده: ساخت callback URL با تمام پارامترهای لازم
+    const baseUrl = window.location.origin;
+    const callbackUrl = `${baseUrl}/commission/phantom_callback?session=${sessionId}&telegram_id=${CONFIG.telegramId}`;
+    
+    debugLog('Callback URL:', callbackUrl);
 
-    console.log('DEEPLINK:', deeplink);
+    // ✅ اصلاح شده: ساخت Phantom Deeplink با ترتیب و نام پارامترهای صحیح
+    // طبق مستندات Phantom: https://docs.phantom.app/integrations/deeplinks-ios-and-android
+    const params = new URLSearchParams({
+      dapp_encryption_public_key: 'PLACEHOLDER', // Phantom این را نادیده می‌گیرد اگر transaction از قبل امضا شده باشد
+      nonce: sessionId.substring(0, 24), // 24 character nonce
+      redirect_link: callbackUrl,
+      payload: transaction
+    });
+
+    const deeplink = `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
+    
+    debugLog('Deeplink generated (first 200 chars):', deeplink.substring(0, 200));
 
     showStatus('📱 Opening Phantom...', 'info');
 
-    // open properly in Telegram webview or fallback
-    if (tg?.openLink) {
-      tg.openLink(deeplink, { tryBrowser: true });
+    // ✅ باز کردن Phantom با روش صحیح
+    if (tg && tg.openLink) {
+      debugLog('Opening via Telegram WebApp');
+      tg.openLink(deeplink, { try_instant_view: false });
+    } else if (window.TelegramWebviewProxy) {
+      debugLog('Opening via TelegramWebviewProxy');
+      window.TelegramWebviewProxy.postEvent('web_app_open_link', JSON.stringify({ url: deeplink }));
     } else {
+      debugLog('Opening via window.location');
       window.location.href = deeplink;
     }
 
-    // show verify button after some time in case callback fails
+    // نمایش دکمه verify بعد از 3 ثانیه
     setTimeout(() => {
       setButtonLoading(false);
       document.getElementById('verify-btn').style.display = 'block';
-      showStatus('💡 If Phantom did not prompt, click "Check Payment Status".', 'info');
-    }, 2500);
+      showStatus('💡 After approving in Phantom, the page should reload automatically. If not, click "Check Payment Status".', 'info');
+    }, 3000);
 
   } catch (err) {
-    console.error(err);
-    showStatus('❌ ' + (err.message || 'Payment init failed'), 'error');
+    console.error('Payment error:', err);
+    debugLog('ERROR:', err.message);
+    showStatus('❌ ' + (err.message || 'Payment initialization failed'), 'error');
     setButtonLoading(false);
   }
 }
 
-// manual verify (fallback)
+// بررسی دستی وضعیت پرداخت
 async function checkPayment(){
   try {
     showStatus('🔍 Checking payment status...', 'info');
+    debugLog('Manual payment check started');
+    
     const resp = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
     const data = await resp.json();
-    console.log('check_status:', data);
+    
+    debugLog('Payment status:', data);
+    
     if (data.commission_paid) {
-      window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+      showStatus('✅ Payment confirmed! Redirecting...', 'success');
+      setTimeout(() => {
+        window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+      }, 1500);
     } else {
-      showStatus('⏳ Payment not found yet. Try again in a few seconds.', 'info');
+      showStatus('⏳ Payment not confirmed yet. Please wait a few seconds and try again.', 'info');
     }
   } catch (e) {
-    console.error(e);
-    showStatus('❌ Check failed', 'error');
+    console.error('Check payment error:', e);
+    debugLog('Check payment ERROR:', e.message);
+    showStatus('❌ Failed to check payment status', 'error');
   }
 }
 
-// auto-handle phantom callback (if user returns)
+// ✅ بهبود یافته: مدیریت خودکار callback از Phantom
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
+  
+  debugLog('Page loaded with params:', Object.fromEntries(params));
+  
+  // بررسی خطاهای Phantom
+  if (params.has('errorCode') || params.has('errorMessage')) {
+    const errorCode = params.get('errorCode');
+    const errorMessage = params.get('errorMessage') || 'Unknown error';
+    debugLog('Phantom returned error:', { errorCode, errorMessage });
+    showStatus(`❌ Phantom Error: ${decodeURIComponent(errorMessage)} (Code: ${errorCode})`, 'error');
+    setButtonLoading(false);
+    return;
+  }
+  
+  // بررسی موفقیت تراکنش
   if (params.has('signature') && params.has('session')) {
     const signature = params.get('signature');
     const session = params.get('session');
-    showStatus('🔍 Verifying transaction on server...', 'info');
+    
+    debugLog('Transaction signature received:', signature);
+    showStatus('🔍 Verifying transaction on blockchain...', 'info');
 
     try {
       const verify = await fetch('/commission/verify_signature', {
@@ -291,20 +374,60 @@ window.addEventListener('load', async () => {
           signature: signature
         })
       });
+      
       const result = await verify.json();
-      console.log('verify_signature result:', result);
+      debugLog('Verification result:', result);
+      
       if (result.verified) {
-        showStatus('✅ Payment Verified! Redirecting...', 'success');
-        setTimeout(()=> window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`, 1500);
+        showStatus('✅ Payment Verified Successfully! Redirecting...', 'success');
+        setTimeout(() => {
+          window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+        }, 2000);
       } else {
-        showStatus('❌ Verification failed. Please try "Check Payment Status".', 'error');
+        showStatus(`⚠️ ${result.message || 'Verification failed. Click "Check Payment Status" to retry.'}`, 'error');
+        document.getElementById('verify-btn').style.display = 'block';
       }
     } catch (e) {
-      console.error(e);
-      showStatus('❌ Server verification error', 'error');
+      console.error('Verification error:', e);
+      debugLog('Verification ERROR:', e.message);
+      showStatus('❌ Failed to verify transaction. Click "Check Payment Status" to retry.', 'error');
+      document.getElementById('verify-btn').style.display = 'block';
     }
   }
 });
+
+// Auto-check payment status every 5 seconds if verify button is visible
+let autoCheckInterval = null;
+const verifyBtn = document.getElementById('verify-btn');
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.attributeName === 'style') {
+      if (verifyBtn.style.display !== 'none' && !autoCheckInterval) {
+        debugLog('Starting auto-check interval');
+        autoCheckInterval = setInterval(async () => {
+          try {
+            const resp = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
+            const data = await resp.json();
+            if (data.commission_paid) {
+              clearInterval(autoCheckInterval);
+              showStatus('✅ Payment confirmed! Redirecting...', 'success');
+              setTimeout(() => {
+                window.location.href = `/commission/success?telegram_id=${CONFIG.telegramId}`;
+              }, 1500);
+            }
+          } catch (e) {
+            console.error('Auto-check error:', e);
+          }
+        }, 5000);
+      } else if (verifyBtn.style.display === 'none' && autoCheckInterval) {
+        clearInterval(autoCheckInterval);
+        autoCheckInterval = null;
+      }
+    }
+  });
+});
+
+observer.observe(verifyBtn, { attributes: true });
 </script>
 </body>
 </html>
