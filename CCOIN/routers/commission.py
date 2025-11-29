@@ -144,29 +144,39 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 )
             )
 
-            # ✅ ساخت Message با blockhash
-            message = Message.new_with_blockhash(
-                [transfer_ix],
-                from_pubkey,
-                recent_blockhash
+            # ✅ CRITICAL FIX: استفاده از VersionedMessage
+            from solders.message import MessageV0
+            from solders.hash import Hash
+            
+            # تبدیل recent_blockhash به Hash
+            if isinstance(recent_blockhash, Hash):
+                blockhash_hash = recent_blockhash
+            else:
+                blockhash_hash = Hash.from_string(str(recent_blockhash))
+
+            # ✅ ساخت Message با MessageV0
+            message = MessageV0.try_compile(
+                payer=from_pubkey,
+                instructions=[transfer_ix],
+                address_lookup_table_accounts=[],
+                recent_blockhash=blockhash_hash
             )
 
-            # ✅ ساخت Transaction (unsigned)
-            tx = Transaction.new_unsigned(message)
-
-            # ✅ CRITICAL: Serialize به صورت base64 برای Phantom
-            # Phantom انتظار دارد transaction را به صورت base64-encoded bytes دریافت کند
+            # ✅ ساخت VersionedTransaction
+            from solders.transaction import VersionedTransaction
+            
+            tx = VersionedTransaction(message, [])
+            
+            # ✅ Serialize کردن - روش صحیح
             tx_bytes = bytes(tx)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
-            
-            # ✅ IMPORTANT: همچنین به صورت base58 هم تست کنید (برخی wallet ها این را ترجیح می‌دهند)
-            # اما Phantom معمولاً base64 را می‌خواهد
             
             logger.info("Transaction serialized", extra={
                 "telegram_id": telegram_id,
                 "tx_base64_length": len(tx_base64),
                 "tx_bytes_length": len(tx_bytes),
-                "first_50_chars": tx_base64[:50]
+                "first_50_chars": tx_base64[:50],
+                "last_50_chars": tx_base64[-50:] if len(tx_base64) > 50 else "N/A"
             })
 
             await client.close()
