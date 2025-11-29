@@ -397,14 +397,31 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
 # Success page
 # -------------------------
 @router.get("/success", response_class=HTMLResponse)
-async def commission_success(request: Request, telegram_id: str = Query(..., description="Telegram user ID"), db: Session = Depends(get_db)):
+async def commission_success(
+    request: Request,
+    telegram_id: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Success page after commission payment
+    """
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # فرمت کردن تاریخ
+    payment_date_str = None
+    if user.commission_payment_date:
+        payment_date_str = user.commission_payment_date.strftime("%B %d, %Y at %I:%M %p")
+    
     return templates.TemplateResponse("commission_success.html", {
         "request": request,
         "telegram_id": telegram_id,
-        "bot_username": BOT_USERNAME
+        "bot_username": BOT_USERNAME,
+        "already_paid": user.commission_paid,
+        "commission_amount": COMMISSION_AMOUNT,
+        "transaction_hash": user.commission_transaction_hash,
+        "payment_date": payment_date_str
     })
 
 
