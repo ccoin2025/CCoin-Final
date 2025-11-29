@@ -6,10 +6,20 @@
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Payment Successful - CCoin</title>
+    
+    <!-- ✅ اضافه شده: Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
             display: flex;
             justify-content: center;
@@ -26,14 +36,15 @@
             padding: 50px 40px;
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-            max-width: 400px;
+            max-width: 500px;
             width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .success-icon {
             font-size: 80px;
             margin-bottom: 20px;
-            animation: scaleIn 0.5s ease;
+            animation: scaleIn 0.5s ease, pulse 2s ease-in-out infinite 0.5s;
         }
 
         @keyframes scaleIn {
@@ -41,16 +52,76 @@
             to { transform: scale(1); }
         }
 
-        h1 {
-            font-size: 28px;
-            margin-bottom: 15px;
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
 
-        p {
+        h1 {
+            font-size: 32px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            color: #ffd700;
+            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .subtitle {
             font-size: 16px;
-            opacity: 0.9;
+            opacity: 0.95;
             margin-bottom: 30px;
             line-height: 1.6;
+        }
+
+        /* ✅ اضافه شده: باکس اطلاعات تراکنش */
+        .transaction-info {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 25px 0;
+            text-align: left;
+        }
+
+        .transaction-info h3 {
+            font-size: 14px;
+            color: #ffd700;
+            margin-bottom: 15px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #90ee90;
+        }
+
+        .transaction-hash {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-all;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 5px;
         }
 
         .btn {
@@ -66,6 +137,8 @@
             display: inline-block;
             transition: all 0.3s ease;
             width: 100%;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+            margin-top: 10px;
         }
 
         .btn:hover {
@@ -73,10 +146,43 @@
             box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
         }
 
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        /* ✅ بهبود یافته: استایل countdown */
         .countdown {
-            font-size: 14px;
+            font-size: 13px;
             opacity: 0.7;
             margin-top: 20px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .countdown.paused {
+            opacity: 0.5;
+        }
+
+        /* ✅ اضافه شده: دکمه view on explorer */
+        .explorer-link {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            margin-top: 10px;
+            font-size: 14px;
+            padding: 12px 24px;
+        }
+
+        .explorer-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+        }
+
+        /* ✅ اضافه شده: نمایش زمان */
+        .timestamp {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 15px;
         }
     </style>
 </head>
@@ -84,22 +190,186 @@
   <div class="container">
     <div class="success-icon">✅</div>
     <h1>Payment Successful!</h1>
-    <p>Your commission has been paid successfully. You are now eligible for the CCoin airdrop!</p>
-    <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">Return to Bot</a>
-    <p class="countdown">Redirecting in <span id="countdown">3</span> seconds...</p>
+    <p class="subtitle">
+        {% if already_paid %}
+            Your commission was already paid. You are eligible for the CCoin airdrop!
+        {% else %}
+            Your commission has been confirmed on the Solana blockchain. You can now participate in the airdrop!
+        {% endif %}
+    </p>
+
+    <!-- ✅ اضافه شده: نمایش اطلاعات تراکنش -->
+    {% if not already_paid %}
+    <div class="transaction-info">
+        <h3>📋 Transaction Details</h3>
+        
+        <div class="info-row">
+            <span class="info-label">Amount Paid:</span>
+            <span class="info-value">{{ commission_amount|default('0.05') }} SOL</span>
+        </div>
+        
+        {% if payment_date %}
+        <div class="info-row">
+            <span class="info-label">Payment Date:</span>
+            <span class="info-value">{{ payment_date }}</span>
+        </div>
+        {% endif %}
+        
+        {% if transaction_hash %}
+        <div class="info-row">
+            <span class="info-label">Transaction:</span>
+        </div>
+        <div class="transaction-hash" id="tx-hash">
+            {{ transaction_hash }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- دکمه بازگشت به ربات -->
+    <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">
+        🚀 Return to Bot
+    </a>
+
+    <!-- ✅ اضافه شده: دکمه مشاهده در explorer -->
+    {% if transaction_hash %}
+    <a href="https://solscan.io/tx/{{ transaction_hash }}" 
+       target="_blank" 
+       class="btn explorer-link" 
+       id="explorer-btn">
+        🔍 View on Solscan
+    </a>
+    {% endif %}
+
+    <!-- ✅ بهبود یافته: Countdown با قابلیت توقف -->
+    <p class="countdown" id="countdown-text">
+        Auto-redirect in <span id="countdown">5</span> seconds
+        <br>
+        <small>(Click any button to cancel)</small>
+    </p>
+
+    <!-- ✅ اضافه شده: نمایش timestamp -->
+    <p class="timestamp" id="current-time"></p>
   </div>
+
 <script>
-let seconds = 3;
+// ✅ اضافه شده: Initialize Telegram WebApp
+let tg = window.Telegram?.WebApp;
+if (tg) {
+    tg.ready();
+    tg.expand();
+    // تنظیم رنگ header بر اساس تم
+    tg.setHeaderColor('#11998e');
+}
+
+// ✅ بهبود یافته: Countdown با مدیریت بهتر
+let seconds = 5; // افزایش زمان به 5 ثانیه
+let countdownActive = true;
 const countdownEl = document.getElementById('countdown');
-const interval = setInterval(()=> {
-  seconds--;
-  countdownEl.textContent = seconds;
-  if (seconds <= 0) {
-    clearInterval(interval);
-    window.location.href = 'https://t.me/{{ bot_username }}';
-  }
+const countdownText = document.getElementById('countdown-text');
+const botUsername = '{{ bot_username }}';
+
+const interval = setInterval(() => {
+    if (!countdownActive) return;
+    
+    seconds--;
+    countdownEl.textContent = seconds;
+    
+    if (seconds <= 0) {
+        clearInterval(interval);
+        redirectToBot();
+    }
 }, 1000);
-document.getElementById('return-btn').addEventListener('click', ()=> clearInterval(interval));
+
+// تابع redirect
+function redirectToBot() {
+    const botUrl = `https://t.me/${botUsername}`;
+    if (tg && tg.openTelegramLink) {
+        tg.openTelegramLink(botUrl);
+    } else if (tg && tg.openLink) {
+        tg.openLink(botUrl);
+    } else {
+        window.location.href = botUrl;
+    }
+}
+
+// ✅ توقف countdown با کلیک روی هر دکمه
+function stopCountdown() {
+    countdownActive = false;
+    clearInterval(interval);
+    countdownText.classList.add('paused');
+    countdownText.innerHTML = '<small>Auto-redirect cancelled</small>';
+}
+
+document.getElementById('return-btn').addEventListener('click', (e) => {
+    stopCountdown();
+});
+
+// ✅ مدیریت دکمه explorer
+const explorerBtn = document.getElementById('explorer-btn');
+if (explorerBtn) {
+    explorerBtn.addEventListener('click', (e) => {
+        stopCountdown();
+        // باز کردن در مرورگر خارجی
+        if (tg && tg.openLink) {
+            e.preventDefault();
+            tg.openLink(e.target.href, { try_instant_view: false });
+        }
+    });
+}
+
+// ✅ اضافه شده: نمایش زمان فعلی
+function updateTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    const timeEl = document.getElementById('current-time');
+    if (timeEl) {
+        timeEl.textContent = timeStr;
+    }
+}
+updateTime();
+
+// ✅ اضافه شده: کپی کردن transaction hash با کلیک
+const txHashEl = document.getElementById('tx-hash');
+if (txHashEl) {
+    txHashEl.style.cursor = 'pointer';
+    txHashEl.title = 'Click to copy';
+    txHashEl.addEventListener('click', async () => {
+        const hash = txHashEl.textContent.trim();
+        try {
+            await navigator.clipboard.writeText(hash);
+            const originalText = txHashEl.innerHTML;
+            txHashEl.innerHTML = '✅ Copied!';
+            txHashEl.style.color = '#90ee90';
+            setTimeout(() => {
+                txHashEl.innerHTML = originalText;
+                txHashEl.style.color = '';
+            }, 2000);
+            
+            // نمایش haptic feedback در تلگرام
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+        } catch (e) {
+            console.error('Failed to copy:', e);
+            alert('Transaction hash: ' + hash);
+        }
+    });
+}
+
+// ✅ اضافه شده: Log برای debugging
+console.log('Success page loaded', {
+    telegram_id: '{{ telegram_id }}',
+    bot_username: '{{ bot_username }}',
+    already_paid: {{ 'true' if already_paid else 'false' }},
+    has_tx_hash: {{ 'true' if transaction_hash else 'false' }}
+});
 </script>
 </body>
 </html>
