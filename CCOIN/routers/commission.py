@@ -489,3 +489,41 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT
     }
+
+
+# -------------------------
+# send_link
+# -------------------------
+
+@router.post("/send_link", response_class=JSONResponse)
+async def send_payment_link(request: Request, db: Session = Depends(get_db)):
+    """
+    درخواست از سمت WebApp برای ارسال لینک پرداخت در چت تلگرام
+    """
+    try:
+        # 1. داده ها را از بدنه درخواست بخوانید
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+            
+        # 2. از تابع موجود در telegram_security استفاده کنید
+        from CCOIN.config import BOT_TOKEN # مطمئن شوید BOT_TOKEN در دسترس است
+        from CCOIN.utils.telegram_security import send_commission_payment_link
+        
+        success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
+        
+        if success:
+            logger.info(f"Successfully sent commission payment link to user {telegram_id} via chat.")
+            return {"success": True, "detail": "Link sent to chat."}
+        else:
+            logger.error(f"Failed to send commission payment link to user {telegram_id}.")
+            return {"success": False, "detail": "Failed to send link via bot."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in /send_link endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
