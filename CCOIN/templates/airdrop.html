@@ -762,112 +762,57 @@
             }
         }
 
-        async function handleCommissionPayment() {
+        function handleCommissionPayment() {
             const telegramId = getTelegramId();
 
             if (!telegramId) {
-                showToast('❌ Error: Telegram ID not found', 'error');
-                console.error('Telegram ID not found');
+                showToast('Error: Telegram ID not found', 'error');
                 return;
             }
 
-            const user = await checkUserStatus();
-            if (!user || !user.wallet_connected) {
-                showToast('⚠️ Please connect your wallet first', 'error');
-                return;
-            }
-
+            // ✅ ساخت URL کامل با domain
             const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegramId}`;
 
-            console.log('🔗 Opening commission payment URL:', commissionUrl);
-            console.log('📱 Telegram WebApp available:', !!(window.Telegram && window.Telegram.WebApp));
+            console.log('Opening commission payment in external browser:', commissionUrl);
 
+            // ✅ استفاده از API رسمی تلگرام برای باز کردن در مرورگر خارجی
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-                console.log('✅ Using Telegram.WebApp.openLink (guaranteed method)');
-
-                try {
-                    window.Telegram.WebApp.openLink(commissionUrl, {
-                        try_instant_view: false  
-                    });
-
-                    showToast('📱 Opening payment page in your browser...', 'info');
-
-                    // Haptic feedback
-                    if (window.Telegram.WebApp.HapticFeedback) {
-                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                    }
-
-                } catch (error) {
-                    console.error('❌ Error opening link:', error);
-                    showToast('❌ Failed to open payment page', 'error');
-                }
-            }
-            else {
-                console.log('⚠️ Telegram WebApp not available, using fallback');
-
-                try {
-                    const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
-
-                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                        console.warn('Pop-up blocked, trying alternative method');
-                        window.location.href = commissionUrl;
-                    }
-                } catch (error) {
-                    console.error('❌ Fallback method failed:', error);
-                    window.location.href = commissionUrl;
-                }
+                // روش تضمینی: openLink با try_instant_view: false
+                window.Telegram.WebApp.openLink(commissionUrl, {
+                    try_instant_view: false  // ✅ اجبار به باز شدن در مرورگر خارجی
+                });
+            } else {
+                // Fallback برای محیط‌های غیر تلگرام
+                window.open(commissionUrl, '_blank', 'noopener,noreferrer');
             }
         }
-
-        
-        function getTelegramId() {
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
-                const user = window.Telegram.WebApp.initDataUnsafe.user;
-                if (user && user.id) {
-                    return user.id.toString();
-                }
-            }
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const telegramIdFromUrl = urlParams.get('telegram_id');
-            if (telegramIdFromUrl) {
-                return telegramIdFromUrl;
-            }
-
-            if (typeof TELEGRAM_ID !== 'undefined') {
-                return TELEGRAM_ID;
-            }
-
-            console.error('Could not retrieve Telegram ID from any source');
-            return null;
+        function showCommissionModal() {
+            const modal = document.getElementById('commissionModal');
+            modal.classList.add('show');
         }
 
-        async function checkUserStatus() {
-            const telegramId = getTelegramId();
-            if (!telegramId) return null;
-
-            try {
-                const response = await fetch(`/airdrop/check_status?telegram_id=${telegramId}`);
-                if (response.ok) {
-                    return await response.json();
-                }
-            } catch (error) {
-                console.error('Error checking user status:', error);
-            }
-            return null;
+        function closeCommissionModal() {
+            const modal = document.getElementById('commissionModal');
+            modal.classList.remove('show');
         }
-       
-        function showToast(message, type = 'info') {
 
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type} show`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
+        function openCommissionPayment() {
+            closeCommissionModal();
 
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            if (!telegramId) {
+                showToast('Error: User information not found', 'error');
+                return;
+            }
+
+            const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.openLink(commissionUrl, {tryBrowser: true});
+            } else {
+                window.open(commissionUrl, '_blank');
+            }
+
+            showToast('Opening payment page in external browser...', 'info');
         }
 
         function checkAllTasksCompletion() {
