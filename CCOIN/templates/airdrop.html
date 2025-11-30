@@ -763,29 +763,19 @@
         }
 
         function handleCommissionPayment() {
-            const telegramId = getTelegramId();
-
-            if (!telegramId) {
-                showToast('Error: Telegram ID not found', 'error');
+            if (!userStatuses.wallet_connected) {
+                showToast('Please connect your wallet first', 'error');
                 return;
             }
 
-            // ✅ ساخت URL کامل با domain
-            const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${telegramId}`;
-
-            console.log('Opening commission payment in external browser:', commissionUrl);
-
-            // ✅ استفاده از API رسمی تلگرام برای باز کردن در مرورگر خارجی
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-                // روش تضمینی: openLink با try_instant_view: false
-                window.Telegram.WebApp.openLink(commissionUrl, {
-                    try_instant_view: false  // ✅ اجبار به باز شدن در مرورگر خارجی
-                });
-            } else {
-                // Fallback برای محیط‌های غیر تلگرام
-                window.open(commissionUrl, '_blank', 'noopener,noreferrer');
+            if (userStatuses.commission_paid) {
+                showToast('Commission has already been paid', 'info');
+                return;
             }
+
+            showCommissionModal();
         }
+
         function showCommissionModal() {
             const modal = document.getElementById('commissionModal');
             modal.classList.add('show');
