@@ -438,11 +438,13 @@ async function disconnectWallet() {
 }
 
 
+// در فایل airdrop.js
+
 async function handleCommissionPayment() {
     try {
         log('💰 Starting commission payment process...');
 
-        // ... (بررسی اتصال کیف پول و پرداخت قبلی - بدون تغییر) ...
+        // 1. بررسی اتصال wallet و پرداخت قبلی (بدون تغییر)
         if (!tasksCompleted.wallet || !connectedWallet) {
             showToast('⚠️ Please connect your wallet first!', 'error');
             return;
@@ -451,35 +453,37 @@ async function handleCommissionPayment() {
             showToast('✅ Commission already paid!', 'info');
             return;
         }
-        
-        // ✅ ساخت URL کامل برای صفحه کمیسیون (بدون تغییر)
-        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-        
-        log('🔗 Generated commission payment URL: ' + commissionUrl);
 
-        // ❌ قبلی: window.Telegram.WebApp.openLink(...) را حذف کنید.
+        // 2. ✅ ساخت URL کامل برای صفحه کمیسیون
+        // این URL را در یک متغیر سراسری یا محلی ذخیره می‌کنیم تا openCommissionPayment به آن دسترسی داشته باشد.
+        window.tempCommissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
         
-        // ✅ جدید: فراخوانی تابع نمایش مودال
-        if (window.Telegram && window.Telegram.WebApp) {
-            showPaymentModal(commissionUrl); // فراخوانی تابع جدید/اصلاح شده
-            
-            showToast('🔑 Please open the link in an external browser from the modal.', 'info');
-            
+        log('🔗 Generated commission payment URL: ' + window.tempCommissionUrl);
+
+        // 3. ❌ حذف: window.Telegram.WebApp.openLink(...)
+        
+        // 4. ✅ جدید: نمایش مودال موجود
+        const modal = document.getElementById('commissionModal');
+        if (modal) {
+            modal.style.display = 'flex'; // یا 'block'
+            showToast('🔑 Please click "Pay Commission" in the window that just appeared.', 'info');
+
             // Haptic feedback
-            if (window.Telegram.WebApp.HapticFeedback) {
+            if (window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
             
-            log('✅ Payment link displayed in existing modal');
+            log('✅ Commission modal displayed.');
         } else {
-            log('❌ Telegram WebApp not available');
-            showToast('❌ Please open this app in Telegram', 'error');
+            // Fallback در صورت عدم وجود مودال
+            window.Telegram.WebApp.openLink(window.tempCommissionUrl, { try_instant_view: false });
         }
+
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
         console.error('Commission payment error:', error);
-        showToast('❌ Failed to show payment link', 'error');
+        showToast('❌ Failed to show payment page', 'error');
     }
 }
 
