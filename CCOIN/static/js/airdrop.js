@@ -437,7 +437,6 @@ async function disconnectWallet() {
     }
 }
 
-
 async function handleCommissionPayment() {
     try {
         log('💰 Starting commission payment process...');
@@ -461,78 +460,36 @@ async function handleCommissionPayment() {
 
         // ✅ ساخت URL کامل برای صفحه کمیسیون
         const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-
+        
         log('🔗 Opening commission payment URL: ' + commissionUrl);
-        log('📱 Telegram WebApp available: ' + !!(window.Telegram && window.Telegram.WebApp));
 
-        // ✅ روش ۱: استفاده از API رسمی تلگرام (تضمینی ۱۰۰٪)
+        // ✅ فقط برای موبایل: استفاده از API رسمی تلگرام
         if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-            log('✅ Using Telegram.WebApp.openLink (guaranteed method)');
-
-            // باز کردن در مرورگر خارجی با API رسمی تلگرام
-            window.Telegram.WebApp.openLink(commissionUrl, {
-                try_instant_view: false  // ✅ اجبار به باز شدن در مرورگر خارجی
+            // باز کردن در مرورگر خارجی
+            window.Telegram.WebApp.openLink(commissionUrl, { 
+                try_instant_view: false
             });
-
-            // نمایش پیام راهنما
+            
             showToast('📱 Opening payment page in your browser...', 'info');
-
+            
             // Haptic feedback
             if (window.Telegram.WebApp.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
-
-            log('✅ Commission payment page opened successfully');
-
-        }
-        // ✅ روش ۲: Fallback برای محیط‌های غیر تلگرام
-        else {
-            log('⚠️ Telegram WebApp not available, using fallback method');
-
-            const newWindow = window.open(commissionUrl, '_blank', 'noopener,noreferrer');
-
-            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                log('⚠️ Pop-up blocked, trying alternative method');
-                // آخرین راه: redirect مستقیم
-                window.location.href = commissionUrl;
-            } else {
-                showToast('📱 Opening payment page...', 'info');
-                log('✅ Commission payment page opened in new window');
-            }
+            
+            log('✅ Payment page opened in external browser');
+        } else {
+            log('❌ Telegram WebApp not available');
+            showToast('❌ Please open this app in Telegram', 'error');
         }
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
         console.error('Commission payment error:', error);
-        showToast('❌ Failed to open payment page: ' + error.message, 'error');
+        showToast('❌ Failed to open payment page', 'error');
     }
 }
 
-
-function getTelegramId() {
-    // روش ۱: از APP_CONFIG
-    if (typeof USER_ID !== 'undefined' && USER_ID) {
-        return USER_ID;
-    }
-
-    // روش ۲: از WebApp
-    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
-        const user = window.Telegram.WebApp.initDataUnsafe.user;
-        if (user && user.id) {
-            return user.id.toString();
-        }
-    }
-
-    // روش ۳: از URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const telegramIdFromUrl = urlParams.get('telegram_id');
-    if (telegramIdFromUrl) {
-        return telegramIdFromUrl;
-    }
-
-    log('❌ Could not retrieve Telegram ID');
-    return null;
-}
 
 async function claimAirdrop() {
     try {
