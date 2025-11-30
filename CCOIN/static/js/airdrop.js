@@ -437,59 +437,45 @@ async function disconnectWallet() {
     }
 }
 
+
 async function handleCommissionPayment() {
     try {
         log('💰 Starting commission payment process...');
-
-        // بررسی اتصال wallet
-        if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('⚠️ Please connect your wallet first!', 'error');
-            log('❌ Commission payment blocked: wallet not connected');
-            return;
-        }
-
-        // بررسی پرداخت قبلی
-        if (tasksCompleted.pay) {
-            showToast('✅ Commission already paid!', 'info');
-            log('ℹ️ Commission already paid');
-            return;
-        }
-
-        // ذخیره زمان شروع پرداخت
-        localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
-
-        // ✅ ساخت URL کامل برای صفحه کمیسیون
-        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
+        // ... (بررسی اتصال کیف پول و پرداخت قبلی) ...
         
-        log('🔗 Opening commission payment URL: ' + commissionUrl);
+        // ❌ حذف: window.Telegram.WebApp.openLink(...)
+        
+        // ✅ جدید: ارسال درخواست به سرور برای ارسال لینک پرداخت در چت
+        showToast('⏳ Sending payment link to your Telegram chat...', 'info');
+        
+        const response = await fetch(`/commission/send_link`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() // فرض می‌کنم تابع getCsrfToken موجود است
+            },
+            body: JSON.stringify({
+                telegram_id: USER_ID
+            })
+        });
 
-        // ✅ فقط برای موبایل: استفاده از API رسمی تلگرام
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-            // باز کردن در مرورگر خارجی
-            window.Telegram.WebApp.openLink(commissionUrl, { 
-                try_instant_view: false
-            });
-            
-            showToast('📱 Opening payment page in your browser...', 'info');
-            
-            // Haptic feedback
-            if (window.Telegram.WebApp.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('✅ Link sent to chat! Please check your messages.', 'success');
+            // در صورت موفقیت Web App را ببندید تا کاربر به چت برگردد
+            if (window.Telegram.WebApp) {
+                window.Telegram.WebApp.close(); 
             }
-            
-            log('✅ Payment page opened in external browser');
         } else {
-            log('❌ Telegram WebApp not available');
-            showToast('❌ Please open this app in Telegram', 'error');
+            showToast('❌ Failed to send link: ' + data.detail, 'error');
         }
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
-        console.error('Commission payment error:', error);
-        showToast('❌ Failed to open payment page', 'error');
+        showToast('❌ Server Error. Try again later.', 'error');
     }
 }
-
 
 async function claimAirdrop() {
     try {
