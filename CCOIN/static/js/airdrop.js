@@ -482,6 +482,38 @@ async function handleCommissionPayment() {
         showToast('❌ Failed to show payment link', 'error');
     }
 }
+
+// در فایل airdrop.js (یا فایل مدیریت مودال)
+
+function showPaymentModal(url) {
+    // فرض می‌کنیم این ID های مودال شما هستند. در صورت نیاز آن را تغییر دهید.
+    const modal = document.getElementById('paymentCommissionModal'); 
+    const linkInput = document.getElementById('paymentLinkInput');   
+    const openBtn = document.getElementById('openExternalLinkBtn');  
+
+    if (modal && linkInput && openBtn) {
+        // 1. نمایش لینک در input
+        linkInput.value = url;
+        
+        // 2. تنظیم عملکرد دکمه باز کردن لینک
+        // **نکته کلیدی:** استفاده از window.open(url, '_blank') به جای API تلگرام، 
+        // احتمال بیشتری دارد که در دستگاه‌های ناسازگار، مرورگر خارجی را فعال کند.
+        openBtn.onclick = function() {
+            window.open(url, '_blank');
+            // بستن مودال
+            modal.style.display = 'none'; 
+        };
+
+        // 3. نمایش مودال
+        modal.style.display = 'flex'; // یا 'block' بسته به CSS شما
+    } else {
+        console.error("Modal elements not found. Fallback to direct opening.");
+        // Fallback نهایی: اگر المان‌ها پیدا نشدند، دوباره سعی کنید لینک را باز کنید
+        window.open(url, '_blank');
+    }
+}
+
+
 async function claimAirdrop() {
     try {
         log('🎉 Claiming airdrop...');
