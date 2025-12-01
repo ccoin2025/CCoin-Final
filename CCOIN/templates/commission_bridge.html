@@ -68,26 +68,38 @@
         100% { transform: rotate(360deg);}
     }
 </style>
-
 <script>
-    function openExternal() {
-        const tg = window.Telegram?.WebApp;
+    function redirectToBrowser() {
         const telegramId = "{{ telegram_id }}";
         const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+        const tg = window.Telegram?.WebApp;
 
+        let redirected = false;
+
+        // تلاش اولیه با openLink
         try {
-            tg?.openLink(targetUrl, { tryBrowser: true });
+            if (tg?.openLink) {
+                tg.openLink(targetUrl, { tryBrowser: true });
+                redirected = true;
+            }
         } catch (e) {
-            window.location.href = targetUrl; // fallback
+            console.warn("tg.openLink failed", e);
         }
+
+        // fallback خودکار با location.href اگر openLink کار نکرد
+        setTimeout(() => {
+            if (!redirected) {
+                window.location.href = targetUrl;
+            }
+        }, 1000); // 1 ثانیه تا openLink فرصت داشته باشه
     }
 
     window.onload = () => {
-        setTimeout(openExternal, 1200); // سریعتر ریدایرکت
-    }
+        redirectToBrowser();
+    };
 </script>
-</head>
 
+</head>
 <body>
     <div class="box">
         <div class="loader"></div>
