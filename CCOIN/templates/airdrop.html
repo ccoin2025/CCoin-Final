@@ -794,13 +794,14 @@
                 return;
             }
 
-            const commissionUrl = window.location.origin + `/commission/browser/pay?telegram_id=${telegramId}`;
+            const commissionUrl = `/commission/bridge?telegram_id=${telegramId}`;
 
             if (window.Telegram?.WebApp) {
-                Telegram.WebApp.openLink(commissionUrl, {tryBrowser: true});
+                window.Telegram.WebApp.openLink(commissionUrl, {tryBrowser: true});
             } else {
                 window.open(commissionUrl, '_blank');
             }
+
 
 
             showToast('Opening payment page in external browser...', 'info');
