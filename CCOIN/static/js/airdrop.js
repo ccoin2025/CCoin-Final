@@ -1,8 +1,4 @@
-// ============================================
-// CCoin Airdrop JavaScript
-// ============================================
-
-// Check for APP_CONFIG and create fallback if not exists
+// تشخیص وجود APP_CONFIG و ایجاد fallback در صورت عدم وجود
 if (typeof window.APP_CONFIG === 'undefined') {
     console.error('❌ APP_CONFIG not found! Using fallback values.');
     window.APP_CONFIG = {
@@ -18,7 +14,7 @@ if (typeof window.APP_CONFIG === 'undefined') {
     };
 }
 
-// Extract global variables from APP_CONFIG
+// Use global variables from HTML
 const {
     USER_ID,
     SOLANA_RPC_URL,
@@ -31,7 +27,6 @@ const {
     INITIAL_WALLET_ADDRESS
 } = window.APP_CONFIG;
 
-// State management
 let tasksCompleted = {
     task: INITIAL_TASKS_COMPLETED,
     invite: INITIAL_INVITED_FRIENDS,
@@ -44,36 +39,9 @@ let phantomProvider = null;
 let phantomDetected = false;
 let countdownInterval = null;
 
-// ============================================
-// Utility Functions
-// ============================================
-
 function log(msg) {
     console.log('[Airdrop] ' + msg);
 }
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = 'toast toast-' + type;
-    toast.textContent = message;
-
-    document.body.appendChild(toast);
-
-    setTimeout(function() {
-        toast.classList.add('show');
-    }, 100);
-
-    setTimeout(function() {
-        toast.classList.remove('show');
-        setTimeout(function() {
-            document.body.removeChild(toast);
-        }, 300);
-    }, 3000);
-}
-
-// ============================================
-// Countdown Timer
-// ============================================
 
 function updateCountdown() {
     try {
@@ -87,52 +55,113 @@ function updateCountdown() {
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            const daysEl = document.getElementById('days');
-            const hoursEl = document.getElementById('hours');
-            const minutesEl = document.getElementById('minutes');
-            const secondsEl = document.getElementById('seconds');
+            const daysElement = document.getElementById('days');
+            const hoursElement = document.getElementById('hours');
+            const minutesElement = document.getElementById('minutes');
+            const secondsElement = document.getElementById('seconds');
 
-            if (daysEl) daysEl.textContent = days.toString().padStart(2, '0');
-            if (hoursEl) hoursEl.textContent = hours.toString().padStart(2, '0');
-            if (minutesEl) minutesEl.textContent = minutes.toString().padStart(2, '0');
-            if (secondsEl) secondsEl.textContent = seconds.toString().padStart(2, '0');
+            if (daysElement) {
+                const newValue = days.toString().padStart(2, '0');
+                if (daysElement.textContent !== newValue) {
+                    daysElement.classList.add('flip');
+                    setTimeout(() => {
+                        daysElement.textContent = newValue;
+                        daysElement.classList.remove('flip');
+                    }, 150);
+                } else {
+                    daysElement.textContent = newValue;
+                }
+            }
+
+            if (hoursElement) {
+                const newValue = hours.toString().padStart(2, '0');
+                if (hoursElement.textContent !== newValue) {
+                    hoursElement.classList.add('flip');
+                    setTimeout(() => {
+                        hoursElement.textContent = newValue;
+                        hoursElement.classList.remove('flip');
+                    }, 150);
+                } else {
+                    hoursElement.textContent = newValue;
+                }
+            }
+
+            if (minutesElement) {
+                const newValue = minutes.toString().padStart(2, '0');
+                if (minutesElement.textContent !== newValue) {
+                    minutesElement.classList.add('flip');
+                    setTimeout(() => {
+                        minutesElement.textContent = newValue;
+                        minutesElement.classList.remove('flip');
+                    }, 150);
+                } else {
+                    minutesElement.textContent = newValue;
+                }
+            }
+
+            if (secondsElement) {
+                const newValue = seconds.toString().padStart(2, '0');
+                if (secondsElement.textContent !== newValue) {
+                    secondsElement.classList.add('flip');
+                    setTimeout(() => {
+                        secondsElement.textContent = newValue;
+                        secondsElement.classList.remove('flip');
+                    }, 150);
+                } else {
+                    secondsElement.textContent = newValue;
+                }
+            }
+
+            if (seconds % 30 === 0) {
+                console.log(`⏰ Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`);
+            }
 
         } else {
             const elements = ['days', 'hours', 'minutes', 'seconds'];
-            elements.forEach(function(id) {
-                const el = document.getElementById(id);
-                if (el) el.textContent = '00';
+            elements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = '00';
             });
+
+            console.log('🎉 Countdown finished!');
+
+            const countdownTitle = document.querySelector('.countdown-title');
+            if (countdownTitle) {
+                countdownTitle.textContent = '🎉 Airdrop is LIVE!';
+                countdownTitle.style.color = '#ffd700';
+            }
 
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
             }
         }
+
     } catch (error) {
         console.error('❌ Countdown error:', error);
     }
 }
 
 function startCountdown() {
-    log('⏰ Starting countdown...');
+    log('⏰ Starting countdown timer...');
+
     updateCountdown();
-    if (countdownInterval) clearInterval(countdownInterval);
+
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
     countdownInterval = setInterval(updateCountdown, 1000);
-    log('✅ Countdown started');
+
+    log('✅ Countdown timer started successfully');
 }
 
 function stopCountdown() {
     if (countdownInterval) {
         clearInterval(countdownInterval);
         countdownInterval = null;
-        log('⏹️ Countdown stopped');
+        log('⏹️ Countdown timer stopped');
     }
 }
-
-// ============================================
-// UI Update Functions
-// ============================================
 
 function updateWalletUI() {
     const walletButtonText = document.getElementById('wallet-button-text');
@@ -144,7 +173,7 @@ function updateWalletUI() {
         const shortAddress = connectedWallet.substring(0, 6) + '...' + connectedWallet.substring(connectedWallet.length - 4);
 
         if (walletButtonText) {
-            walletButtonText.textContent = 'Connected: ' + shortAddress;
+            walletButtonText.textContent = `Connected: ${shortAddress}`;
             walletButtonText.style.color = '#ffffff';
         }
 
@@ -153,10 +182,16 @@ function updateWalletUI() {
             walletIcon.style.color = '#28a745';
         }
 
-        if (walletButton) walletButton.classList.add('wallet-connected');
-        if (walletStatusIndicator) walletStatusIndicator.classList.add('connected');
+        if (walletButton) {
+            walletButton.classList.add('wallet-connected');
+        }
+
+        if (walletStatusIndicator) {
+            walletStatusIndicator.classList.add('connected');
+        }
 
         log('✅ Wallet UI updated: ' + shortAddress);
+
     } else {
         if (walletButtonText) {
             walletButtonText.textContent = 'Connect Wallet';
@@ -168,10 +203,15 @@ function updateWalletUI() {
             walletIcon.style.color = '#aaa';
         }
 
-        if (walletButton) walletButton.classList.remove('wallet-connected');
-        if (walletStatusIndicator) walletStatusIndicator.classList.remove('connected');
+        if (walletButton) {
+            walletButton.classList.remove('wallet-connected');
+        }
 
-        log('🔄 Wallet UI reset');
+        if (walletStatusIndicator) {
+            walletStatusIndicator.classList.remove('connected');
+        }
+
+        log('🔄 Wallet UI reset to disconnected state');
     }
 }
 
@@ -184,15 +224,24 @@ function updateCommissionUI() {
             commissionIcon.className = 'fas fa-check right-icon';
             commissionIcon.style.color = '#28a745';
         }
-        if (commissionButton) commissionButton.classList.add('commission-paid');
-        log('✅ Commission UI: paid');
+
+        if (commissionButton) {
+            commissionButton.classList.add('commission-paid');
+        }
+
+        log('✅ Commission UI updated: paid');
+
     } else {
         if (commissionIcon) {
             commissionIcon.className = 'fas fa-chevron-right right-icon';
             commissionIcon.style.color = '#aaa';
         }
-        if (commissionButton) commissionButton.classList.remove('commission-paid');
-        log('💰 Commission UI: not paid');
+
+        if (commissionButton) {
+            commissionButton.classList.remove('commission-paid');
+        }
+
+        log('💰 Commission UI updated: not paid');
     }
 }
 
@@ -205,15 +254,24 @@ function updateTaskCompleteUI() {
             taskIcon.className = 'fas fa-check right-icon';
             taskIcon.style.color = '#28a745';
         }
-        if (taskButton) taskButton.classList.add('tasks-completed');
-        log('✅ Tasks UI: completed');
+
+        if (taskButton) {
+            taskButton.classList.add('tasks-completed');
+        }
+
+        log('✅ Tasks UI updated: completed');
+
     } else {
         if (taskIcon) {
             taskIcon.className = 'fas fa-chevron-right right-icon';
             taskIcon.style.color = '#aaa';
         }
-        if (taskButton) taskButton.classList.remove('tasks-completed');
-        log('📋 Tasks UI: not completed');
+
+        if (taskButton) {
+            taskButton.classList.remove('tasks-completed');
+        }
+
+        log('📋 Tasks UI updated: not completed');
     }
 }
 
@@ -226,15 +284,24 @@ function updateInviteFriendsUI() {
             friendsIcon.className = 'fas fa-check right-icon';
             friendsIcon.style.color = '#28a745';
         }
-        if (friendsButton) friendsButton.classList.add('friends-invited');
-        log('✅ Friends UI: invited');
+
+        if (friendsButton) {
+            friendsButton.classList.add('friends-invited');
+        }
+
+        log('✅ Friends UI updated: invited');
+
     } else {
         if (friendsIcon) {
             friendsIcon.className = 'fas fa-chevron-right right-icon';
             friendsIcon.style.color = '#aaa';
         }
-        if (friendsButton) friendsButton.classList.remove('friends-invited');
-        log('👥 Friends UI: not invited');
+
+        if (friendsButton) {
+            friendsButton.classList.remove('friends-invited');
+        }
+
+        log('👥 Friends UI updated: not invited');
     }
 }
 
@@ -265,33 +332,44 @@ function updateAllTasksUI() {
     updateClaimButton();
 }
 
-// ============================================
-// Wallet Functions
-// ============================================
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 100);
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+}
 
 async function detectPhantom() {
     try {
         if (window.solana && window.solana.isPhantom) {
             phantomProvider = window.solana;
             phantomDetected = true;
-            log('✅ Phantom detected');
+            log('✅ Phantom Wallet detected');
             return true;
         } else {
-            log('❌ Phantom not detected');
+            log('❌ Phantom Wallet not detected');
             return false;
         }
     } catch (error) {
-        log('❌ Phantom detection error: ' + error.message);
+        log('❌ Error detecting Phantom: ' + error.message);
         return false;
     }
 }
 
 async function handleWalletConnection() {
     try {
-        log('🔗 Wallet connection...');
+        log('🔗 Initiating wallet connection...');
 
-        const walletUrl = '/wallet/browser/connect?telegram_id=' + USER_ID;
-        log('Opening: ' + walletUrl);
+        const walletUrl = `/wallet/browser/connect?telegram_id=${USER_ID}`;
+        log('Opening wallet connection page: ' + walletUrl);
 
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.openLink(walletUrl);
@@ -300,38 +378,48 @@ async function handleWalletConnection() {
         }
 
     } catch (error) {
-        log('❌ Wallet error: ' + error.message);
-        showToast('Failed to connect wallet', 'error');
+        log('❌ Wallet connection error: ' + error.message);
+        showToast('Failed to open wallet connection: ' + error.message, 'error');
     }
 }
 
 async function sendWalletToServer(walletAddress) {
     try {
-        log('📤 Sending wallet: ' + (walletAddress || 'disconnect'));
+        log(`📤 Sending wallet to server: ${walletAddress || 'disconnect'}`);
 
         const response = await fetch('/airdrop/connect_wallet', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({wallet_address: walletAddress})
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                wallet_address: walletAddress
+            })
         });
 
-        if (!response.ok) throw new Error('Server error: ' + response.statusText);
+        if (!response.ok) {
+            throw new Error('Server error: ' + response.statusText);
+        }
 
         const data = await response.json();
-        log('✅ Response: ' + JSON.stringify(data));
+        log('✅ Server response: ' + JSON.stringify(data));
+
         return data;
 
     } catch (error) {
-        log('❌ Send wallet error: ' + error.message);
+        log('❌ Error sending wallet to server: ' + error.message);
         throw error;
     }
 }
 
 async function disconnectWallet() {
     try {
-        log('🔌 Disconnecting...');
+        log('🔌 Disconnecting wallet...');
 
-        if (phantomProvider) await phantomProvider.disconnect();
+        if (phantomProvider) {
+            await phantomProvider.disconnect();
+        }
+
         await sendWalletToServer(null);
 
         connectedWallet = '';
@@ -340,225 +428,233 @@ async function disconnectWallet() {
         updateWalletUI();
         updateClaimButton();
 
-        showToast('Wallet disconnected!', 'success');
-        log('✅ Disconnected');
+        showToast('Wallet disconnected successfully!', 'success');
+        log('✅ Wallet disconnected');
 
     } catch (error) {
-        log('❌ Disconnect error: ' + error.message);
-        showToast('Failed to disconnect', 'error');
+        log('❌ Wallet disconnection failed: ' + error.message);
+        showToast('Failed to disconnect wallet: ' + error.message, 'error');
     }
 }
 
-function changeWallet() {
-    handleWalletConnection();
-}
-
-// ============================================
-// ✅ UPDATED: Commission Payment Function
-// ============================================
-
 async function handleCommissionPayment() {
     try {
-        log('💰 Starting commission payment...');
+        log('💰 Starting commission payment process...');
         console.log('💰 handleCommissionPayment called');
 
         // Check wallet connection
         if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('⚠️ ابتدا کیف پول را متصل کنید!', 'error');
-            log('❌ Wallet not connected');
+            showToast('⚠️ Please connect your wallet first!', 'error');
+            log('❌ Commission payment blocked: wallet not connected');
             return;
         }
 
         // Check if already paid
         if (tasksCompleted.pay) {
-            showToast('✅ قبلاً پرداخت شده است!', 'info');
-            log('ℹ️ Already paid');
+            showToast('✅ Commission already paid!', 'info');
+            log('ℹ️ Commission already paid');
             return;
         }
 
-        // Show loading state
-        const commissionButton = document.getElementById('commission-button');
-        const commissionIcon = document.getElementById('commission-icon');
-        
-        if (commissionButton) commissionButton.classList.add('loading');
-        if (commissionIcon) {
-            commissionIcon.className = 'fas fa-spinner right-icon';
-        }
+        // Build commission URL
+        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
 
-        // Build payment URL
-        const url = window.location.origin + '/commission/browser/pay?telegram_id=' + USER_ID;
-        log('🔗 Payment URL: ' + url);
+        log('🔗 Commission URL: ' + commissionUrl);
 
-        // Send link to Telegram chat
+        // Send link to chat via server
         try {
-            log('📤 Sending link to chat...');
+            log('📤 Sending link to chat via server...');
 
             const response = await fetch('/commission/send_link_to_chat', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                     telegram_id: USER_ID,
-                    payment_url: url
+                    payment_url: commissionUrl
                 })
             });
 
-            // Remove loading state
-            if (commissionButton) commissionButton.classList.remove('loading');
-            if (commissionIcon) {
-                commissionIcon.className = 'fas fa-chevron-right right-icon';
-            }
-
             if (!response.ok) {
-                throw new Error('Server error: ' + response.status);
+                throw new Error(`Server error: ${response.status}`);
             }
 
             const result = await response.json();
-            log('📨 Response: ' + JSON.stringify(result));
 
             if (result.success) {
-                showToast('✅ لینک پرداخت به چت تلگرام ارسال شد!', 'success');
-                log('✅ Link sent successfully to chat');
+                showToast('✅ Payment link sent to your chat!', 'success');
+                log('✅ Link sent to chat successfully');
 
                 // Haptic feedback
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
                     window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
                 }
 
-                // Show instruction
-                setTimeout(function() {
-                    showToast('💬 لطفاً چت تلگرام خود را بررسی کنید', 'info');
-                }, 2000);
-
-                setTimeout(function() {
-                    showToast('🔗 روی لینک کلیک کنید تا صفحه پرداخت باز شود', 'info');
-                }, 4000);
+                // Show instruction message
+                setTimeout(() => {
+                    showToast('💬 Please check your Telegram chat and open the payment link', 'info');
+                }, 2500);
 
             } else {
                 throw new Error(result.error || 'Failed to send link');
             }
 
-        } catch (fetchError) {
-            // Remove loading state on error
-            if (commissionButton) commissionButton.classList.remove('loading');
-            if (commissionIcon) {
-                commissionIcon.className = 'fas fa-chevron-right right-icon';
-            }
-
-            log('❌ Send error: ' + fetchError.message);
-            console.error('❌ Error:', fetchError);
-            showToast('❌ خطا در ارسال لینک. لطفاً دوباره تلاش کنید.', 'error');
+        } catch (error) {
+            log('❌ Failed to send link: ' + error.message);
+            console.error('❌ Error sending link:', error);
+            showToast('❌ Failed to send payment link. Please try again.', 'error');
         }
 
     } catch (error) {
-        // Remove loading state on error
-        const commissionButton = document.getElementById('commission-button');
-        const commissionIcon = document.getElementById('commission-icon');
-        
-        if (commissionButton) commissionButton.classList.remove('loading');
-        if (commissionIcon) {
-            commissionIcon.className = 'fas fa-chevron-right right-icon';
-        }
-
-        log('❌ Commission error: ' + error.message);
+        log('❌ Commission payment error: ' + error.message);
         console.error('❌ Error:', error);
-        showToast('❌ خطایی رخ داده است', 'error');
+        showToast('❌ An error occurred', 'error');
     }
 }
 
-// ============================================
-// Task Handlers
-// ============================================
+function getTelegramId() {
+    // روش ۱: از APP_CONFIG
+    if (typeof USER_ID !== 'undefined' && USER_ID) {
+        return USER_ID;
+    }
 
-async function handleTaskCompletion() {
-    window.location.href = '/earn';
+    // روش ۲: از WebApp
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        if (user && user.id) {
+            return user.id.toString();
+        }
+    }
+
+    // روش ۳: از URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const telegramIdFromUrl = urlParams.get('telegram_id');
+    if (telegramIdFromUrl) {
+        return telegramIdFromUrl;
+    }
+
+    log('❌ Could not retrieve Telegram ID');
+    return null;
 }
 
-async function handleInviteCheck() {
-    window.location.href = '/friends';
-}
-
-async function handleClaimAirdrop() {
+async function claimAirdrop() {
     try {
-        log('🎁 Claiming airdrop...');
+        log('🎉 Claiming airdrop...');
 
         const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
 
         if (!allCompleted) {
-            showToast('⚠️ لطفاً ابتدا تمام مراحل را تکمیل کنید', 'error');
+            showToast('Please complete all tasks first!', 'error');
             return;
         }
 
-        showToast('🎉 در حال پردازش...', 'info');
+        const claimButton = document.getElementById('claimBtn');
+        if (claimButton) {
+            claimButton.disabled = true;
+            claimButton.textContent = 'Processing...';
+        }
 
         const response = await fetch('/airdrop/claim', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({telegram_id: USER_ID})
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
 
-        if (!response.ok) throw new Error('Claim failed');
+        if (!response.ok) {
+            throw new Error('Server error: ' + response.statusText);
+        }
 
         const data = await response.json();
         log('✅ Claim response: ' + JSON.stringify(data));
 
         if (data.success) {
-            showToast('🎉 ایردراپ با موفقیت دریافت شد!', 'success');
-            
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
+            showToast('🎉 Airdrop claimed successfully!', 'success');
 
-            setTimeout(function() {
-                window.location.reload();
-            }, 2000);
+            if (claimButton) {
+                claimButton.textContent = '✅ Claimed!';
+                claimButton.style.background = '#28a745';
+            }
         } else {
-            throw new Error(data.error || 'Claim failed');
+            throw new Error(data.message || 'Claim failed');
         }
 
     } catch (error) {
         log('❌ Claim error: ' + error.message);
-        showToast('❌ خطا در دریافت ایردراپ', 'error');
+        showToast('Failed to claim airdrop: ' + error.message, 'error');
+
+        const claimButton = document.getElementById('claimBtn');
+        if (claimButton) {
+            claimButton.disabled = false;
+            claimButton.textContent = 'Claim Airdrop';
+        }
     }
 }
 
-// ============================================
-// Page Initialization
-// ============================================
+function checkWalletStatus() {
+    const urlParams = new URLSearchParams(window.location.search);
 
-document.addEventListener('DOMContentLoaded', function() {
-    log('📱 Page loaded');
+    if (urlParams.has('wallet_connected')) {
+        const status = urlParams.get('wallet_connected');
+        if (status === 'success') {
+            showToast('✅ Wallet connected successfully!', 'success');
 
-    // Start countdown
-    startCountdown();
-
-    // Detect Phantom
-    detectPhantom();
-
-    // Update all UI elements
-    updateAllTasksUI();
-
-    // Setup claim button
-    const claimBtn = document.getElementById('claimBtn');
-    if (claimBtn) {
-        claimBtn.addEventListener('click', handleClaimAirdrop);
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        }
     }
 
-    // Close wallet dropdown when clicking outside
-    document.addEventListener('click', function(event) {
-        const dropdown = document.getElementById('wallet-dropdown-content');
-        const walletButton = document.querySelector('#connect-wallet .task-button');
+    if (urlParams.has('wallet_error')) {
+        const error = urlParams.get('wallet_error');
+        showToast('❌ Wallet connection failed: ' + error, 'error');
+    }
 
-        if (dropdown && walletButton) {
-            if (!walletButton.contains(event.target) && !dropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
+    if (urlParams.has('commission_paid')) {
+        const status = urlParams.get('commission_paid');
+        if (status === 'success') {
+            showToast('✅ Commission paid successfully!', 'success');
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         }
-    });
+    }
 
-    log('✅ Initialization complete');
+    if (urlParams.has('commission_error')) {
+        const error = urlParams.get('commission_error');
+        showToast('❌ Commission payment failed: ' + error, 'error');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+    log('🚀 Airdrop page loaded');
+
+    startCountdown();
+
+    updateAllTasksUI();
+
+    checkWalletStatus();
+
+    const connectWalletBtn = document.querySelector('#connect-wallet .task-button');
+    if (connectWalletBtn) {
+        connectWalletBtn.addEventListener('click', handleWalletConnection);
+    }
+
+    const payCommissionBtn = document.querySelector('#pay-commission .task-button');
+    if (payCommissionBtn) {
+        payCommissionBtn.addEventListener('click', handleCommissionPayment);
+    }
+
+    const claimBtn = document.getElementById('claimBtn');
+    if (claimBtn) {
+        claimBtn.addEventListener('click', claimAirdrop);
+    }
+
+    log('✅ Event listeners attached');
 });
 
-// Cleanup on page unload
 window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
