@@ -101,11 +101,15 @@
 
 </head>
 <body>
-    <div class="box">
-        <div class="loader"></div>
-        <h2>Preparing Payment...</h2>
-        <p>You are being redirected to your browser to complete the commission payment.</p>
-        <button class="btn" onclick="openExternal()">Open Manually</button>
-    </div>
+    <div style="text-align:center; margin-top: 100px; color:white;">
+        <h2>Open Payment Page in Your Browser</h2>
+        <p>برای پرداخت کمیسیون، لطفاً روی دکمه زیر کلیک کنید:</p>
+        <a href="/commission/browser/pay?telegram_id={{ telegram_id }}" target="_blank">
+        <button style="padding:15px 30px; font-size:18px; border-radius:10px; background:#7b68ee; color:white; border:none; cursor:pointer;">
+            Open in Browser
+        </button>
+    </a>
+</div>
+
 </body>
 </html>
