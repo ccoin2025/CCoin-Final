@@ -437,84 +437,73 @@ async function disconnectWallet() {
     }
 }
 
-
 async function handleCommissionPayment() {
     try {
         log('💰 Starting commission payment process...');
         console.log('💰 handleCommissionPayment called');
 
-        // بررسی اتصال wallet
+        // Check wallet connection
         if (!tasksCompleted.wallet || !connectedWallet) {
             showToast('⚠️ Please connect your wallet first!', 'error');
             log('❌ Commission payment blocked: wallet not connected');
             return;
         }
 
-        // بررسی پرداخت قبلی
+        // Check if already paid
         if (tasksCompleted.pay) {
             showToast('✅ Commission already paid!', 'info');
             log('ℹ️ Commission already paid');
             return;
         }
 
-        // ✅ ساخت URL کامل برای صفحه کمیسیون
+        // Build commission URL
         const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
 
         log('🔗 Commission URL: ' + commissionUrl);
 
-        // ✅ ارسال درخواست به ربات برای ارسال لینک به چت
-        if (window.Telegram && window.Telegram.WebApp) {
-            try {
-                // ساخت پیام برای ربات
-                const botData = {
-                    action: 'send_commission_link',
+        // Send link to chat via server
+        try {
+            log('📤 Sending link to chat via server...');
+
+            const response = await fetch('/commission/send_link_to_chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
                     telegram_id: USER_ID,
-                    link: commissionUrl
-                };
+                    payment_url: commissionUrl
+                })
+            });
 
-                log('📤 Sending request to bot...');
-
-                // ارسال درخواست به سرور برای ارسال پیام به چت
-                const response = await fetch('/commission/send_link_to_chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        telegram_id: USER_ID,
-                        payment_url: commissionUrl
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showToast('✅ Payment link sent to your chat! Please check your messages.', 'success');
-                    log('✅ Link sent to chat successfully');
-
-                    // Haptic feedback
-                    if (window.Telegram.WebApp.HapticFeedback) {
-                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                    }
-
-                    // نمایش پیام راهنما
-                    setTimeout(() => {
-                        showToast('💬 Open the link from your chat to complete payment', 'info');
-                    }, 2000);
-
-                } else {
-                    throw new Error(result.error || 'Failed to send link');
-                }
-
-            } catch (error) {
-                log('❌ Failed to send link: ' + error.message);
-                console.error('❌ Error sending link:', error);
-                showToast('❌ Failed to send payment link. Please try again.', 'error');
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
             }
 
-        } else {
-            log('❌ Telegram WebApp not available');
-            showToast('❌ Please open this app in Telegram', 'error');
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('✅ Payment link sent to your chat!', 'success');
+                log('✅ Link sent to chat successfully');
+
+                // Haptic feedback
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+                }
+
+                // Show instruction message
+                setTimeout(() => {
+                    showToast('💬 Please check your Telegram chat and open the payment link', 'info');
+                }, 2500);
+
+            } else {
+                throw new Error(result.error || 'Failed to send link');
+            }
+
+        } catch (error) {
+            log('❌ Failed to send link: ' + error.message);
+            console.error('❌ Error sending link:', error);
+            showToast('❌ Failed to send payment link. Please try again.', 'error');
         }
 
     } catch (error) {
