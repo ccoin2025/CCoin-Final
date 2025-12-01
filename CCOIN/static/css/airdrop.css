@@ -261,38 +261,7 @@ flex-direction: column;
 .task-box {
 margin-bottom: 12px;
 }
-
-.toast {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 15px 20px;
-    border-radius: 8px;
-    color: white;
-    font-weight: 500;
-    z-index: 10000;
-    max-width: 300px;
-    word-wrap: break-word;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    transform: translateX(400px);
-    transition: transform 0.3s ease;
 }
-
-.toast.show {
-    transform: translateX(0);
-}
-
-.toast-success {
-    background: #28a745;
-}
-
-.toast-error {
-    background: #dc3545;
-}
-
-.toast-info {
-    background: #007bff;
-}  
 /* Footer styles */
 .footer-icons {
 position: fixed;
