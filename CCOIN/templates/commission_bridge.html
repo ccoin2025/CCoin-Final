@@ -1,61 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redirecting...</title>
 
-    <title>Redirecting...</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600&display=swap');
 
-    <style>
-        body {
-            background: #000;
-            color: #fff;
-            font-family: 'Urbanist', sans-serif;
-            text-align: center;
-            padding: 40px;
+    body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+        font-family: 'Urbanist', sans-serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        text-align: center;
+    }
+
+    .box {
+        max-width: 400px;
+        padding: 20px;
+    }
+
+    h2 {
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+
+    p {
+        font-size: 16px;
+        margin-bottom: 30px;
+    }
+
+    .btn {
+        padding: 15px 30px;
+        font-size: 18px;
+        background: #7b68ee;
+        border-radius: 12px;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn:hover {
+        background: #5a4bdc;
+    }
+
+    /* Loading animation */
+    .loader {
+        border: 6px solid #222;
+        border-top: 6px solid #7b68ee;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px auto;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg);}
+        100% { transform: rotate(360deg);}
+    }
+</style>
+
+<script>
+    function openExternal() {
+        const tg = window.Telegram?.WebApp;
+        const telegramId = "{{ telegram_id }}";
+        const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+
+        try {
+            tg?.openLink(targetUrl, { tryBrowser: true });
+        } catch (e) {
+            window.location.href = targetUrl; // fallback
         }
-        .box {
-            margin-top: 100px;
-        }
-        .btn {
-            margin-top: 30px;
-            padding: 15px 25px;
-            font-size: 18px;
-            background: #7b68ee;
-            border-radius: 10px;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-        }
-    </style>
+    }
 
-    <script>
-        function openExternal() {
-            const tg = window.Telegram?.WebApp;
-            const telegramId = "{{ telegram_id }}";
-
-            const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
-
-            try {
-                // خروج از تگرام → مرورگر بیرونی
-                tg?.openLink(targetUrl, { tryBrowser: true });
-            } catch (e) {
-                window.location.href = targetUrl; // fallback
-            }
-        }
-
-        // Auto open after 600ms
-        window.onload = () => {
-            setTimeout(openExternal, 1600);
-        }
-    </script>
+    window.onload = () => {
+        setTimeout(openExternal, 1200); // سریعتر ریدایرکت
+    }
+</script>
 </head>
 
 <body>
     <div class="box">
-        <h2>Opening Payment Page...</h2>
-        <p>You are being redirected to your browser.</p>
-
+        <div class="loader"></div>
+        <h2>Preparing Payment...</h2>
+        <p>You are being redirected to your browser to complete the commission payment.</p>
         <button class="btn" onclick="openExternal()">Open Manually</button>
     </div>
 </body>
