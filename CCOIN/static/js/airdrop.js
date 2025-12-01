@@ -438,85 +438,84 @@ async function disconnectWallet() {
 }
 
 
-// در فایل airdrop.js
-
 async function handleCommissionPayment() {
     try {
         log('💰 Starting commission payment process...');
 
-        // 1. بررسی اتصال wallet و پرداخت قبلی (بدون تغییر)
+        // بررسی اتصال wallet
         if (!tasksCompleted.wallet || !connectedWallet) {
             showToast('⚠️ Please connect your wallet first!', 'error');
+            log('❌ Commission payment blocked: wallet not connected');
             return;
         }
+
+        // بررسی پرداخت قبلی
         if (tasksCompleted.pay) {
             showToast('✅ Commission already paid!', 'info');
+            log('ℹ️ Commission already paid');
             return;
         }
 
-        // 2. ✅ ساخت URL کامل برای صفحه کمیسیون
-        // این URL را در یک متغیر سراسری یا محلی ذخیره می‌کنیم تا openCommissionPayment به آن دسترسی داشته باشد.
-        window.tempCommissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-        
-        log('🔗 Generated commission payment URL: ' + window.tempCommissionUrl);
+        // ذخیره زمان شروع پرداخت
+        localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
 
-        // 3. ❌ حذف: window.Telegram.WebApp.openLink(...)
+        // ✅ ساخت URL کامل برای صفحه کمیسیون
+        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
         
-        // 4. ✅ جدید: نمایش مودال موجود
-        const modal = document.getElementById('commissionModal');
-        if (modal) {
-            modal.style.display = 'flex'; // یا 'block'
-            showToast('🔑 Please click "Pay Commission" in the window that just appeared.', 'info');
+        log('🔗 Opening commission payment URL: ' + commissionUrl);
 
+        // ✅ فقط برای موبایل: استفاده از API رسمی تلگرام
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+            // باز کردن در مرورگر خارجی
+            window.Telegram.WebApp.openLink(commissionUrl, { 
+                try_instant_view: false
+            });
+            
+            showToast('📱 Opening payment page in your browser...', 'info');
+            
             // Haptic feedback
-            if (window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+            if (window.Telegram.WebApp.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
             
-            log('✅ Commission modal displayed.');
+            log('✅ Payment page opened in external browser');
         } else {
-            // Fallback در صورت عدم وجود مودال
-            window.Telegram.WebApp.openLink(window.tempCommissionUrl, { try_instant_view: false });
+            log('❌ Telegram WebApp not available');
+            showToast('❌ Please open this app in Telegram', 'error');
         }
-
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
         console.error('Commission payment error:', error);
-        showToast('❌ Failed to show payment page', 'error');
+        showToast('❌ Failed to open payment page', 'error');
     }
 }
 
-// در فایل airdrop.js (یا فایل مدیریت مودال)
 
-function showPaymentModal(url) {
-    // فرض می‌کنیم این ID های مودال شما هستند. در صورت نیاز آن را تغییر دهید.
-    const modal = document.getElementById('paymentCommissionModal'); 
-    const linkInput = document.getElementById('paymentLinkInput');   
-    const openBtn = document.getElementById('openExternalLinkBtn');  
-
-    if (modal && linkInput && openBtn) {
-        // 1. نمایش لینک در input
-        linkInput.value = url;
-        
-        // 2. تنظیم عملکرد دکمه باز کردن لینک
-        // **نکته کلیدی:** استفاده از window.open(url, '_blank') به جای API تلگرام، 
-        // احتمال بیشتری دارد که در دستگاه‌های ناسازگار، مرورگر خارجی را فعال کند.
-        openBtn.onclick = function() {
-            window.open(url, '_blank');
-            // بستن مودال
-            modal.style.display = 'none'; 
-        };
-
-        // 3. نمایش مودال
-        modal.style.display = 'flex'; // یا 'block' بسته به CSS شما
-    } else {
-        console.error("Modal elements not found. Fallback to direct opening.");
-        // Fallback نهایی: اگر المان‌ها پیدا نشدند، دوباره سعی کنید لینک را باز کنید
-        window.open(url, '_blank');
+function getTelegramId() {
+    // روش ۱: از APP_CONFIG
+    if (typeof USER_ID !== 'undefined' && USER_ID) {
+        return USER_ID;
     }
-}
 
+    // روش ۲: از WebApp
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        if (user && user.id) {
+            return user.id.toString();
+        }
+    }
+
+    // روش ۳: از URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const telegramIdFromUrl = urlParams.get('telegram_id');
+    if (telegramIdFromUrl) {
+        return telegramIdFromUrl;
+    }
+
+    log('❌ Could not retrieve Telegram ID');
+    return null;
+}
 
 async function claimAirdrop() {
     try {
