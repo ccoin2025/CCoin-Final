@@ -437,41 +437,90 @@ async function disconnectWallet() {
     }
 }
 
+
 async function handleCommissionPayment() {
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        showToast('Please connect wallet first!', 'error');
-        return;
-    }
-
-    if (tasksCompleted.pay) {
-        showToast('Commission already paid!', 'info');
-        return;
-    }
-
-    const btn = document.querySelector('#pay-commission .task-button');
-    btn.classList.add('loading');
-
     try {
-        const response = await fetch('/commission/send_link', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
-            },
-            body: JSON.stringify({ telegram_id: USER_ID })
-        });
+        log('💰 Starting commission payment process...');
+        console.log('💰 handleCommissionPayment called');
 
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            showToast('Payment link sent to your private chat!\nClick it there — always opens in external browser', 'success');
-        } else {
-            showToast(data.detail || 'Failed to send link', 'error');
+        // بررسی اتصال wallet
+        if (!tasksCompleted.wallet || !connectedWallet) {
+            showToast('⚠️ Please connect your wallet first!', 'error');
+            log('❌ Commission payment blocked: wallet not connected');
+            return;
         }
-    } catch (err) {
-        showToast('Connection error', 'error');
-    } finally {
-        btn.classList.remove('loading');
+
+        // بررسی پرداخت قبلی
+        if (tasksCompleted.pay) {
+            showToast('✅ Commission already paid!', 'info');
+            log('ℹ️ Commission already paid');
+            return;
+        }
+
+        // ✅ ساخت URL کامل برای صفحه کمیسیون
+        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
+
+        log('🔗 Commission URL: ' + commissionUrl);
+
+        // ✅ ارسال درخواست به ربات برای ارسال لینک به چت
+        if (window.Telegram && window.Telegram.WebApp) {
+            try {
+                // ساخت پیام برای ربات
+                const botData = {
+                    action: 'send_commission_link',
+                    telegram_id: USER_ID,
+                    link: commissionUrl
+                };
+
+                log('📤 Sending request to bot...');
+
+                // ارسال درخواست به سرور برای ارسال پیام به چت
+                const response = await fetch('/commission/send_link_to_chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        telegram_id: USER_ID,
+                        payment_url: commissionUrl
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('✅ Payment link sent to your chat! Please check your messages.', 'success');
+                    log('✅ Link sent to chat successfully');
+
+                    // Haptic feedback
+                    if (window.Telegram.WebApp.HapticFeedback) {
+                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+                    }
+
+                    // نمایش پیام راهنما
+                    setTimeout(() => {
+                        showToast('💬 Open the link from your chat to complete payment', 'info');
+                    }, 2000);
+
+                } else {
+                    throw new Error(result.error || 'Failed to send link');
+                }
+
+            } catch (error) {
+                log('❌ Failed to send link: ' + error.message);
+                console.error('❌ Error sending link:', error);
+                showToast('❌ Failed to send payment link. Please try again.', 'error');
+            }
+
+        } else {
+            log('❌ Telegram WebApp not available');
+            showToast('❌ Please open this app in Telegram', 'error');
+        }
+
+    } catch (error) {
+        log('❌ Commission payment error: ' + error.message);
+        console.error('❌ Error:', error);
+        showToast('❌ An error occurred', 'error');
     }
 }
 
