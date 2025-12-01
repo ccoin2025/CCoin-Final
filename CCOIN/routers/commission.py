@@ -439,3 +439,15 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
         "wallet_address": user.wallet_address,
         "commission_amount": COMMISSION_AMOUNT
     }
+
+# -------------------------
+# bridge
+# -------------------------
+@router.get("/bridge", response_class=HTMLResponse)
+async def commission_bridge(request: Request, telegram_id: str):
+    return templates.TemplateResponse("commission_bridge.html", {
+        "request": request,
+        "telegram_id": telegram_id
+    })
+
+
