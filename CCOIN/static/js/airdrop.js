@@ -354,7 +354,7 @@ function changeWallet() {
 }
 
 // ============================================
-// Commission Payment Function
+// ✅ UPDATED: Commission Payment Function
 // ============================================
 
 async function handleCommissionPayment() {
@@ -364,16 +364,25 @@ async function handleCommissionPayment() {
 
         // Check wallet connection
         if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('⚠️ Connect wallet first!', 'error');
+            showToast('⚠️ ابتدا کیف پول را متصل کنید!', 'error');
             log('❌ Wallet not connected');
             return;
         }
 
         // Check if already paid
         if (tasksCompleted.pay) {
-            showToast('✅ Already paid!', 'info');
+            showToast('✅ قبلاً پرداخت شده است!', 'info');
             log('ℹ️ Already paid');
             return;
+        }
+
+        // Show loading state
+        const commissionButton = document.getElementById('commission-button');
+        const commissionIcon = document.getElementById('commission-icon');
+        
+        if (commissionButton) commissionButton.classList.add('loading');
+        if (commissionIcon) {
+            commissionIcon.className = 'fas fa-spinner right-icon';
         }
 
         // Build payment URL
@@ -383,7 +392,7 @@ async function handleCommissionPayment() {
         // Send link to Telegram chat
         try {
             log('📤 Sending link to chat...');
-            
+
             const response = await fetch('/commission/send_link_to_chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -393,6 +402,12 @@ async function handleCommissionPayment() {
                 })
             });
 
+            // Remove loading state
+            if (commissionButton) commissionButton.classList.remove('loading');
+            if (commissionIcon) {
+                commissionIcon.className = 'fas fa-chevron-right right-icon';
+            }
+
             if (!response.ok) {
                 throw new Error('Server error: ' + response.status);
             }
@@ -401,9 +416,9 @@ async function handleCommissionPayment() {
             log('📨 Response: ' + JSON.stringify(result));
 
             if (result.success) {
-                showToast('✅ Link sent to chat!', 'success');
-                log('✅ Link sent successfully');
-                
+                showToast('✅ لینک پرداخت به چت تلگرام ارسال شد!', 'success');
+                log('✅ Link sent successfully to chat');
+
                 // Haptic feedback
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
                     window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
@@ -411,23 +426,42 @@ async function handleCommissionPayment() {
 
                 // Show instruction
                 setTimeout(function() {
-                    showToast('💬 Check your Telegram chat', 'info');
-                }, 2500);
+                    showToast('💬 لطفاً چت تلگرام خود را بررسی کنید', 'info');
+                }, 2000);
+
+                setTimeout(function() {
+                    showToast('🔗 روی لینک کلیک کنید تا صفحه پرداخت باز شود', 'info');
+                }, 4000);
 
             } else {
                 throw new Error(result.error || 'Failed to send link');
             }
 
         } catch (fetchError) {
+            // Remove loading state on error
+            if (commissionButton) commissionButton.classList.remove('loading');
+            if (commissionIcon) {
+                commissionIcon.className = 'fas fa-chevron-right right-icon';
+            }
+
             log('❌ Send error: ' + fetchError.message);
             console.error('❌ Error:', fetchError);
-            showToast('❌ Failed to send link. Try again.', 'error');
+            showToast('❌ خطا در ارسال لینک. لطفاً دوباره تلاش کنید.', 'error');
         }
 
     } catch (error) {
+        // Remove loading state on error
+        const commissionButton = document.getElementById('commission-button');
+        const commissionIcon = document.getElementById('commission-icon');
+        
+        if (commissionButton) commissionButton.classList.remove('loading');
+        if (commissionIcon) {
+            commissionIcon.className = 'fas fa-chevron-right right-icon';
+        }
+
         log('❌ Commission error: ' + error.message);
         console.error('❌ Error:', error);
-        showToast('❌ An error occurred', 'error');
+        showToast('❌ خطایی رخ داده است', 'error');
     }
 }
 
@@ -443,35 +477,88 @@ async function handleInviteCheck() {
     window.location.href = '/friends';
 }
 
+async function handleClaimAirdrop() {
+    try {
+        log('🎁 Claiming airdrop...');
+
+        const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
+
+        if (!allCompleted) {
+            showToast('⚠️ لطفاً ابتدا تمام مراحل را تکمیل کنید', 'error');
+            return;
+        }
+
+        showToast('🎉 در حال پردازش...', 'info');
+
+        const response = await fetch('/airdrop/claim', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
+        });
+
+        if (!response.ok) throw new Error('Claim failed');
+
+        const data = await response.json();
+        log('✅ Claim response: ' + JSON.stringify(data));
+
+        if (data.success) {
+            showToast('🎉 ایردراپ با موفقیت دریافت شد!', 'success');
+            
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+
+            setTimeout(function() {
+                window.location.reload();
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Claim failed');
+        }
+
+    } catch (error) {
+        log('❌ Claim error: ' + error.message);
+        showToast('❌ خطا در دریافت ایردراپ', 'error');
+    }
+}
+
 // ============================================
 // Page Initialization
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    log('📄 Page loaded');
-    
+    log('📱 Page loaded');
+
+    // Start countdown
     startCountdown();
-    updateAllTasksUI();
+
+    // Detect Phantom
     detectPhantom();
-    
+
+    // Update all UI elements
+    updateAllTasksUI();
+
+    // Setup claim button
+    const claimBtn = document.getElementById('claimBtn');
+    if (claimBtn) {
+        claimBtn.addEventListener('click', handleClaimAirdrop);
+    }
+
+    // Close wallet dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('wallet-dropdown-content');
+        const walletButton = document.querySelector('#connect-wallet .task-button');
+
+        if (dropdown && walletButton) {
+            if (!walletButton.contains(event.target) && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        }
+    });
+
     log('✅ Initialization complete');
 });
 
-// ============================================
-// Wallet Dropdown Toggle
-// ============================================
-
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('wallet-dropdown-content');
-    const walletButton = document.querySelector('#connect-wallet .task-button');
-    
-    if (dropdown && walletButton) {
-        if (event.target.closest('#connect-wallet') && tasksCompleted.wallet) {
-            dropdown.classList.toggle('show');
-        } else if (!event.target.closest('.wallet-dropdown')) {
-            dropdown.classList.remove('show');
-        }
-    }
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    stopCountdown();
 });
-
-log('✅ Airdrop.js loaded successfully');
