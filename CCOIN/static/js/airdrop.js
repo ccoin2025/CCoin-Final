@@ -448,16 +448,15 @@ async function handleCommissionPayment() {
         return;
     }
 
-    // Show loading state
     const btn = document.querySelector('#pay-commission .task-button');
     btn.classList.add('loading');
 
     try {
         const response = await fetch('/commission/send_link', {
             method: 'POST',
-            headers: {
+            headers: { 
                 'Content-Type': 'application/json',
-                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
             },
             body: JSON.stringify({ telegram_id: USER_ID })
         });
@@ -465,7 +464,7 @@ async function handleCommissionPayment() {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            showToast('Link sent to your private chat with bot!\nClick it there → always opens in external browser', 'success');
+            showToast('Payment link sent to your private chat!\nClick it there — always opens in external browser', 'success');
         } else {
             showToast(data.detail || 'Failed to send link', 'error');
         }
