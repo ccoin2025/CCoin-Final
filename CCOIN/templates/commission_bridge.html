@@ -30,28 +30,25 @@
     </style>
 
     <script>
-    function openExternal() {
-        const tg = window.Telegram?.WebApp;
-        const telegramId = "{{ telegram_id }}";
-        const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+        function openExternal() {
+            const tg = window.Telegram?.WebApp;
+            const telegramId = "{{ telegram_id }}";
 
-        if (tg && tg.openLink) {
+            const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+
             try {
-                tg.openLink(targetUrl, { tryBrowser: true });
+                // خروج از تگرام → مرورگر بیرونی
+                tg?.openLink(targetUrl, { tryBrowser: true });
             } catch (e) {
-                console.error("WebApp openLink failed, fallback to window.location", e);
-                window.location.href = targetUrl;
+                window.location.href = targetUrl; // fallback
             }
-        } else {
-            window.location.href = targetUrl;
         }
-    }
 
-    window.onload = () => {
-        setTimeout(openExternal, 2000);
-    };
-</script>
-
+        // Auto open after 600ms
+        window.onload = () => {
+            setTimeout(openExternal, 1600);
+        }
+    </script>
 </head>
 
 <body>
