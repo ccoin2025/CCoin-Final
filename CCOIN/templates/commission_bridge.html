@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Redirecting...</title>
+
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Urbanist', sans-serif;
+            text-align: center;
+            padding: 40px;
+        }
+        .box {
+            margin-top: 100px;
+        }
+        .btn {
+            margin-top: 30px;
+            padding: 15px 25px;
+            font-size: 18px;
+            background: #7b68ee;
+            border-radius: 10px;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+
+    <script>
+        function openExternal() {
+            const tg = window.Telegram?.WebApp;
+            const telegramId = "{{ telegram_id }}";
+
+            const targetUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
+
+            try {
+                // خروج از تگرام → مرورگر بیرونی
+                tg?.openLink(targetUrl, { tryBrowser: true });
+            } catch (e) {
+                window.location.href = targetUrl; // fallback
+            }
+        }
+
+        // Auto open after 600ms
+        window.onload = () => {
+            setTimeout(openExternal, 600);
+        }
+    </script>
+</head>
+
+<body>
+    <div class="box">
+        <h2>Opening Payment Page...</h2>
+        <p>You are being redirected to your browser.</p>
+
+        <button class="btn" onclick="openExternal()">Open Manually</button>
+    </div>
+</body>
+</html>
