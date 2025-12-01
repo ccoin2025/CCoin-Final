@@ -692,3 +692,142 @@ async def request_commission_link(request: Request, db: Session = Depends(get_db
         logger.error("Error sending commission link", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to send link: {str(e)}")
 
+
+@router.post("/send_link_to_chat", response_class=JSONResponse)
+async def send_link_to_chat(request: Request, db: Session = Depends(get_db)):
+    """
+    Send commission payment link to user's Telegram chat
+    """
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        payment_url = body.get("payment_url")
+
+        if not telegram_id or not payment_url:
+            raise HTTPException(status_code=400, detail="Missing required parameters")
+
+        logger.info("Send link to chat request", extra={
+            "telegram_id": telegram_id,
+            "payment_url": payment_url
+        })
+
+        # بررسی کاربر
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            logger.warning("User not found", extra={"telegram_id": telegram_id})
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # بررسی پرداخت قبلی
+        if user.commission_paid:
+            logger.info("Commission already paid", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": False,
+                "error": "Commission already paid"
+            }, status_code=400)
+
+        # بررسی اتصال wallet
+        if not user.wallet_address:
+            logger.warning("Wallet not connected", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": False,
+                "error": "Wallet not connected. Please connect your wallet first."
+            }, status_code=400)
+
+        # ارسال پیام به چت کاربر
+        try:
+            from telegram import Bot
+            from telegram.constants import ParseMode
+            
+            # دریافت BOT_TOKEN از config
+            from CCOIN.config import BOT_TOKEN
+            
+            if not BOT_TOKEN:
+                raise ValueError("BOT_TOKEN not configured")
+            
+            bot = Bot(token=BOT_TOKEN)
+            
+            # متن پیام (دو زبانه)
+            message_text = (
+                "🔔 <b>Commission Payment Required</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Dear User,\n\n"
+                "To complete your CCoin airdrop registration, please pay the commission fee.\n\n"
+                f"💰 <b>Amount:</b> {COMMISSION_AMOUNT} SOL\n"
+                "📱 <b>Method:</b> Phantom Wallet\n\n"
+                "<b>📋 Payment Instructions:</b>\n\n"
+                "1️⃣ Click the link below\n"
+                "2️⃣ Complete payment in Phantom wallet\n"
+                "3️⃣ Return to bot after payment\n"
+                "4️⃣ Payment will be verified automatically\n\n"
+                "👇 <b>Click here to pay:</b>\n"
+                f"{payment_url}\n\n"
+            )
+
+            # ارسال پیام
+            await bot.send_message(
+                chat_id=int(telegram_id),
+                text=message_text,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=False
+            )
+
+            logger.info("Payment link sent to chat successfully", extra={
+                "telegram_id": telegram_id
+            })
+
+            return {
+                "success": True,
+                "message": "Payment link sent to your chat successfully"
+            }
+
+        except Exception as e:
+            logger.error("Failed to send Telegram message", extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "telegram_id": telegram_id
+            }, exc_info=True)
+            
+            return JSONResponse({
+                "success": False,
+                "error": f"Failed to send message to Telegram: {str(e)}"
+            }, status_code=500)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("send_link_to_chat error", extra={
+            "error": str(e),
+            "error_type": type(e).__name__
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/check_status", response_class=JSONResponse)
+async def check_commission_status(
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if user has paid commission
+    """
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        
+        if not user:
+            return {
+                "commission_paid": False,
+                "message": "User not found"
+            }
+        
+        return {
+            "commission_paid": user.commission_paid,
+            "transaction_hash": user.commission_transaction_hash if user.commission_paid else None,
+            "payment_date": user.commission_payment_date.isoformat() if user.commission_paid and user.commission_payment_date else None
+        }
+        
+    except Exception as e:
+        logger.error("check_status error", extra={"error": str(e), "telegram_id": telegram_id})
+        return {
+            "commission_paid": False,
+            "error": str(e)
+        }
