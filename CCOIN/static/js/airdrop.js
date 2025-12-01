@@ -448,23 +448,33 @@ async function handleCommissionPayment() {
         return;
     }
 
+    // Show loading state
+    const btn = document.querySelector('#pay-commission .task-button');
+    btn.classList.add('loading');
+
     try {
         const response = await fetch('/commission/send_link', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+            },
             body: JSON.stringify({ telegram_id: USER_ID })
         });
 
-        if (response.ok) {
-            showToast('Payment link sent to your private chat!\nClick there — always opens in external browser', 'success');
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            showToast('Link sent to your private chat with bot!\nClick it there → always opens in external browser', 'success');
         } else {
-            showToast('Failed to send link', 'error');
+            showToast(data.detail || 'Failed to send link', 'error');
         }
     } catch (err) {
-        showToast('Server connection error', 'error');
+        showToast('Connection error', 'error');
+    } finally {
+        btn.classList.remove('loading');
     }
 }
-
 
 function getTelegramId() {
     // روش ۱: از APP_CONFIG
