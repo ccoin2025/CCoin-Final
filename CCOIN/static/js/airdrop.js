@@ -1,8 +1,6 @@
 // ============================================
-// CCoin Airdrop JavaScript - Version 2.0
+// CCoin Airdrop JavaScript
 // ============================================
-
-console.log('🚀 Airdrop.js v2.0 loaded');
 
 // Check for APP_CONFIG and create fallback if not exists
 if (typeof window.APP_CONFIG === 'undefined') {
@@ -51,7 +49,7 @@ let countdownInterval = null;
 // ============================================
 
 function log(msg) {
-    console.log('[Airdrop v2.0] ' + msg);
+    console.log('[Airdrop] ' + msg);
 }
 
 function showToast(message, type = 'info') {
@@ -356,24 +354,24 @@ function changeWallet() {
 }
 
 // ============================================
-// NEW: Commission Payment Function
+// ✅ UPDATED: Commission Payment Function
 // ============================================
 
 async function handleCommissionPayment() {
     try {
-        log('💰 Starting commission payment (v2.0)...');
-        console.log('💰 handleCommissionPayment v2.0 called');
+        log('💰 Starting commission payment...');
+        console.log('💰 handleCommissionPayment called');
 
         // Check wallet connection
         if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('⚠️ Please connect wallet first!', 'error');
+            showToast('⚠️ ابتدا کیف پول را متصل کنید!', 'error');
             log('❌ Wallet not connected');
             return;
         }
 
         // Check if already paid
         if (tasksCompleted.pay) {
-            showToast('✅ Already paid!', 'info');
+            showToast('✅ قبلاً پرداخت شده است!', 'info');
             log('ℹ️ Already paid');
             return;
         }
@@ -384,7 +382,7 @@ async function handleCommissionPayment() {
         
         if (commissionButton) commissionButton.classList.add('loading');
         if (commissionIcon) {
-            commissionIcon.className = 'fas fa-spinner fa-spin right-icon';
+            commissionIcon.className = 'fas fa-spinner right-icon';
         }
 
         // Build payment URL
@@ -393,7 +391,7 @@ async function handleCommissionPayment() {
 
         // Send link to Telegram chat
         try {
-            log('📤 Sending link to chat via /commission/send_link_to_chat...');
+            log('📤 Sending link to chat...');
 
             const response = await fetch('/commission/send_link_to_chat', {
                 method: 'POST',
@@ -410,19 +408,15 @@ async function handleCommissionPayment() {
                 commissionIcon.className = 'fas fa-chevron-right right-icon';
             }
 
-            log('📥 Response status: ' + response.status);
-
             if (!response.ok) {
-                const errorText = await response.text();
-                log('❌ Server error response: ' + errorText);
                 throw new Error('Server error: ' + response.status);
             }
 
             const result = await response.json();
-            log('📨 Response data: ' + JSON.stringify(result));
+            log('📨 Response: ' + JSON.stringify(result));
 
             if (result.success) {
-                showToast('✅ Payment link sent to Telegram chat!', 'success');
+                showToast('✅ لینک پرداخت به چت تلگرام ارسال شد!', 'success');
                 log('✅ Link sent successfully to chat');
 
                 // Haptic feedback
@@ -432,15 +426,14 @@ async function handleCommissionPayment() {
 
                 // Show instruction
                 setTimeout(function() {
-                    showToast('💬 Please check your Telegram chat', 'info');
+                    showToast('💬 لطفاً چت تلگرام خود را بررسی کنید', 'info');
                 }, 2000);
 
                 setTimeout(function() {
-                    showToast('🔗 Click the link to open payment page', 'info');
+                    showToast('🔗 روی لینک کلیک کنید تا صفحه پرداخت باز شود', 'info');
                 }, 4000);
 
             } else {
-                log('❌ Server returned error: ' + (result.error || 'Unknown'));
                 throw new Error(result.error || 'Failed to send link');
             }
 
@@ -451,9 +444,9 @@ async function handleCommissionPayment() {
                 commissionIcon.className = 'fas fa-chevron-right right-icon';
             }
 
-            log('❌ Fetch error: ' + fetchError.message);
-            console.error('❌ Full error:', fetchError);
-            showToast('❌ Failed to send link. Please try again.', 'error');
+            log('❌ Send error: ' + fetchError.message);
+            console.error('❌ Error:', fetchError);
+            showToast('❌ خطا در ارسال لینک. لطفاً دوباره تلاش کنید.', 'error');
         }
 
     } catch (error) {
@@ -467,8 +460,8 @@ async function handleCommissionPayment() {
         }
 
         log('❌ Commission error: ' + error.message);
-        console.error('❌ Full error:', error);
-        showToast('❌ An error occurred', 'error');
+        console.error('❌ Error:', error);
+        showToast('❌ خطایی رخ داده است', 'error');
     }
 }
 
@@ -491,11 +484,11 @@ async function handleClaimAirdrop() {
         const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
 
         if (!allCompleted) {
-            showToast('⚠️ Please complete all tasks first', 'error');
+            showToast('⚠️ لطفاً ابتدا تمام مراحل را تکمیل کنید', 'error');
             return;
         }
 
-        showToast('🎉 Processing...', 'info');
+        showToast('🎉 در حال پردازش...', 'info');
 
         const response = await fetch('/airdrop/claim', {
             method: 'POST',
@@ -509,7 +502,7 @@ async function handleClaimAirdrop() {
         log('✅ Claim response: ' + JSON.stringify(data));
 
         if (data.success) {
-            showToast('🎉 Airdrop claimed successfully!', 'success');
+            showToast('🎉 ایردراپ با موفقیت دریافت شد!', 'success');
             
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
@@ -524,7 +517,7 @@ async function handleClaimAirdrop() {
 
     } catch (error) {
         log('❌ Claim error: ' + error.message);
-        showToast('❌ Failed to claim airdrop', 'error');
+        showToast('❌ خطا در دریافت ایردراپ', 'error');
     }
 }
 
@@ -533,7 +526,7 @@ async function handleClaimAirdrop() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    log('📱 Page loaded - v2.0');
+    log('📱 Page loaded');
 
     // Start countdown
     startCountdown();
@@ -562,12 +555,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    log('✅ Initialization complete - v2.0');
+    log('✅ Initialization complete');
 });
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
-
-console.log('✅ Airdrop.js v2.0 fully loaded');
