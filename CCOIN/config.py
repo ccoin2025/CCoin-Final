@@ -7,7 +7,7 @@ logger = structlog.get_logger()
 load_dotenv()
 
 # Telegram Bot Settings
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 if not BOT_TOKEN:
     logger.warning("BOT_TOKEN is not set in environment variables")
 
