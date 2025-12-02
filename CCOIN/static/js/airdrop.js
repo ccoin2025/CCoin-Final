@@ -448,38 +448,66 @@ async function handleCommissionPayment() {
         return;
     }
 
-    // فقط مودال را باز کن
-    document.getElementById('commissionModal').classList.add('show');
+    // باز کردن مودال
+    openCommissionModal();
+}
+
+function openCommissionModal() {
+    const modal = document.getElementById('commissionModal');
+    if (modal) {
+        modal.classList.add('show');
+        log('Commission modal opened');
+    }
+}
+
+function closeCommissionModal() {
+    const modal = document.getElementById('commissionModal');
+    if (modal) {
+        modal.classList.remove('show');
+        log('Commission modal closed');
+    }
 }
 
 async function sendPaymentLinkToChat() {
-    closeCommissionModal();
-    showToast('درحال ارسال درخواست...', 'info');
-
     try {
+        log('📤 Sending commission payment link to Telegram...');
+        
+        // نمایش loading
+        showToast('Sending link to your Telegram...', 'info');
+        
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        showToast('CSRF token: ' + (csrfToken ? 'دارد' : 'ندارد'), csrfToken ? 'success' : 'error');
-
+        
         const response = await fetch('/commission/send_payment_link', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-Token': csrfToken
             },
-            body: JSON.stringify({ telegram_id: USER_ID })
+            body: JSON.stringify({ 
+                telegram_id: USER_ID 
+            })
         });
 
-        showToast('Status کد: ' + response.status, response.ok ? 'success' : 'error');
-
         const result = await response.json();
-        
-        if (result.success) {
-            showToast('لینک با موفقیت ارسال شد!', 'success');
+
+        if (response.ok && result.success) {
+            log('✅ Payment link sent successfully');
+            showToast(result.message || 'Link sent! Check your Telegram.', 'success');
+            
+            // بستن مودال بعد از 2 ثانیه
+            setTimeout(() => {
+                closeCommissionModal();
+            }, 2000);
+            
         } else {
-            showToast('خطا: ' + (result.error || 'نامشخص'), 'error');
+            log('❌ Failed to send link: ' + (result.error || result.message));
+            showToast(result.error || result.message || 'Failed to send link', 'error');
         }
-    } catch (err) {
-        showToast('خطای شبکه: ' + err.message, 'error');
+
+    } catch (error) {
+        log('❌ Error sending payment link: ' + error.message);
+        showToast('Network error. Please try again.', 'error');
+        console.error('Error:', error);
     }
 }
 
@@ -675,9 +703,7 @@ async function sendCommissionLinkToChat() {
     }
 }
 
-/**
- * بستن مودال کمیسیون
- */
+ 
 function closeCommissionModal() {
     const modal = document.getElementById('commission-modal');
     if (modal) {
@@ -686,9 +712,7 @@ function closeCommissionModal() {
     }
 }
 
-/**
- * باز کردن مودال کمیسیون
- */
+
 function openCommissionModal() {
     const modal = document.getElementById('commission-modal');
     if (modal) {
