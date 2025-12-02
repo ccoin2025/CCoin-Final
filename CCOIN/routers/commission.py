@@ -443,34 +443,59 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
 # -------------------------
 # send_payment_link
 # -------------------------
+
 @router.post("/send_payment_link", response_class=JSONResponse)
-async def send_payment_link(request: Request, db: Session = Depends(get_db)):
+async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
+    """
+    Send commission payment link to user's Telegram chat
+    """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-
+        
         if not telegram_id:
-            raise HTTPException(status_code=400, detail="Missing telegram_id")
-
+            logger.warning("Missing telegram_id in send_payment_link request")
+            return JSONResponse({
+                "success": False,
+                "error": "Missing telegram_id"
+            }, status_code=400)
+        
+        # بررسی وجود کاربر
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
+            logger.warning("User not found", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": False,
+                "error": "User not found"
+            }, status_code=404)
+        
+        # بررسی اینکه آیا قبلاً پرداخت کرده
         if user.commission_paid:
-            return {"success": False, "error": "Already paid"}
-
-        # ساخت لینک پرداخت
-        payment_url = f"{request.base_url}commission/browser/pay?telegram_id={telegram_id}"
-
-        # استفاده از تابع موجود در telegram_security.py
-        from CCOIN.utils.telegram_security import send_commission_payment_link
-        success = await send_commission_payment_link(telegram_id=str(telegram_id), bot_token=BOT_TOKEN)
-
+            logger.info("Commission already paid", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": True,
+                "message": "Commission already paid!"
+            })
+        
+        # ارسال لینک به تلگرام
+        success = await send_commission_payment_link(telegram_id)
+        
         if success:
-            return {"success": True}
+            logger.info("Commission payment link sent successfully", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": True,
+                "message": "Payment link sent to your Telegram! Please check your messages."
+            })
         else:
-            raise Exception("Failed to send message")
-
+            logger.error("Failed to send commission payment link", extra={"telegram_id": telegram_id})
+            return JSONResponse({
+                "success": False,
+                "error": "Failed to send link. Please try again."
+            }, status_code=500)
+            
     except Exception as e:
-        logger.error("send_payment_link error", extra={"error": str(e)})
-        return {"success": False, "error": str(e)}
+        logger.error("Error in send_payment_link_to_telegram", extra={"error": str(e)}, exc_info=True)
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
