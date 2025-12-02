@@ -25,6 +25,7 @@ import base58
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME
+from CCOIN.utils.telegram_security import send_commission_payment_link
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()  # main.py شامل خواهد کرد با prefix="/commission"
@@ -453,6 +454,8 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         body = await request.json()
         telegram_id = body.get("telegram_id")
         
+        logger.info("send_payment_link called", extra={"telegram_id": telegram_id})
+        
         if not telegram_id:
             logger.warning("Missing telegram_id in send_payment_link request")
             return JSONResponse({
@@ -469,7 +472,7 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
                 "error": "User not found"
             }, status_code=404)
         
-        # بررسی اینکه آیا قبلاً پرداخت کرده
+        # بررسی پرداخت قبلی
         if user.commission_paid:
             logger.info("Commission already paid", extra={"telegram_id": telegram_id})
             return JSONResponse({
@@ -478,13 +481,14 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
             })
         
         # ارسال لینک به تلگرام
+        logger.info("Calling send_commission_payment_link", extra={"telegram_id": telegram_id})
         success = await send_commission_payment_link(telegram_id)
         
         if success:
             logger.info("Commission payment link sent successfully", extra={"telegram_id": telegram_id})
             return JSONResponse({
                 "success": True,
-                "message": "Payment link sent to your Telegram! Please check your messages."
+                "message": "✅ Payment link sent to your Telegram! Please check your messages."
             })
         else:
             logger.error("Failed to send commission payment link", extra={"telegram_id": telegram_id})
