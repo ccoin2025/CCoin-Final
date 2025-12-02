@@ -980,7 +980,17 @@
                 }
             }
         }
-
+        window.APP_CONFIG = {
+            USER_ID: '{{ telegram_id }}',
+            SOLANA_RPC_URL: '{{ solana_rpc }}',
+            COMMISSION_AMOUNT: parseFloat('{{ commission_amount }}'),
+            ADMIN_WALLET: '{{ admin_wallet }}',
+            INITIAL_TASKS_COMPLETED: {{ 'true' if tasks_completed else 'false' }},
+            INITIAL_INVITED_FRIENDS: {{ 'true' if invited_friends else 'false' }},
+            INITIAL_WALLET_CONNECTED: {{ 'true' if wallet_connected else 'false' }},
+            INITIAL_COMMISSION_PAID: {{ 'true' if commission_paid else 'false' }},
+            INITIAL_WALLET_ADDRESS: '{{ wallet_address if wallet_address else '' }}'
+        };
         setInterval(checkCommissionStatus, 10000);
     </script>
     <script src="/static/js/airdrop.js"></script>
