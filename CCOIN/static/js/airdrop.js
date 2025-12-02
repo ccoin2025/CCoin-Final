@@ -662,33 +662,6 @@ window.addEventListener('beforeunload', function() {
 });
 
 
-/**
- * باز کردن مودال کمیسیون
- */
-function openCommissionModal() {
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.add('show');
-        log('✅ Commission modal opened');
-    } else {
-        console.error('❌ Commission modal not found!');
-    }
-}
-
-/**
- * بستن مودال کمیسیون  
- */
-function closeCommissionModal() {
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.remove('show');
-        log('✅ Commission modal closed');
-    }
-}
-
-/**
- * ارسال لینک پرداخت به چت تلگرام
- */
 async function sendPaymentLinkToChat() {
     try {
         console.log('🔵 sendPaymentLinkToChat called!'); // تست اولیه
@@ -740,20 +713,70 @@ async function sendPaymentLinkToChat() {
     }
 }
 
-// مطمئن شوید که این تابع هم وجود دارد
+/**
+ * باز کردن مودال کمیسیون
+ */
+function openCommissionModal() {
+    console.log('🔵 [DEBUG] openCommissionModal called');
+    const modal = document.getElementById('commissionModal');
+    if (modal) {
+        modal.classList.add('show');
+        console.log('✅ Modal opened successfully');
+        log('Commission modal opened');
+    } else {
+        console.error('❌ commissionModal element not found in DOM!');
+        alert('Error: Modal not found. Please refresh the page.');
+    }
+}
+
+/**
+ * بستن مودال کمیسیون
+ */
+function closeCommissionModal() {
+    console.log('🔵 [DEBUG] closeCommissionModal called');
+    const modal = document.getElementById('commissionModal');
+    if (modal) {
+        modal.classList.remove('show');
+        console.log('✅ Modal closed successfully');
+        log('Commission modal closed');
+    }
+}
+
+/**
+ * Handle commission payment button click
+ */
 async function handleCommissionPayment() {
-    console.log('🔵 handleCommissionPayment called!');
+    console.log('🔵 [DEBUG] handleCommissionPayment called');
+    console.log('🔵 [DEBUG] Wallet connected:', tasksCompleted.wallet);
+    console.log('🔵 [DEBUG] Connected wallet address:', connectedWallet);
+    console.log('🔵 [DEBUG] Commission paid:', tasksCompleted.pay);
     
     if (!tasksCompleted.wallet || !connectedWallet) {
+        console.log('❌ Wallet not connected');
         showToast('Please connect your wallet first!', 'error');
         return;
     }
 
     if (tasksCompleted.pay) {
+        console.log('ℹ️ Commission already paid');
         showToast('Commission already paid!', 'info');
         return;
     }
 
-    // باز کردن مودال
+    console.log('✅ Opening commission modal...');
     openCommissionModal();
 }
+
+/**
+ * تابع تست برای دیباگ
+ */
+window.testCommissionModal = function() {
+    console.log('🧪 Testing commission modal...');
+    console.log('Modal element:', document.getElementById('commissionModal'));
+    console.log('Send button:', document.getElementById('sendPaymentLinkBtn'));
+    console.log('Close button:', document.getElementById('closeCommissionModalBtn'));
+    console.log('APP_CONFIG:', window.APP_CONFIG);
+    openCommissionModal();
+};
+
+console.log('✅ Commission modal functions loaded');
