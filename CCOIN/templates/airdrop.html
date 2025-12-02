@@ -533,16 +533,25 @@
             </div>
         </div>
 
-        <div id="commissionModal" class="commission-modal">
+        <div class="commission-modal" id="commissionModal">
             <div class="commission-modal-content">
-                <h3>💰 Pay Commission</h3>
-                <p>Complete your commission payment to unlock airdrop eligibility.</p>
-                <div class="phantom-modal-buttons">
-                    <button class="phantom-modal-btn primary" onclick="openCommissionPayment()">
-                        Pay Commission
-                    </button>
-                    <button class="phantom-modal-btn secondary" onclick="closeCommissionModal()">
-                        Cancel
+                <span class="close" onclick="closeCommissionModal()">×</span>
+                <h3>Commission Payment Required</h3>
+                <p>To be eligible for the airdrop, you must pay a small commission fee of {{ commission_amount }}
+                    SOL.</p>
+                <div class="info-box">
+                    <h4>How it works:</h4>
+                    <ol>
+                        <li>We will send you a payment link in your private chat with the bot</li>
+                        <li>Click the link — it will open in your browser</li>
+                        <li>Complete the payment in Phantom (extension or mobile app)</li>
+                        <li>Return to the app — payment will be detected automatically</li>
+                    </ol>
+                </div>
+                <div class="commission-modal-buttons">
+                    <button class="commission-modal-btn secondary" onclick="closeCommissionModal()">Cancel</button>
+                    <button class="commission-modal-btn primary" onclick="sendPaymentLinkToChat()">
+                        Send Payment Link to Chat
                     </button>
                 </div>
             </div>
