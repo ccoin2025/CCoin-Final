@@ -632,3 +632,67 @@ window.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
+
+
+async function sendCommissionLinkToChat() {
+    try {
+        log('📤 Sending commission payment link to Telegram chat...');
+        
+        // نمایش وضعیت loading
+        showToast('Sending link to your Telegram...', 'info');
+        
+        // ارسال درخواست به سرور
+        const response = await fetch('/airdrop/send_commission_link', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: USER_ID
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            log('✅ Commission link sent successfully');
+            showToast(data.message || 'Link sent! Check your Telegram messages.', 'success');
+            
+            // بستن مودال بعد از 2 ثانیه
+            setTimeout(() => {
+                closeCommissionModal();
+            }, 2000);
+            
+        } else {
+            log('❌ Failed to send commission link: ' + data.message);
+            showToast(data.message || 'Failed to send link. Please try again.', 'error');
+        }
+
+    } catch (error) {
+        log('❌ Error sending commission link: ' + error.message);
+        showToast('Network error. Please check your connection.', 'error');
+        console.error('Error:', error);
+    }
+}
+
+/**
+ * بستن مودال کمیسیون
+ */
+function closeCommissionModal() {
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        log('Commission modal closed');
+    }
+}
+
+/**
+ * باز کردن مودال کمیسیون
+ */
+function openCommissionModal() {
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.add('show');
+        log('Commission modal opened');
+    }
+}        
