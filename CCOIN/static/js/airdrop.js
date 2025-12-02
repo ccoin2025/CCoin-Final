@@ -455,19 +455,20 @@ async function handleCommissionPayment() {
 async function sendPaymentLinkToChat() {
     closeCommissionModal();
 
-    const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-
     try {
         const response = await fetch('/commission/send_payment_link', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({telegram_id: USER_ID})
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ telegram_id: USER_ID })
         });
 
         const result = await response.json();
 
         if (result.success) {
-            showToast('Payment link sent to your chat!', 'success');
+            showToast('Payment link sent to your private chat!', 'success');
             if (window.Telegram?.WebApp?.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
