@@ -454,30 +454,32 @@ async function handleCommissionPayment() {
 
 async function sendPaymentLinkToChat() {
     closeCommissionModal();
+    showToast('درحال ارسال درخواست...', 'info');
 
     try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        showToast('CSRF token: ' + (csrfToken ? 'دارد' : 'ندارد'), csrfToken ? 'success' : 'error');
+
         const response = await fetch('/commission/send_payment_link', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                'X-CSRF-Token': csrfToken
             },
             body: JSON.stringify({ telegram_id: USER_ID })
         });
 
-        const result = await response.json();
+        showToast('Status کد: ' + response.status, response.ok ? 'success' : 'error');
 
+        const result = await response.json();
+        
         if (result.success) {
-            showToast('Payment link sent to your private chat!', 'success');
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
+            showToast('لینک با موفقیت ارسال شد!', 'success');
         } else {
-            throw new Error(result.error || 'Failed');
+            showToast('خطا: ' + (result.error || 'نامشخص'), 'error');
         }
     } catch (err) {
-        showToast('Failed to send link. Try again.', 'error');
-        console.error(err);
+        showToast('خطای شبکه: ' + err.message, 'error');
     }
 }
 
