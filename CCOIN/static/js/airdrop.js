@@ -438,79 +438,50 @@ async function disconnectWallet() {
 }
 
 async function handleCommissionPayment() {
-    try {
-        log('💰 Starting commission payment process...');
-        console.log('💰 handleCommissionPayment called');
-
-        // Check wallet connection
-        if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('⚠️ Please connect your wallet first!', 'error');
-            log('❌ Commission payment blocked: wallet not connected');
-            return;
-        }
-
-        // Check if already paid
-        if (tasksCompleted.pay) {
-            showToast('✅ Commission already paid!', 'info');
-            log('ℹ️ Commission already paid');
-            return;
-        }
-
-        // Build commission URL
-        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-
-        log('🔗 Commission URL: ' + commissionUrl);
-
-        // Send link to chat via server
-        try {
-            log('📤 Sending link to chat via server...');
-
-            const response = await fetch('/commission/send_link_to_chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    telegram_id: USER_ID,
-                    payment_url: commissionUrl
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (result.success) {
-                showToast('✅ Payment link sent to your chat!', 'success');
-                log('✅ Link sent to chat successfully');
-
-                // Haptic feedback
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
-                    window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                }
-
-                // Show instruction message
-                setTimeout(() => {
-                    showToast('💬 Please check your Telegram chat and open the payment link', 'info');
-                }, 2500);
-
-            } else {
-                throw new Error(result.error || 'Failed to send link');
-            }
-
-        } catch (error) {
-            log('❌ Failed to send link: ' + error.message);
-            console.error('❌ Error sending link:', error);
-            showToast('❌ Failed to send payment link. Please try again.', 'error');
-        }
-
-    } catch (error) {
-        log('❌ Commission payment error: ' + error.message);
-        console.error('❌ Error:', error);
-        showToast('❌ An error occurred', 'error');
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Please connect your wallet first!', 'error');
+        return;
     }
+
+    if (tasksCompleted.pay) {
+        showToast('Commission already paid!', 'info');
+        return;
+    }
+
+    // فقط مودال را باز کن
+    document.getElementById('commissionModal').classList.add('show');
+}
+
+async function sendPaymentLinkToChat() {
+    closeCommissionModal();
+
+    const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
+
+    try {
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Payment link sent to your chat!', 'success');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+        } else {
+            throw new Error(result.error || 'Failed');
+        }
+    } catch (err) {
+        showToast('Failed to send link. Try again.', 'error');
+        console.error(err);
+    }
+}
+
+function closeCommissionModal() {
+    document.getElementById('commissionModal').classList.remove('show');
 }
 
 function getTelegramId() {
