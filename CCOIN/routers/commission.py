@@ -441,13 +441,38 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
     }
 
 # -------------------------
-# bridge
+# send_payment_link
 # -------------------------
-@router.get("/bridge", response_class=HTMLResponse)
-async def commission_bridge(request: Request, telegram_id: str):
-    return templates.TemplateResponse("commission_bridge.html", {
-        "request": request,
-        "telegram_id": telegram_id
-    })
+@router.post("/send_payment_link", response_class=JSONResponse)
+async def send_payment_link(request: Request, db: Session = Depends(get_db)):
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user.commission_paid:
+            return {"success": False, "error": "Already paid"}
+
+        # ساخت لینک پرداخت
+        payment_url = f"{request.base_url}commission/browser/pay?telegram_id={telegram_id}"
+
+        # استفاده از تابع موجود در telegram_security.py
+        from CCOIN.utils.telegram_security import send_commission_payment_link
+        success = await send_commission_payment_link(telegram_id=str(telegram_id), bot_token=BOT_TOKEN)
+
+        if success:
+            return {"success": True}
+        else:
+            raise Exception("Failed to send message")
+
+    except Exception as e:
+        logger.error("send_payment_link error", extra={"error": str(e)})
+        return {"success": False, "error": str(e)}
 
 
