@@ -1,8 +1,9 @@
 from fastapi import HTTPException, Request, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.error import TelegramError
 from CCOIN.models.user import User
 from CCOIN.database import get_db
 from CCOIN.config import BOT_TOKEN, TELEGRAM_CHANNEL_USERNAME
@@ -10,7 +11,6 @@ import requests
 import uuid
 import structlog
 import os
-from urllib.parse import urlencode
 
 structlog.configure(
     processors=[
@@ -18,7 +18,6 @@ structlog.configure(
         structlog.stdlib.add_log_level,
         structlog.processors.JSONRenderer(),
     ],
-    context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
@@ -29,201 +28,136 @@ logger = structlog.get_logger()
 # Initialize Telegram Bot Application
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+
 def is_user_in_telegram_channel(user_id: int) -> bool:
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": f"@{TELEGRAM_CHANNEL_USERNAME}", "user_id": user_id}
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code == 200:
-            data = response.json()
-            status = data.get("result", {}).get("status")
+            status = response.json().get("result", {}).get("status")
             return status in ["member", "administrator", "creator"]
-        logger.error(f"Telegram API error: {response.status_code} - {response.text}")
+        logger.error("Telegram getChatMember error", extra={"status": response.status_code, "text": response.text})
         return False
     except Exception as e:
-        logger.error(f"Error checking Telegram channel membership: {e}")
+        logger.error("Error checking channel membership", extra={"error": str(e)})
         return False
+
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.session.get("telegram_id")
     if not telegram_id:
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
-    
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
     return user
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from CCOIN.database import SessionLocal
     db = SessionLocal()
-    
     try:
         telegram_id = str(update.message.from_user.id)
-        username = update.message.from_user.username
-        first_name = update.message.from_user.first_name
-        last_name = update.message.from_user.last_name
+        username = update.message.from_user.username or ""
+        first_name = update.message.from_user.first_name or ""
+        last_name = update.message.from_user.last_name or ""
         referral_code = context.args[0] if context.args else None
-        
-        logger.info(f"Processing /start command for user {telegram_id}")
-        
-        # بررسی اینکه آیا کاربر قبلاً وجود دارد
+
+        logger.info("Processing /start", extra={"telegram_id": telegram_id})
+
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        
         is_new_user = False
-        
+
         if not user:
-            # کاربر جدید است
             is_new_user = True
-            logger.info(f"Creating new user: {telegram_id}")
-            
             user = User(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
                 last_name=last_name,
                 referral_code=str(uuid.uuid4())[:8],
-                tokens=2000,  # welcome bonus
+                tokens=2000,
                 first_login=True,
             )
-            
-            # فقط برای کاربران جدید کد رفرال پردازش می‌شود
+            db.add(user)
+
             if referral_code:
                 referrer = db.query(User).filter(User.referral_code == referral_code).first()
                 if referrer:
                     user.referred_by = referrer.id
-                    referrer.tokens += 50  # جایزه برای صاحب رفرال
-                    logger.info(f"New user {telegram_id} referred by {referrer.telegram_id}")
-                else:
-                    logger.warning(f"Invalid referral code: {referral_code}")
-            else:
-                logger.info(f"New user {telegram_id} joined without referral code")
-            
-            db.add(user)
+                    referrer.tokens += 50
+                    logger.info("Referral applied", extra={"referrer": referrer.telegram_id})
+
             db.commit()
             db.refresh(user)
-            logger.info(f"New user created: {telegram_id} with 2000 tokens")
-        
+
         else:
-            # کاربر قبلاً وجود داشته
-            logger.info(f"Existing user: {telegram_id}, first_login={user.first_login}")
-            
-            # اگر کاربر قبلاً وجود داشته باشد، کد رفرال پردازش نمی‌شود
-            if referral_code:
-                logger.info(f"Ignoring referral code {referral_code} for existing user {telegram_id}")
-            
-            # فقط اطلاعات کاربر را به‌روزرسانی می‌کنیم (در صورت نیاز)
+            # Update info if changed
+            updated = False
             if user.username != username:
                 user.username = username
+                updated = True
             if user.first_name != first_name:
                 user.first_name = first_name
+                updated = True
             if user.last_name != last_name:
                 user.last_name = last_name
-            
-            db.commit()
-            db.refresh(user)
-        
-        # Create Web App URL based on user status
-        base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
-        
-        # اگر کاربر جدید است یا first_login=True است، به load برود
-        if user.first_login:
-            web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
-        else:
-            web_app_url = f"{base_url}/home?telegram_id={telegram_id}"
-        
-        # استفاده از WebAppInfo
-        try:
-            from telegram import WebAppInfo
-            web_app = WebAppInfo(url=web_app_url)
-            keyboard = [
-                [InlineKeyboardButton("🚀 Open CCoin App", web_app=web_app)]
-            ]
-            logger.info("Using WebAppInfo for inline button")
-        except ImportError:
-            keyboard = [
-                [InlineKeyboardButton("🚀 Open CCoin App", url=web_app_url)]
-            ]
-            logger.info("WebAppInfo not available, using URL")
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+                updated = True
+            if updated:
+                db.commit()
+
+        base_url = os.getenv("APP_DOMAIN", "https://ccoin2025.onrender.com")
+        web_app_url = f"{base_url}/load?telegram_id={telegram_id}" if user.first_login else f"{base_url}/home?telegram_id={telegram_id}"
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Open CCoin App", web_app=WebAppInfo(url=web_app_url))
+        ]])
+
         if is_new_user:
-            if user.referred_by:
-                welcome_message = (
-                    "💰 **Welcome to CCoin!**\n\n"
-                    "🎉 Your crypto journey starts here!\n"
-                    "💎 You received 2000 CCoin as welcome bonus!\n"
-                    "🎯 Complete tasks and earn more tokens!\n"
-                    "👥 Thanks for using a referral link!\n\n"
-                    "👇 Click the button below to open the app:"
-                )
-            else:
-                welcome_message = (
-                    "💰 **Welcome to CCoin!**\n\n"
-                    "🎉 Your crypto journey starts here!\n"
-                    "💎 You received 2000 CCoin as welcome bonus!\n"
-                    "🎯 Complete tasks and earn more tokens!\n\n"
-                    "👇 Click the button below to open the app:"
-                )
+            text = "💰 **Welcome to CCoin!**\n\n🎉 Your journey starts now!\n💎 2000 CCoin welcome bonus added!\n\n👇 Open the app:"
         else:
-            welcome_message = (
-                "💰 **Welcome back to CCoin!**\n\n"
-                f"💎 You have {user.tokens} tokens\n"
-                "🎯 Ready to earn more?\n\n"
-                "👇 Click the button below to open the app:"
-            )
-        
-        await update.message.reply_text(
-            welcome_message,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        logger.info(f"Start message sent to user {telegram_id}")
-    
+            text = f"💰 **Welcome back!**\n\n💎 You have {user.tokens:,} CCoin\n\n👇 Open the app:"
+
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        logger.info("Start message sent", extra={"telegram_id": telegram_id})
+
     except Exception as e:
-        logger.error(f"Error in start command: {e}")
-        await update.message.reply_text("خطایی رخ داد. لطفاً دوباره تلاش کنید.")
-    
+        logger.error("Error in /start", extra={"error": str(e)})
+        await update.message.reply_text("An error occurred. Please try again.")
     finally:
         db.close()
 
-async def send_commission_payment_link(telegram_id: str, bot_token: str):
-    """
-    ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
-    این لینک در مرورگر خارجی باز می‌شود
-    """
-    from telegram import Bot
-    
+
+async def send_commission_payment_link(telegram_id: str, bot_token: str = BOT_TOKEN) -> bool:
     bot = Bot(token=bot_token)
-    
-    commission_url = f"https://ccoin2025.onrender.com/commission/browser/pay?telegram_id={telegram_id}"
-    
-    keyboard = [
-        [InlineKeyboardButton("💳 Pay Commission (Open in Browser)", url=commission_url)]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    message_text = (
+    url = f"https://ccoin2025.onrender.com/commission/browser/pay?telegram_id={telegram_id}"
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("💳 Pay Commission (Open in Browser)", url=url)
+    ]])
+
+    text = (
         "💰 **Commission Payment Required**\n\n"
         "To complete your airdrop eligibility, please pay the commission fee.\n\n"
         "Click the button below to open the payment page in your browser."
     )
-    
+
     try:
         await bot.send_message(
             chat_id=telegram_id,
-            text=message_text,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
         )
+        logger.info("Commission payment link sent", extra={"telegram_id": telegram_id})
         return True
+    except TelegramError as e:
+        logger.error("Telegram error sending commission link", extra={"telegram_id": telegram_id, "error": str(e)})
+        return False
     except Exception as e:
-        print(f"Error sending message: {e}")
+        logger.error("Unexpected error sending commission link", extra={"telegram_id": telegram_id, "error": str(e)})
         return False
 
 
-# Add command handler
 app.add_handler(CommandHandler("start", start))
