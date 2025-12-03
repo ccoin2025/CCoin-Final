@@ -425,7 +425,9 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
     }
 
 
-
+# -------------------------
+# Send payment link to Telegram
+# -------------------------
 @router.post("/send_payment_link", response_class=JSONResponse)
 async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
     """
@@ -435,15 +437,15 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         body = await request.json()
         telegram_id = body.get("telegram_id")
         
+        logger.info("🔵 Received send_payment_link request", extra={"telegram_id": telegram_id})
+        
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
         
-        # بررسی وجود کاربر
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # بررسی اینکه کمیسیون قبلاً پرداخت نشده باشد
         if user.commission_paid:
             return JSONResponse({
                 "success": False, 
@@ -454,21 +456,45 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
         
         if success:
-            logger.info("Payment link sent to telegram", extra={"telegram_id": telegram_id})
+            logger.info("✅ Payment link sent", extra={"telegram_id": telegram_id})
             return {
                 "success": True,
-                "message": "Payment link sent to your Telegram chat. Please check your messages."
+                "message": "Payment link sent to your Telegram chat."
             }
         else:
-            logger.error("Failed to send payment link", extra={"telegram_id": telegram_id})
+            logger.error("❌ Failed to send link", extra={"telegram_id": telegram_id})
             return JSONResponse({
                 "success": False,
-                "message": "Failed to send payment link. Please try again."
+                "message": "Failed to send payment link."
             }, status_code=500)
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("send_payment_link error", extra={"error": str(e)}, exc_info=True)
+        logger.error("🔴 Error in send_payment_link", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# -------------------------
+# Check payment status
+# -------------------------
+@router.get("/check_status", response_class=JSONResponse)
+async def check_commission_status(
+    telegram_id: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    بررسی وضعیت پرداخت کمیسیون کاربر
+    """
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {
+            "commission_paid": user.commission_paid,
+            "transaction_hash": user.commission_transaction_hash if user.commission_paid else None
+        }
+    except Exception as e:
+        logger.error("Error checking commission status", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
