@@ -611,3 +611,10 @@ window.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
+
+function closeCommissionModal() {
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
