@@ -437,59 +437,6 @@ async function disconnectWallet() {
     }
 }
 
-async function handleCommissionPayment() {
-    try {
-        log('💰 Starting commission payment process...');
-
-        if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('Please connect your wallet first!', 'error');
-            return;
-        }
-
-        if (tasksCompleted.pay) {
-            showToast('Commission already paid!', 'info');
-            return;
-        }
-
-        // نمایش لودینگ
-        showToast('📤 Sending payment link to Telegram...', 'info');
-
-        // ارسال درخواست به سرور برای ارسال لینک به تلگرام
-        const response = await fetch('/commission/send_payment_link', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                telegram_id: USER_ID
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            log('✅ Payment link sent to Telegram successfully');
-            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
-            
-            // بستن مودال کمیسیون
-            const modal = document.getElementById('commission-modal');
-            if (modal) {
-                modal.classList.remove('show');
-            }
-            
-            // ذخیره زمان شروع پرداخت
-            localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
-            
-        } else {
-            log('❌ Failed to send payment link: ' + data.message);
-            showToast('❌ ' + data.message, 'error');
-        }
-
-    } catch (error) {
-        log('❌ Commission payment error: ' + error.message);
-        showToast('Failed to send payment link: ' + error.message, 'error');
-    }
-}
 
 async function claimAirdrop() {
     try {
@@ -612,9 +559,75 @@ window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
 
+
+// تابع برای باز کردن مودال کمیسیون
+function openCommissionModal() {
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.add('show');
+        log('📋 Commission modal opened');
+    }
+}
+
+// تابع برای بستن مودال کمیسیون
 function closeCommissionModal() {
     const modal = document.getElementById('commission-modal');
     if (modal) {
         modal.classList.remove('show');
+        log('📋 Commission modal closed');
+    }
+}
+
+// تابع اصلی پرداخت کمیسیون - به جای تابع قبلی
+async function handleCommissionPayment() {
+    try {
+        log('💰 Starting commission payment process...');
+
+        // بررسی اتصال کیف پول
+        if (!tasksCompleted.wallet || !connectedWallet) {
+            showToast('Please connect your wallet first!', 'error');
+            return;
+        }
+
+        // بررسی پرداخت قبلی
+        if (tasksCompleted.pay) {
+            showToast('Commission already paid!', 'info');
+            return;
+        }
+
+        // نمایش لودینگ
+        showToast('📤 Sending payment link to Telegram...', 'info');
+
+        // ارسال درخواست به سرور برای ارسال لینک به تلگرام
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: USER_ID
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            log('✅ Payment link sent to Telegram successfully');
+            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
+            
+            // بستن مودال کمیسیون
+            closeCommissionModal();
+            
+            // ذخیره زمان شروع پرداخت
+            localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+            
+        } else {
+            log('❌ Failed to send payment link: ' + data.message);
+            showToast('❌ ' + data.message, 'error');
+        }
+
+    } catch (error) {
+        log('❌ Commission payment error: ' + error.message);
+        showToast('Failed to send payment link: ' + error.message, 'error');
     }
 }
