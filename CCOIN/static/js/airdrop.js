@@ -451,28 +451,43 @@ async function handleCommissionPayment() {
             return;
         }
 
-        // ذخیره زمان شروع پرداخت
-        localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+        // نمایش لودینگ
+        showToast('📤 Sending payment link to Telegram...', 'info');
 
-        // ساخت URL کامل برای صفحه کمیسیون
-        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
-        
-        log('🔗 Opening commission page in external browser: ' + commissionUrl);
+        // ارسال درخواست به سرور برای ارسال لینک به تلگرام
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: USER_ID
+            })
+        });
 
-        // استفاده از Telegram WebApp API برای باز کردن در مرورگر خارجی
-        if (window.Telegram && window.Telegram.WebApp) {
-            // این متد صفحه را در مرورگر خارجی باز می‌کند
-            window.Telegram.WebApp.openTelegramLink(`https://t.me/iv?url=${encodeURIComponent(commissionUrl)}&rhash=${Math.random()}`);
+        const data = await response.json();
+
+        if (data.success) {
+            log('✅ Payment link sent to Telegram successfully');
+            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
+            
+            // بستن مودال کمیسیون
+            const modal = document.getElementById('commission-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+            
+            // ذخیره زمان شروع پرداخت
+            localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+            
         } else {
-            // fallback
-            window.open(commissionUrl, '_blank');
+            log('❌ Failed to send payment link: ' + data.message);
+            showToast('❌ ' + data.message, 'error');
         }
-
-        showToast('Opening payment page...', 'info');
 
     } catch (error) {
         log('❌ Commission payment error: ' + error.message);
-        showToast('Failed to open payment page: ' + error.message, 'error');
+        showToast('Failed to send payment link: ' + error.message, 'error');
     }
 }
 
