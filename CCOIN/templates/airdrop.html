@@ -533,13 +533,23 @@
             </div>
         </div>
 
-        <div class="commission-modal" id="commission-modal">
+        <div id="commission-modal" class="commission-modal">
             <div class="commission-modal-content">
-                <!-- محتوای مودال -->
-        
+                <div class="modal-logo">💰</div>
+                <h1>Commission Payment</h1>
+                <p class="modal-subtitle">Complete your payment to unlock the airdrop</p>
+
+                <div class="modal-info-box">
+                    <h4>📋 Important Information</h4>
+                    <p>• You will receive a payment link in your Telegram chat</p>
+                    <p>• The link will open in an external browser</p>
+                    <p>• Complete the payment using your Phantom wallet</p>
+                    <p>• Return to the app after successful payment</p>
+                </div>
+
                 <div class="modal-buttons">
                     <button class="modal-btn pay" onclick="handleCommissionPayment()">
-                        💳 Pay Commission
+                        💳 Send Payment Link
                     </button>
                     <button class="modal-btn cancel" onclick="closeCommissionModal()">
                         Cancel
