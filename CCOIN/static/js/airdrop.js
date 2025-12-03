@@ -562,25 +562,30 @@ window.addEventListener('beforeunload', function() {
 
 // تابع برای باز کردن مودال کمیسیون
 function openCommissionModal() {
+    console.log('🔵 Opening commission modal');
     const modal = document.getElementById('commission-modal');
     if (modal) {
         modal.classList.add('show');
-        log('📋 Commission modal opened');
+        console.log('✅ Modal opened');
+    } else {
+        console.error('❌ Modal element not found!');
     }
 }
 
 // تابع برای بستن مودال کمیسیون
 function closeCommissionModal() {
+    console.log('🔵 Closing commission modal');
     const modal = document.getElementById('commission-modal');
     if (modal) {
         modal.classList.remove('show');
-        log('📋 Commission modal closed');
+        console.log('✅ Modal closed');
     }
 }
 
-// تابع اصلی پرداخت کمیسیون - به جای تابع قبلی
+// تابع اصلی پرداخت کمیسیون
 async function handleCommissionPayment() {
     try {
+        console.log('🔵 handleCommissionPayment called');
         log('💰 Starting commission payment process...');
 
         // بررسی اتصال کیف پول
@@ -610,6 +615,7 @@ async function handleCommissionPayment() {
         });
 
         const data = await response.json();
+        console.log('🔵 Server response:', data);
 
         if (data.success) {
             log('✅ Payment link sent to Telegram successfully');
@@ -627,6 +633,7 @@ async function handleCommissionPayment() {
         }
 
     } catch (error) {
+        console.error('🔴 Error:', error);
         log('❌ Commission payment error: ' + error.message);
         showToast('Failed to send payment link: ' + error.message, 'error');
     }
