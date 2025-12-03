@@ -227,3 +227,43 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
 
 # Add command handler
 app.add_handler(CommandHandler("start", start))
+
+
+async def send_commission_payment_link(telegram_id: str, bot_token: str):
+    """
+    ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
+    این لینک در مرورگر خارجی باز می‌شود
+    """
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+
+    bot = Bot(token=bot_token)
+    
+    # ساخت URL کامل
+    base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
+    commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
+
+    # ساخت دکمه inline
+    keyboard = [
+        [InlineKeyboardButton("💳 Pay Commission (Open in Browser)", url=commission_url)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    message_text = (
+        "💰 **Commission Payment Required**\n\n"
+        "To complete your airdrop eligibility, please pay the commission fee.\n\n"
+        "📱 Click the button below to open the payment page in your browser.\n"
+        "✅ After payment, return to the app and check your status."
+    )
+
+    try:
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ Commission payment link sent to user {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error sending payment link to {telegram_id}: {e}")
+        return False
