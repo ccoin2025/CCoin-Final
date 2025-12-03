@@ -144,14 +144,14 @@ function updateCountdown() {
 
 function startCountdown() {
     log('⏰ Starting countdown timer...');
-
+    
     updateCountdown();
-
+    
     if (countdownInterval) {
         clearInterval(countdownInterval);
     }
     countdownInterval = setInterval(updateCountdown, 1000);
-
+    
     log('✅ Countdown timer started successfully');
 }
 
@@ -171,7 +171,7 @@ function updateWalletUI() {
 
     if (tasksCompleted.wallet && connectedWallet) {
         const shortAddress = connectedWallet.substring(0, 6) + '...' + connectedWallet.substring(connectedWallet.length - 4);
-
+        
         if (walletButtonText) {
             walletButtonText.textContent = `Connected: ${shortAddress}`;
             walletButtonText.style.color = '#ffffff';
@@ -438,106 +438,42 @@ async function disconnectWallet() {
 }
 
 async function handleCommissionPayment() {
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        showToast('Please connect your wallet first!', 'error');
-        return;
-    }
-
-    if (tasksCompleted.pay) {
-        showToast('Commission already paid!', 'info');
-        return;
-    }
-
-    // باز کردن مودال
-    openCommissionModal();
-}
-
-function openCommissionModal() {
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.add('show');
-        log('Commission modal opened');
-    }
-}
-
-function closeCommissionModal() {
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.remove('show');
-        log('Commission modal closed');
-    }
-}
-
-async function sendPaymentLinkToChat() {
     try {
-        log('📤 Sending commission payment link to Telegram...');
-        
-        // نمایش loading
-        showToast('Sending link to your Telegram...', 'info');
-        
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        
-        const response = await fetch('/commission/send_payment_link', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken
-            },
-            body: JSON.stringify({ 
-                telegram_id: USER_ID 
-            })
-        });
+        log('💰 Starting commission payment process...');
 
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            log('✅ Payment link sent successfully');
-            showToast(result.message || 'Link sent! Check your Telegram.', 'success');
-            
-            // بستن مودال بعد از 2 ثانیه
-            setTimeout(() => {
-                closeCommissionModal();
-            }, 2000);
-            
-        } else {
-            log('❌ Failed to send link: ' + (result.error || result.message));
-            showToast(result.error || result.message || 'Failed to send link', 'error');
+        if (!tasksCompleted.wallet || !connectedWallet) {
+            showToast('Please connect your wallet first!', 'error');
+            return;
         }
+
+        if (tasksCompleted.pay) {
+            showToast('Commission already paid!', 'info');
+            return;
+        }
+
+        // ذخیره زمان شروع پرداخت
+        localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
+
+        // ساخت URL کامل برای صفحه کمیسیون
+        const commissionUrl = `${window.location.origin}/commission/browser/pay?telegram_id=${USER_ID}`;
+        
+        log('🔗 Opening commission page in external browser: ' + commissionUrl);
+
+        // استفاده از Telegram WebApp API برای باز کردن در مرورگر خارجی
+        if (window.Telegram && window.Telegram.WebApp) {
+            // این متد صفحه را در مرورگر خارجی باز می‌کند
+            window.Telegram.WebApp.openTelegramLink(`https://t.me/iv?url=${encodeURIComponent(commissionUrl)}&rhash=${Math.random()}`);
+        } else {
+            // fallback
+            window.open(commissionUrl, '_blank');
+        }
+
+        showToast('Opening payment page...', 'info');
 
     } catch (error) {
-        log('❌ Error sending payment link: ' + error.message);
-        showToast('Network error. Please try again.', 'error');
-        console.error('Error:', error);
+        log('❌ Commission payment error: ' + error.message);
+        showToast('Failed to open payment page: ' + error.message, 'error');
     }
-}
-
-function closeCommissionModal() {
-    document.getElementById('commissionModal').classList.remove('show');
-}
-
-function getTelegramId() {
-    // روش ۱: از APP_CONFIG
-    if (typeof USER_ID !== 'undefined' && USER_ID) {
-        return USER_ID;
-    }
-
-    // روش ۲: از WebApp
-    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
-        const user = window.Telegram.WebApp.initDataUnsafe.user;
-        if (user && user.id) {
-            return user.id.toString();
-        }
-    }
-
-    // روش ۳: از URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const telegramIdFromUrl = urlParams.get('telegram_id');
-    if (telegramIdFromUrl) {
-        return telegramIdFromUrl;
-    }
-
-    log('❌ Could not retrieve Telegram ID');
-    return null;
 }
 
 async function claimAirdrop() {
@@ -573,7 +509,7 @@ async function claimAirdrop() {
 
         if (data.success) {
             showToast('🎉 Airdrop claimed successfully!', 'success');
-
+            
             if (claimButton) {
                 claimButton.textContent = '✅ Claimed!';
                 claimButton.style.background = '#28a745';
@@ -596,18 +532,18 @@ async function claimAirdrop() {
 
 function checkWalletStatus() {
     const urlParams = new URLSearchParams(window.location.search);
-
+    
     if (urlParams.has('wallet_connected')) {
         const status = urlParams.get('wallet_connected');
         if (status === 'success') {
             showToast('✅ Wallet connected successfully!', 'success');
-
+            
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
         }
     }
-
+    
     if (urlParams.has('wallet_error')) {
         const error = urlParams.get('wallet_error');
         showToast('❌ Wallet connection failed: ' + error, 'error');
@@ -617,7 +553,7 @@ function checkWalletStatus() {
         const status = urlParams.get('commission_paid');
         if (status === 'success') {
             showToast('✅ Commission paid successfully!', 'success');
-
+            
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
@@ -632,13 +568,13 @@ function checkWalletStatus() {
 
 window.addEventListener('DOMContentLoaded', function() {
     log('🚀 Airdrop page loaded');
-
+    
     startCountdown();
-
+    
     updateAllTasksUI();
-
+    
     checkWalletStatus();
-
+    
     const connectWalletBtn = document.querySelector('#connect-wallet .task-button');
     if (connectWalletBtn) {
         connectWalletBtn.addEventListener('click', handleWalletConnection);
@@ -660,123 +596,3 @@ window.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
-
-
-async function sendPaymentLinkToChat() {
-    try {
-        console.log('🔵 sendPaymentLinkToChat called!'); // تست اولیه
-        log('📤 Sending payment link to Telegram chat...');
-        
-        // نمایش loading
-        showToast('Sending link to your Telegram...', 'info');
-        
-        // دریافت CSRF token
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        console.log('🔑 CSRF Token:', csrfToken ? 'Found' : 'Not found');
-        console.log('👤 User ID:', USER_ID);
-        
-        // ارسال درخواست
-        const response = await fetch('/commission/send_payment_link', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken
-            },
-            body: JSON.stringify({ 
-                telegram_id: USER_ID 
-            })
-        });
-
-        console.log('📡 Response status:', response.status);
-        
-        const result = await response.json();
-        console.log('📦 Response data:', result);
-
-        if (response.ok && result.success) {
-            log('✅ Payment link sent successfully');
-            showToast(result.message || 'Link sent! Check your Telegram messages.', 'success');
-            
-            // بستن مودال بعد از 2 ثانیه
-            setTimeout(() => {
-                closeCommissionModal();
-            }, 2000);
-            
-        } else {
-            log('❌ Failed to send link: ' + (result.error || result.message));
-            showToast(result.error || result.message || 'Failed to send link. Please try again.', 'error');
-        }
-
-    } catch (error) {
-        console.error('❌ Error in sendPaymentLinkToChat:', error);
-        log('❌ Error sending payment link: ' + error.message);
-        showToast('Network error. Please check your connection and try again.', 'error');
-    }
-}
-
-/**
- * باز کردن مودال کمیسیون
- */
-function openCommissionModal() {
-    console.log('🔵 [DEBUG] openCommissionModal called');
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.add('show');
-        console.log('✅ Modal opened successfully');
-        log('Commission modal opened');
-    } else {
-        console.error('❌ commissionModal element not found in DOM!');
-        alert('Error: Modal not found. Please refresh the page.');
-    }
-}
-
-/**
- * بستن مودال کمیسیون
- */
-function closeCommissionModal() {
-    console.log('🔵 [DEBUG] closeCommissionModal called');
-    const modal = document.getElementById('commissionModal');
-    if (modal) {
-        modal.classList.remove('show');
-        console.log('✅ Modal closed successfully');
-        log('Commission modal closed');
-    }
-}
-
-/**
- * Handle commission payment button click
- */
-async function handleCommissionPayment() {
-    console.log('🔵 [DEBUG] handleCommissionPayment called');
-    console.log('🔵 [DEBUG] Wallet connected:', tasksCompleted.wallet);
-    console.log('🔵 [DEBUG] Connected wallet address:', connectedWallet);
-    console.log('🔵 [DEBUG] Commission paid:', tasksCompleted.pay);
-    
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        console.log('❌ Wallet not connected');
-        showToast('Please connect your wallet first!', 'error');
-        return;
-    }
-
-    if (tasksCompleted.pay) {
-        console.log('ℹ️ Commission already paid');
-        showToast('Commission already paid!', 'info');
-        return;
-    }
-
-    console.log('✅ Opening commission modal...');
-    openCommissionModal();
-}
-
-/**
- * تابع تست برای دیباگ
- */
-window.testCommissionModal = function() {
-    console.log('🧪 Testing commission modal...');
-    console.log('Modal element:', document.getElementById('commissionModal'));
-    console.log('Send button:', document.getElementById('sendPaymentLinkBtn'));
-    console.log('Close button:', document.getElementById('closeCommissionModalBtn'));
-    console.log('APP_CONFIG:', window.APP_CONFIG);
-    openCommissionModal();
-};
-
-console.log('✅ Commission modal functions loaded');
