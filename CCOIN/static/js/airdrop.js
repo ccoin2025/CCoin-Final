@@ -638,3 +638,57 @@ async function handleCommissionPayment() {
         showToast('Failed to send payment link: ' + error.message, 'error');
     }
 }
+
+
+// تابع تست ساده برای دکمه کمیسیون
+function testCommissionButton() {
+    console.log('🟢 Button clicked!');
+    alert('Button works! Telegram ID: ' + USER_ID);
+    
+    // تست اتصال کیف پول
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        alert('❌ Please connect your wallet first!');
+        console.log('❌ Wallet not connected');
+        return;
+    }
+    
+    // تست پرداخت قبلی
+    if (tasksCompleted.pay) {
+        alert('✅ Commission already paid!');
+        console.log('✅ Already paid');
+        return;
+    }
+    
+    // ارسال درخواست
+    console.log('🔵 Sending request to server...');
+    
+    fetch('/commission/send_payment_link', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            telegram_id: USER_ID
+        })
+    })
+    .then(response => {
+        console.log('🔵 Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('🔵 Response data:', data);
+        
+        if (data.success) {
+            alert('✅ Success! Check your Telegram chat.');
+            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
+        } else {
+            alert('❌ Failed: ' + data.message);
+            showToast('❌ ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('🔴 Error:', error);
+        alert('❌ Error: ' + error.message);
+        showToast('Error: ' + error.message, 'error');
+    });
+}
