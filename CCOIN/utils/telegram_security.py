@@ -196,7 +196,7 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
     ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
     این لینک در مرورگر خارجی باز می‌شود
     """
-    from telegram import Bot
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, LoginUrl
 
     try:
         bot = Bot(token=bot_token)
@@ -205,20 +205,32 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
 
-        # ✅ ارسال لینک بدون دکمه - این 100% در مرورگر خارجی باز می‌شود
+        # ✅ استفاده از دو دکمه - یکی LoginUrl و یکی URL معمولی
+        keyboard = [
+            [InlineKeyboardButton(
+                "💳 Pay Commission (External Browser)",
+                login_url=LoginUrl(url=commission_url)
+            )],
+            [InlineKeyboardButton(
+                "🔗 Or Open Link Manually",
+                url=commission_url
+            )]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
         message_text = (
             "💰 **Commission Payment Required**\n\n"
             "To complete your airdrop eligibility, please pay the commission fee.\n\n"
-            "🌐 **Click the link below** to open in your browser:\n"
-            f"{commission_url}\n\n"
-            "✅ After payment, return to the bot and your status will update automatically."
+            "📱 Click the **first button** to open in external browser.\n"
+            "🔗 If it doesn't work, use the second button.\n\n"
+            "✅ After payment, return here and your status will update automatically."
         )
 
         await bot.send_message(
             chat_id=telegram_id,
             text=message_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=False
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
         )
         
         logger.info(f"✅ Commission payment link sent to user {telegram_id}")
