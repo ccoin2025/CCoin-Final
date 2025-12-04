@@ -591,5 +591,32 @@
             }
         }
     </script>
+    <script>
+        // تشخیص اگر در Telegram WebView باز شده
+        if (window.Telegram && window.Telegram.WebApp) {
+            // نمایش دکمه برای باز کردن در مرورگر خارجی
+            const openInBrowserBtn = document.createElement('div');
+            openInBrowserBtn.innerHTML = `
+        <div style="background: #ff6b6b; color: white; padding: 15px; text-align: center; margin: 20px; border-radius: 10px; cursor: pointer;">
+            <h3>⚠️ Please Open in External Browser</h3>
+            <p>This page must be opened in your phone's browser (Safari, Chrome, etc.)</p>
+            <button onclick="openInExternalBrowser()" style="background: white; color: #ff6b6b; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                🌐 Open in Browser
+            </button>
+        </div>
+    `;
+            document.body.insertBefore(openInBrowserBtn, document.body.firstChild);
+        }
+
+        function openInExternalBrowser() {
+            const currentUrl = window.location.href;
+            // باز کردن در مرورگر خارجی
+            window.open(currentUrl, '_system');
+            // یا
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openLink(currentUrl);
+            }
+        }
+    </script>
 </body>
 </html>
