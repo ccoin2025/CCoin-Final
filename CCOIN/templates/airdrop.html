@@ -24,6 +24,19 @@
             };
         }
     </script>
+    <script>
+        window.APP_CONFIG = {
+            USER_ID: '{{ request.session.telegram_id }}',
+            SOLANA_RPC_URL: '{{ config.SOLANA_RPC }}',
+            COMMISSION_AMOUNT: {{ config.COMMISSION_AMOUNT }},
+            ADMIN_WALLET: '{{ config.ADMIN_WALLET }}',
+            INITIAL_TASKS_COMPLETED: {{ 'true' if tasks_completed else 'false' }},
+            INITIAL_INVITED_FRIENDS: {{ 'true' if invited else 'false' }},
+            INITIAL_WALLET_CONNECTED: {{ 'true' if wallet_connected else 'false' }},
+            INITIAL_COMMISSION_PAID: {{ 'true' if commission_paid else 'false' }},
+            INITIAL_WALLET_ADDRESS: '{{ user_wallet_address }}'
+        };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/index.min.js"></script>
     <script>
         window.ensureBS58 = function () {
