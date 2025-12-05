@@ -596,51 +596,7 @@
             return metaTag ? metaTag.getAttribute('content') : '';
         }
 
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded, initializing...');
-            
-            initializeCountdown();
-            updateTaskStatuses();
-            
-            document.addEventListener('click', function(event) {
-                const dropdown = document.getElementById('wallet-dropdown-content');
-                const walletButton = document.querySelector('.wallet-connect-button');
-                
-                if (!walletButton.contains(event.target)) {
-                    dropdown.classList.remove('show');
-                }
-            });
-        });
-
-        function initializeCountdown() {
-            const countDownDate = new Date("2026-02-17T23:59:59").getTime();
-            
-            const timer = setInterval(function() {
-                const now = new Date().getTime();
-                const distance = countDownDate - now;
-
-                if (distance < 0) {
-                    clearInterval(timer);
-                    document.getElementById("days").innerHTML = "00";
-                    document.getElementById("hours").innerHTML = "00";
-                    document.getElementById("minutes").innerHTML = "00";
-                    document.getElementById("seconds").innerHTML = "00";
-                    return;
-                }
-
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-                document.getElementById("days").innerHTML = String(days).padStart(2, '0');
-                document.getElementById("hours").innerHTML = String(hours).padStart(2, '0');
-                document.getElementById("minutes").innerHTML = String(minutes).padStart(2, '0');
-                document.getElementById("seconds").innerHTML = String(seconds).padStart(2, '0');
-            }, 1000);
-        }
-
+        
         function updateTaskStatuses() {
             if (userStatuses.tasks_completed) {
                 markTaskAsCompleted('task-completion', 'tasks-icon', 'Tasks Completed');
@@ -911,5 +867,6 @@
 
         setInterval(checkCommissionStatus, 10000);
     </script>
+    <script src="/static/js/airdrop.js"></script>
 </body>
 </html>
