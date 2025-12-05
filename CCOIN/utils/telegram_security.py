@@ -196,7 +196,7 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
     ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
     این لینک در مرورگر خارجی باز می‌شود
     """
-    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, LoginUrl
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
     try:
         bot = Bot(token=bot_token)
@@ -205,25 +205,18 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
 
-        # ✅ استفاده از دو دکمه - یکی LoginUrl و یکی URL معمولی
+        # ✅ استفاده از url بدون WebApp - این باعث باز شدن در مرورگر خارجی می‌شود
         keyboard = [
-            [InlineKeyboardButton(
-                "💳 Pay Commission (External Browser)",
-                login_url=LoginUrl(url=commission_url)
-            )],
-            [InlineKeyboardButton(
-                "🔗 Or Open Link Manually",
-                url=commission_url
-            )]
+            [InlineKeyboardButton("💳 Pay Commission", url=commission_url)]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         message_text = (
             "💰 **Commission Payment Required**\n\n"
             "To complete your airdrop eligibility, please pay the commission fee.\n\n"
-            "📱 Click the **first button** to open in external browser.\n"
-            "🔗 If it doesn't work, use the second button.\n\n"
-            "✅ After payment, return here and your status will update automatically."
+            "📱 **Tap the button below** to open the payment page.\n"
+            "🌐 It will open in your **external browser**.\n\n"
+            "✅ After payment, return to the bot and your status will update automatically."
         )
 
         await bot.send_message(
