@@ -228,3 +228,6 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
     except Exception as e:
         logger.error(f"❌ Error sending payment link to {telegram_id}: {e}", exc_info=True)
         return False
+
+
+app.add_handler(CommandHandler("start", start))
