@@ -245,7 +245,10 @@ async def root(request: Request, db: Session = Depends(get_db)):
 
     if not telegram_id:
         logger.info("No telegram_id in session for root, rendering landing.html")
-        return templates.TemplateResponse("landing.html", {"request": request})
+        return templates.TemplateResponse("landing.html", {
+            "request": request,
+            "bot_username": BOT_USERNAME  # ✅ اضافه شد
+        })
 
     # Sanitize input
     telegram_id = str(telegram_id).strip()
@@ -254,7 +257,10 @@ async def root(request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.info("User not found for root", extra={"telegram_id": telegram_id})
-        return templates.TemplateResponse("landing.html", {"request": request})
+        return templates.TemplateResponse("landing.html", {
+            "request": request,
+            "bot_username": BOT_USERNAME  # ✅ اضافه شد
+        })
 
     # هدایت براساس وضعیت first_login
     if user.first_login:
@@ -263,7 +269,7 @@ async def root(request: Request, db: Session = Depends(get_db)):
     else:
         logger.info("User returning, redirecting to home", extra={"telegram_id": telegram_id})
         return RedirectResponse(url=f"/home?telegram_id={telegram_id}")
-
+        
 # Telegram webhook با امنیت بهبود یافته
 @app.api_route("/telegram_webhook", methods=["POST"])
 async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
