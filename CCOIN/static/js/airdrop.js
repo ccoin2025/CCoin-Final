@@ -43,29 +43,24 @@ function log(msg) {
     console.log('[Airdrop] ' + msg);
 }
 
-const AIRDROP_TARGET_DATE = new Date(Date.now() + (90 * 24 * 60 * 60 * 1000));
 
 function updateCountdown() {
     try {
-        const now = new Date();
-        
-        // ✅ محاسبه صحیح فاصله زمانی
-        const distance = AIRDROP_TARGET_DATE.getTime() - now.getTime();
-        
+        const targetDate = new Date('2026-02-24T23:59:59Z').getTime();
+        const now = new Date().getTime();
+        const distance = targetDate - now;
+
         if (distance > 0) {
-            // محاسبه روز، ساعت، دقیقه و ثانیه
             const days = Math.floor(distance / (1000 * 60 * 60 * 24));
             const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            // دریافت المان‌های DOM
             const daysElement = document.getElementById('days');
             const hoursElement = document.getElementById('hours');
             const minutesElement = document.getElementById('minutes');
             const secondsElement = document.getElementById('seconds');
 
-            // بروزرسانی روزها با انیمیشن flip
             if (daysElement) {
                 const newValue = days.toString().padStart(2, '0');
                 if (daysElement.textContent !== newValue) {
@@ -79,7 +74,6 @@ function updateCountdown() {
                 }
             }
 
-            // بروزرسانی ساعت‌ها با انیمیشن flip
             if (hoursElement) {
                 const newValue = hours.toString().padStart(2, '0');
                 if (hoursElement.textContent !== newValue) {
@@ -93,7 +87,6 @@ function updateCountdown() {
                 }
             }
 
-            // بروزرسانی دقیقه‌ها با انیمیشن flip
             if (minutesElement) {
                 const newValue = minutes.toString().padStart(2, '0');
                 if (minutesElement.textContent !== newValue) {
@@ -107,7 +100,6 @@ function updateCountdown() {
                 }
             }
 
-            // بروزرسانی ثانیه‌ها با انیمیشن flip
             if (secondsElement) {
                 const newValue = seconds.toString().padStart(2, '0');
                 if (secondsElement.textContent !== newValue) {
@@ -121,15 +113,11 @@ function updateCountdown() {
                 }
             }
 
-            // لاگ دوره‌ای برای debug
             if (seconds % 30 === 0) {
                 console.log(`⏰ Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`);
-                console.log(`Target: ${AIRDROP_TARGET_DATE.toISOString()}, Now: ${now.toISOString()}`);
-                console.log(`Remaining milliseconds: ${distance}`);
             }
 
         } else {
-            // زمانی که countdown تمام شده
             const elements = ['days', 'hours', 'minutes', 'seconds'];
             elements.forEach(id => {
                 const element = document.getElementById(id);
@@ -138,14 +126,12 @@ function updateCountdown() {
 
             console.log('🎉 Countdown finished!');
 
-            // تغییر عنوان به "Airdrop is LIVE"
             const countdownTitle = document.querySelector('.countdown-title');
             if (countdownTitle) {
                 countdownTitle.textContent = '🎉 Airdrop is LIVE!';
                 countdownTitle.style.color = '#ffd700';
             }
 
-            // متوقف کردن تایمر
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
