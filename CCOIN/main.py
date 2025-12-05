@@ -21,7 +21,7 @@ from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import (
     BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, 
     ADMIN_WALLET, REDIS_URL, ENV, CACHE_ENABLED, RATE_LIMIT_ENABLED,
-    GLOBAL_RATE_LIMIT, APP_DOMAIN
+    GLOBAL_RATE_LIMIT, APP_DOMAIN, TELEGRAM_CHANNEL_USERNAME
 )
 from apscheduler.schedulers.background import BackgroundScheduler
 from solana.rpc.async_api import AsyncClient
