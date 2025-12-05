@@ -193,7 +193,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_commission_payment_link(telegram_id: str, bot_token: str):
     """
     ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
-    این لینک در مرورگر خارجی باز می‌شود
     """
     from telegram import Bot
 
@@ -204,20 +203,23 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
 
-        # ✅ ارسال لینک بدون دکمه - این 100% در مرورگر خارجی باز می‌شود
+        # ✅ پیام با لینک کپی‌شدنی
         message_text = (
-            "💰 **Commission Payment Required**\n\n"
-            "To complete your airdrop eligibility, please pay the commission fee.\n\n"
-            "🌐 **Click the link below** to open in your browser:\n"
-            f"{commission_url}\n\n"
-            "✅ After payment, return to the bot and your status will update automatically."
+            "💰 <b>Commission Payment Required</b>\n\n"
+            "To pay the commission fee:\n\n"
+            "1️⃣ <b>Copy the link below</b>\n"
+            "2️⃣ <b>Open it in your browser</b> (Safari/Chrome)\n"
+            "3️⃣ Complete the payment\n\n"
+            "🔗 Payment Link:\n"
+            f"<code>{commission_url}</code>\n\n"
+            "💡 <b>Tip:</b> Long press the link and select 'Open in Browser'\n\n"
+            "✅ After payment, your status will update automatically."
         )
 
         await bot.send_message(
             chat_id=telegram_id,
             text=message_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=False
+            parse_mode='HTML'
         )
         
         logger.info(f"✅ Commission payment link sent to user {telegram_id}")
