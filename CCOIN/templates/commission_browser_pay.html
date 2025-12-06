@@ -3,11 +3,7 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Pay Commission - CCoin</title>
-   <link rel="manifest" href="/static/manifest.json">
-   <link rel="icon" type="image/png" href="/static/images/icon-512x512.png" sizes="512x512">
-   <link rel="apple-touch-icon" href="/static/images/icon-512x512.png">
-   
+   <title>Pay Commission - CCoin</title> 
    <style>
        * {
            margin: 0;
@@ -65,7 +61,6 @@
            margin-bottom: 30px;
        }
 
-       /* Info Box for Instructions */
        .info-box {
            background: rgba(33, 150, 243, 0.2);
            border: 1px solid rgba(33, 150, 243, 0.4);
@@ -261,7 +256,6 @@
 
         <div id="status" class="status"></div>
 
-        <!-- بخش توضیحات -->
         <div id="instructionsSection">
             <div class="info-box">
                 <h3>📋 Payment Instructions</h3>
@@ -281,7 +275,6 @@
             </button>
         </div>
 
-        <!-- بخش Phantom -->
         <div id="phantomSection">
             <button class="btn" id="pay-btn" onclick="handlePayment()">
                 <span id="btn-text">💳 Pay with Phantom</span>
@@ -334,24 +327,20 @@
         }
 
         window.addEventListener('load', async function() {
-            // Check if payment was initiated
             if (localStorage.getItem('ccoin_payment_initiated')) {
                 const paymentTime = parseInt(localStorage.getItem('ccoin_payment_initiated'));
                 const now = Date.now();
 
-                // If less than 5 minutes passed
                 if (now - paymentTime < 300000) {
                     showPhantomButton();
                     showStatus('⏳ Checking payment...', 'info');
                     setButtonLoading(false);
 
-                    // Start auto-check
                     await autoCheckPayment();
                     return;
                 }
             }
 
-            // Check previous payment status
             try {
                 const response = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
                 const data = await response.json();
@@ -448,7 +437,7 @@
         }
 
         let checkAttempts = 0;
-        const maxCheckAttempts = 5; // محدودیت 5 بار
+        const maxCheckAttempts = 5; 
 
         async function autoCheckPayment() {
             let attempts = 0;
@@ -551,7 +540,7 @@
                     
                     setTimeout(() => {
                         document.getElementById('verify-btn').disabled = false;
-                    }, 30000); // 30 seconds wait
+                    }, 30000); 
                 }
 
             } catch (error) {
@@ -592,9 +581,7 @@
         }
     </script>
     <script>
-        // تشخیص اگر در Telegram WebView باز شده
         if (window.Telegram && window.Telegram.WebApp) {
-            // نمایش دکمه برای باز کردن در مرورگر خارجی
             const openInBrowserBtn = document.createElement('div');
             openInBrowserBtn.innerHTML = `
         <div style="background: #ff6b6b; color: white; padding: 15px; text-align: center; margin: 20px; border-radius: 10px; cursor: pointer;">
@@ -610,9 +597,7 @@
 
         function openInExternalBrowser() {
             const currentUrl = window.location.href;
-            // باز کردن در مرورگر خارجی
             window.open(currentUrl, '_system');
-            // یا
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.openLink(currentUrl);
             }
