@@ -3,11 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>Payment Successful - CCoin</title>
-    
-    <!-- ✅ اضافه شده: Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
@@ -72,7 +68,6 @@
             line-height: 1.6;
         }
 
-        /* ✅ اضافه شده: باکس اطلاعات تراکنش */
         .transaction-info {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -150,7 +145,6 @@
             transform: translateY(-1px);
         }
 
-        /* ✅ بهبود یافته: استایل countdown */
         .countdown {
             font-size: 13px;
             opacity: 0.7;
@@ -164,7 +158,6 @@
             opacity: 0.5;
         }
 
-        /* ✅ اضافه شده: دکمه view on explorer */
         .explorer-link {
             background: rgba(255, 255, 255, 0.2);
             color: white;
@@ -178,7 +171,6 @@
             box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
 
-        /* ✅ اضافه شده: نمایش زمان */
         .timestamp {
             font-size: 12px;
             opacity: 0.6;
@@ -198,7 +190,6 @@
         {% endif %}
     </p>
 
-    <!-- ✅ اضافه شده: نمایش اطلاعات تراکنش -->
     {% if not already_paid %}
     <div class="transaction-info">
         <h3>📋 Transaction Details</h3>
@@ -226,12 +217,10 @@
     </div>
     {% endif %}
 
-    <!-- دکمه بازگشت به ربات -->
     <a href="https://t.me/{{ bot_username }}" class="btn" id="return-btn">
         🚀 Return to Bot
     </a>
 
-    <!-- ✅ اضافه شده: دکمه مشاهده در explorer -->
     {% if transaction_hash %}
     <a href="https://solscan.io/tx/{{ transaction_hash }}" 
        target="_blank" 
@@ -241,29 +230,24 @@
     </a>
     {% endif %}
 
-    <!-- ✅ بهبود یافته: Countdown با قابلیت توقف -->
     <p class="countdown" id="countdown-text">
         Auto-redirect in <span id="countdown">5</span> seconds
         <br>
         <small>(Click any button to cancel)</small>
     </p>
 
-    <!-- ✅ اضافه شده: نمایش timestamp -->
     <p class="timestamp" id="current-time"></p>
   </div>
 
 <script>
-// ✅ اضافه شده: Initialize Telegram WebApp
 let tg = window.Telegram?.WebApp;
 if (tg) {
     tg.ready();
     tg.expand();
-    // تنظیم رنگ header بر اساس تم
     tg.setHeaderColor('#11998e');
 }
 
-// ✅ بهبود یافته: Countdown با مدیریت بهتر
-let seconds = 5; // افزایش زمان به 5 ثانیه
+let seconds = 5; 
 let countdownActive = true;
 const countdownEl = document.getElementById('countdown');
 const countdownText = document.getElementById('countdown-text');
@@ -281,7 +265,6 @@ const interval = setInterval(() => {
     }
 }, 1000);
 
-// تابع redirect
 function redirectToBot() {
     const botUrl = `https://t.me/${botUsername}`;
     if (tg && tg.openTelegramLink) {
@@ -293,7 +276,6 @@ function redirectToBot() {
     }
 }
 
-// ✅ توقف countdown با کلیک روی هر دکمه
 function stopCountdown() {
     countdownActive = false;
     clearInterval(interval);
@@ -305,12 +287,10 @@ document.getElementById('return-btn').addEventListener('click', (e) => {
     stopCountdown();
 });
 
-// ✅ مدیریت دکمه explorer
 const explorerBtn = document.getElementById('explorer-btn');
 if (explorerBtn) {
     explorerBtn.addEventListener('click', (e) => {
         stopCountdown();
-        // باز کردن در مرورگر خارجی
         if (tg && tg.openLink) {
             e.preventDefault();
             tg.openLink(e.target.href, { try_instant_view: false });
@@ -318,7 +298,6 @@ if (explorerBtn) {
     });
 }
 
-// ✅ اضافه شده: نمایش زمان فعلی
 function updateTime() {
     const now = new Date();
     const timeStr = now.toLocaleString('en-US', {
@@ -335,7 +314,6 @@ function updateTime() {
 }
 updateTime();
 
-// ✅ اضافه شده: کپی کردن transaction hash با کلیک
 const txHashEl = document.getElementById('tx-hash');
 if (txHashEl) {
     txHashEl.style.cursor = 'pointer';
@@ -352,7 +330,6 @@ if (txHashEl) {
                 txHashEl.style.color = '';
             }, 2000);
             
-            // نمایش haptic feedback در تلگرام
             if (tg && tg.HapticFeedback) {
                 tg.HapticFeedback.notificationOccurred('success');
             }
@@ -363,7 +340,6 @@ if (txHashEl) {
     });
 }
 
-// ✅ اضافه شده: Log برای debugging
 console.log('Success page loaded', {
     telegram_id: '{{ telegram_id }}',
     bot_username: '{{ bot_username }}',
