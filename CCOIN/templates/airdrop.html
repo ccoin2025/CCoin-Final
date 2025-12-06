@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="csrf-token" content="{{ request.session.csrf_token }}">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>CCoin Airdrop</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/airdrop.css">
@@ -53,7 +51,6 @@
     </script>
 
     <style>
-        /* استایل منوی کشویی کیف پول - فقط دکمه‌های Change و Disconnect */
         .wallet-dropdown {
             position: relative;
             display: inline-block;
@@ -544,7 +541,6 @@
             </div>
         </div>
 
-        <!-- Commission Payment Modal -->
         <div id="commission-modal" class="commission-modal">
             <div class="commission-modal-content">
                 <div class="logo">💰</div>
@@ -577,7 +573,6 @@
     </div>
 
     <script>
-        // Global variables
         let currentWalletAddress = '{{ user_wallet_address if user_wallet_address else "" }}';
         let userStatuses = {
             tasks_completed: {{ tasks_completed|lower }},
@@ -586,11 +581,9 @@
             commission_paid: {{ commission_paid|lower }}
         };
 
-        // Telegram WebApp Initialization
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         const telegramId = tg ? tg.initDataUnsafe.user?.id : null;
 
-        // Get CSRF token from meta tag
         function getCsrfToken() {
             const metaTag = document.querySelector('meta[name="csrf-token"]');
             return metaTag ? metaTag.getAttribute('content') : '';
