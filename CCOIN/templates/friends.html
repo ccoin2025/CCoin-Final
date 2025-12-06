@@ -64,7 +64,6 @@
     </div>
 
     <script>
-        // متغیرهای مستقیم
         const REFERRAL_LINK = "{{ referral_link }}";
         const REFERRAL_CODE = "{{ referral_code }}";
         
@@ -83,7 +82,6 @@
 
             if (window.Telegram && window.Telegram.WebApp) {
                 try {
-                    // ✅ روش صحیح: استفاده از share link
                     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(REFERRAL_LINK)}&text=${encodeURIComponent('🎉 Join CCoin and get FREE tokens!')}`;
 
                     console.log("Opening share URL:", shareUrl);
@@ -144,7 +142,6 @@
             }
         }
 
-        // Initialize Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
