@@ -43,9 +43,10 @@ function log(msg) {
     console.log('[Airdrop] ' + msg);
 }
 
-
+// **تابع شمارش معکوس اصلاح شده**
 function updateCountdown() {
     try {
+        // تاریخ هدف: 06 مارس 2026 (اصلاح شده)
         const targetDate = new Date('2026-03-06T23:59:59Z').getTime();
         const now = new Date().getTime();
         const distance = targetDate - now;
@@ -56,11 +57,13 @@ function updateCountdown() {
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
+            // بروزرسانی المان‌های HTML
             const daysElement = document.getElementById('days');
             const hoursElement = document.getElementById('hours');
             const minutesElement = document.getElementById('minutes');
             const secondsElement = document.getElementById('seconds');
 
+            // بروزرسانی با انیمیشن
             if (daysElement) {
                 const newValue = days.toString().padStart(2, '0');
                 if (daysElement.textContent !== newValue) {
@@ -113,11 +116,13 @@ function updateCountdown() {
                 }
             }
 
+            // فقط هر 30 ثانیه log کن تا spam نشود
             if (seconds % 30 === 0) {
                 console.log(`⏰ Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`);
             }
 
         } else {
+            // تمام شد
             const elements = ['days', 'hours', 'minutes', 'seconds'];
             elements.forEach(id => {
                 const element = document.getElementById(id);
@@ -126,12 +131,14 @@ function updateCountdown() {
 
             console.log('🎉 Countdown finished!');
 
+            // تغییر عنوان countdown
             const countdownTitle = document.querySelector('.countdown-title');
             if (countdownTitle) {
                 countdownTitle.textContent = '🎉 Airdrop is LIVE!';
                 countdownTitle.style.color = '#ffd700';
             }
 
+            // متوقف کردن شمارش معکوس
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
@@ -143,11 +150,14 @@ function updateCountdown() {
     }
 }
 
+// **شروع شمارش معکوس**
 function startCountdown() {
     log('⏰ Starting countdown timer...');
     
+    // اجرا فوری
     updateCountdown();
     
+    // شروع interval
     if (countdownInterval) {
         clearInterval(countdownInterval);
     }
@@ -156,6 +166,7 @@ function startCountdown() {
     log('✅ Countdown timer started successfully');
 }
 
+// **متوقف کردن شمارش معکوس**
 function stopCountdown() {
     if (countdownInterval) {
         clearInterval(countdownInterval);
@@ -163,6 +174,7 @@ function stopCountdown() {
         log('⏹️ Countdown timer stopped');
     }
 }
+
 
 function updateWalletUI() {
     const walletButtonText = document.getElementById('wallet-button-text');
