@@ -3,8 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="icon" type="image/png" href="/static/images/icon-512x512.png">
     <title>C-COIN</title>
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/leaders.css">
@@ -13,17 +11,14 @@
 </head>
 <body>
 
-    <!-- Logo -->
     <div class="logo">
     <img src="/static/images/cup.png" class="logo-img" alt="Trophy">
     </div>
 
-    <!-- Header Title -->
     <div class="header">
         <h2 class="leaderboard-title">Leaderboard</h2>
     </div>
 
-    <!-- User Info Card -->
     <div class="user-box">
         <div class="user-circle" style="background-color: #ff5757">{{ user_info.username[:2]|upper }}</div>
         <div class="user-info">
@@ -33,7 +28,6 @@
         </div>
     </div>
 
-    <!-- Top 100 -->
     <div class="top-leaders">
         <h3 class="leader-title">TOP 100 PLAYERS</h3>
         {% for leader in top_leaders %}
@@ -50,7 +44,6 @@
         {% endfor %}
     </div>
 
-    <!-- Footer -->
     <div class="footer-icons">
         <a href="/leaders" class="footer-btn active">
             <i class="fas fa-medal"></i>
