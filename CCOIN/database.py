@@ -5,11 +5,14 @@ from sqlalchemy.pool import Pool
 from dotenv import load_dotenv
 import os
 import structlog
+from CCOIN.config import BOT_USERNAME
 
 logger = structlog.get_logger()
 
 load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/dbname")
+
+BOT_USERNAME = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
 
 # بهبود Connection Pool
 engine = create_engine(
