@@ -74,51 +74,35 @@
 
         function inviteFunction() {
             console.log("Invite button clicked");
-            
+
             if (!REFERRAL_LINK) {
                 alert('Referral link not available');
                 return;
             }
-            
+
+            const message = `🎉 Join CCoin and get FREE tokens!\n\n${REFERRAL_LINK}`;
+
             if (window.Telegram && window.Telegram.WebApp) {
                 try {
-                    // روش اول: استفاده از switchInlineQuery برای باز کردن صفحه انتخاب کانتکت
-                    if (window.Telegram.WebApp.switchInlineQuery) {
-                        console.log("Using switchInlineQuery");
-                        window.Telegram.WebApp.switchInlineQuery(REFERRAL_LINK, ['users']);
-                        return;
-                    }
-                    
-                    // روش دوم: استفاده از openTelegramLink
+                    // ✅ روش صحیح: استفاده از share link
+                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(REFERRAL_LINK)}&text=${encodeURIComponent('🎉 Join CCoin and get FREE tokens!')}`;
+
+                    console.log("Opening share URL:", shareUrl);
+
                     if (window.Telegram.WebApp.openTelegramLink) {
-                        console.log("Using openTelegramLink");
-                        const shareUrl = `tg://msg?text=${encodeURIComponent(REFERRAL_LINK)}`;
                         window.Telegram.WebApp.openTelegramLink(shareUrl);
-                        return;
-                    }
-                    
-                    // روش سوم: استفاده از openLink
-                    if (window.Telegram.WebApp.openLink) {
-                        console.log("Using openLink");
-                        const shareUrl = `tg://msg?text=${encodeURIComponent(REFERRAL_LINK)}`;
+                    } else if (window.Telegram.WebApp.openLink) {
                         window.Telegram.WebApp.openLink(shareUrl);
-                        return;
+                    } else {
+                        window.open(shareUrl, '_blank');
                     }
-                    
-                    // روش چهارم: fallback
-                    console.log("Using fallback method");
-                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(REFERRAL_LINK)}`;
-                    window.Telegram.WebApp.openLink(shareUrl);
-                    
+
                 } catch (error) {
                     console.error("Error in invite function:", error);
-                    // آخرین fallback
-                    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(REFERRAL_LINK)}`;
-                    window.open(shareUrl, '_blank');
+                    alert('Error sharing link: ' + error.message);
                 }
             } else {
                 console.log("Telegram WebApp not available");
-                // برای تست در مرورگر
                 const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(REFERRAL_LINK)}`;
                 window.open(shareUrl, '_blank');
             }
