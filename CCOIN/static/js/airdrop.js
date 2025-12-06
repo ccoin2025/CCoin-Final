@@ -46,7 +46,7 @@ function log(msg) {
 
 function updateCountdown() {
     try {
-        const targetDate = new Date('2026-03-03T23:59:59Z').getTime();
+        const targetDate = new Date('2026-03-06T23:59:59Z').getTime();
         const now = new Date().getTime();
         const distance = targetDate - now;
 
