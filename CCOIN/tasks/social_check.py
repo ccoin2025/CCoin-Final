@@ -10,7 +10,6 @@ import requests
 import time
 from datetime import datetime
 
-# تنظیم لاگ‌گیری
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
@@ -25,10 +24,8 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-# Memory cache برای جایگزین Redis
 memory_cache = {}
 
-# پاداش‌های پلتفرم‌ها
 PLATFORM_REWARD = {
     "telegram": 500,
     "instagram": 500,
@@ -131,12 +128,10 @@ def check_youtube_subscribe(user_id: str) -> bool:
 
 def check_social_follow(user_id: str, platform: str, force_refresh: bool = False) -> bool:
     """تابع اصلی برای بررسی follow status در پلتفرم‌های مختلف"""
-    # پاک کردن cache های منقضی شده
     clear_expired_cache()
     
     cache_key = f"social_check:{user_id}:{platform}"
     
-    # اگر force_refresh فعال نباشد، از cache استفاده کن
     if not force_refresh:
         cached_result = get_from_cache(cache_key)
         if cached_result is not None:
@@ -167,7 +162,6 @@ def check_social_follow(user_id: str, platform: str, force_refresh: bool = False
         logger.error(f"❌ Error checking {platform} follow for user {user_id}: {e}")
         result = False
     
-    # Cache result for 5 minutes (کاهش مدت cache برای بررسی سریع‌تر انفالو)
     set_in_cache(cache_key, "1" if result else "0", 300)
     
     logger.info(f"✅ Follow check result for user {user_id} platform {platform}: {result}")
@@ -190,10 +184,8 @@ def check_and_update_all_user_tasks(user_id: str, db_session: Session = None) ->
         platforms = ["telegram", "instagram", "x", "youtube"]
         
         for platform in platforms:
-            # بررسی وضعیت فعلی follow
             current_follow_status = check_social_follow(user_id, platform, force_refresh=True)
             
-            # یافتن یا ایجاد task
             task = db_session.query(UserTask).filter(
                 UserTask.user_id == user.id,
                 UserTask.platform == platform
@@ -203,26 +195,21 @@ def check_and_update_all_user_tasks(user_id: str, db_session: Session = None) ->
                 task = UserTask(user_id=user.id, platform=platform, completed=False)
                 db_session.add(task)
             
-            # اگر کاربر فعلاً فالو نکرده ولی قبلاً تسک رو کامل کرده بود
             if not current_follow_status and task.completed:
-                # جریمه: کسر کردن پاداش و غیرفعال کردن تسک
                 reward = PLATFORM_REWARD.get(platform, 0)
-                user.tokens = max(0, user.tokens - reward)  # جلوگیری از منفی شدن توکن‌ها
+                user.tokens = max(0, user.tokens - reward) 
                 task.completed = False
                 task.completed_at = None
                 
                 logger.info(f"🚫 User {user_id} unfollowed {platform}. Penalty applied: -{reward} tokens")
                 results[platform] = {"status": "unfollowed", "penalty": reward, "follow_status": False}
                 
-            # اگر کاربر فالو کرده ولی تسک کامل نشده
             elif current_follow_status and not task.completed:
                 results[platform] = {"status": "ready_to_claim", "follow_status": True}
                 
-            # اگر کاربر فالو کرده و تسک هم کامل شده
             elif current_follow_status and task.completed:
                 results[platform] = {"status": "completed", "follow_status": True}
                 
-            # اگر کاربر فالو نکرده و تسک هم کامل نشده
             else:
                 results[platform] = {"status": "not_completed", "follow_status": False}
         
@@ -238,7 +225,7 @@ def check_and_update_all_user_tasks(user_id: str, db_session: Session = None) ->
             db_session.close()
 
 def get_detailed_telegram_status(user_id: int) -> dict:
-    """دریافت جزئیات کامل وضعیت عضویت در تلگرام"""
+    """Clear the user's cache for a specific platform or for all platforms"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
@@ -291,14 +278,13 @@ def get_detailed_telegram_status(user_id: int) -> dict:
         }
 
 def clear_user_cache(user_id: str, platform: str = None):
-    """پاک کردن cache کاربر برای پلتفرم خاص یا همه پلتفرم‌ها"""
+    """Clear the user's cache for a specific platform or for all platforms"""
     if platform:
         cache_key = f"social_check:{user_id}:{platform}"
         if cache_key in memory_cache:
             del memory_cache[cache_key]
             logger.info(f"🧹 Cleared cache for user {user_id} platform {platform}")
     else:
-        # پاک کردن همه cache های کاربر
         patterns = [
             f"social_check:{user_id}:telegram",
             f"social_check:{user_id}:instagram",
@@ -343,7 +329,6 @@ def verify_bot_access():
                 "error": "BOT_TOKEN not configured"
             }
         
-        # تست با getMe
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
         response = requests.get(url, timeout=10)
         
@@ -355,7 +340,6 @@ def verify_bot_access():
         
         bot_info = response.json()
         
-        # تست دسترسی به کانال
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChat"
         params = {"chat_id": "@CCOIN_OFFICIAL"}
         response = requests.get(url, params=params, timeout=10)
@@ -382,14 +366,11 @@ def verify_bot_access():
             "error": str(e)
         }
 
-# تابع برای manual verification (برای تست)
 def manual_verify_user_task(user_id: str, platform: str, force: bool = False):
     """تایید دستی task کاربر"""
     try:
-        # پاک کردن cache
         clear_user_cache(user_id, platform)
         
-        # بررسی مجدد
         return check_social_follow(user_id, platform, force_refresh=True)
         
     except Exception as e:
