@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
     <title>Connect Wallet</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -193,7 +193,6 @@
             <p class="subtitle">Select your wallet to connect</p>
             
             <div class="wallet-list">
-                <!-- Phantom Wallet Only -->
                 <div class="wallet-item" onclick="connectWallet('phantom')">
                     <img src="https://phantom.app/img/phantom-logo.svg" 
                          alt="Phantom" class="wallet-icon">
@@ -240,7 +239,6 @@
 
         async function connectWallet(walletType) {
             try {
-                // Show loading
                 document.getElementById('select-wallet').style.display = 'none';
                 document.getElementById('loading').style.display = 'block';
 
@@ -254,13 +252,10 @@
                     throw new Error('Failed to connect wallet');
                 }
 
-                // Save to backend
                 await saveWalletToBackend(walletAddress);
 
-                // Show success
                 showSuccess(walletAddress);
 
-                // Return to airdrop page after 3 seconds
                 setTimeout(() => {
                     returnToAirdrop();
                 }, 3000);
@@ -272,12 +267,10 @@
         }
 
         async function connectPhantom() {
-            // Check if in Phantom browser
             if (window.solana && window.solana.isPhantom) {
                 const response = await window.solana.connect();
                 return response.publicKey.toString();
             } else {
-                // Open in Phantom Browser
                 const currentUrl = window.location.href;
                 const phantomUrl = `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}`;
                 window.location.href = phantomUrl;
@@ -321,23 +314,19 @@
         }
 
         function returnToAirdrop() {
-            // Method 1: Use Telegram WebApp API
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.close();
                 return;
             }
 
-            // Method 2: Return to airdrop page
             window.location.href = `/airdrop?telegram_id=${telegramId}`;
         }
 
-        // Check for auto-connect (when returning from Phantom Browser)
         window.addEventListener('load', async function() {
             if (window.solana && window.solana.isPhantom) {
                 try {
                     const response = await window.solana.connect({ onlyIfTrusted: true });
                     if (response.publicKey) {
-                        // Auto-save if already connected
                         const walletAddress = response.publicKey.toString();
                         await saveWalletToBackend(walletAddress);
                         showSuccess(walletAddress);
