@@ -1,8 +1,5 @@
-// Phantom Deep Links Utility Functions
-// Based on official Phantom documentation
 
 const PhantomUtils = {
-    // Generate ephemeral keypair for encryption
     generateKeypair() {
         const keypair = nacl.box.keyPair();
         return {
@@ -11,7 +8,6 @@ const PhantomUtils = {
         };
     },
 
-    // Encrypt payload for Phantom
     encryptPayload(payload, sharedSecret) {
         const nonce = nacl.randomBytes(24);
         const message = JSON.stringify(payload);
@@ -25,7 +21,6 @@ const PhantomUtils = {
         };
     },
 
-    // Decrypt payload from Phantom
     decryptPayload(encryptedData, nonce, sharedSecret) {
         const decryptedData = nacl.box.open.after(
             bs58.decode(encryptedData),
@@ -41,7 +36,6 @@ const PhantomUtils = {
         return JSON.parse(message);
     },
 
-    // Create shared secret
     createSharedSecret(phantomPublicKey, dappSecretKey) {
         return nacl.box.before(
             bs58.decode(phantomPublicKey),
@@ -49,7 +43,6 @@ const PhantomUtils = {
         );
     },
 
-    // Build Phantom connect URL
     buildConnectUrl(dappPublicKey, redirectUrl, cluster = 'mainnet-beta') {
         const params = new URLSearchParams({
             dapp_encryption_public_key: bs58.encode(dappPublicKey),
@@ -61,7 +54,6 @@ const PhantomUtils = {
         return `https://phantom.app/ul/v1/connect?${params.toString()}`;
     },
 
-    // Build Phantom signAndSendTransaction URL
     buildSignAndSendUrl(dappPublicKey, payload, nonce, redirectUrl) {
         const params = new URLSearchParams({
             dapp_encryption_public_key: bs58.encode(dappPublicKey),
@@ -73,7 +65,6 @@ const PhantomUtils = {
         return `https://phantom.app/ul/v1/signAndSendTransaction?${params.toString()}`;
     },
 
-    // Open URL with Telegram support
     openUrl(url) {
         if (window.Telegram?.WebApp?.openLink) {
             window.Telegram.WebApp.openLink(url);
@@ -82,13 +73,11 @@ const PhantomUtils = {
         }
     },
 
-    // Store keypair in localStorage
     storeKeypair(publicKey, secretKey) {
         localStorage.setItem('phantom_dapp_public_key', bs58.encode(publicKey));
         localStorage.setItem('phantom_dapp_secret_key', bs58.encode(secretKey));
     },
 
-    // Retrieve keypair from localStorage
     retrieveKeypair() {
         const publicKey = localStorage.getItem('phantom_dapp_public_key');
         const secretKey = localStorage.getItem('phantom_dapp_secret_key');
@@ -103,14 +92,12 @@ const PhantomUtils = {
         };
     },
 
-    // Store session
     storeSession(session, phantomPublicKey, walletPublicKey) {
         localStorage.setItem('phantom_session', session);
         localStorage.setItem('phantom_public_key', phantomPublicKey);
         localStorage.setItem('phantom_wallet_address', walletPublicKey);
     },
 
-    // Retrieve session
     retrieveSession() {
         return {
             session: localStorage.getItem('phantom_session'),
@@ -119,7 +106,6 @@ const PhantomUtils = {
         };
     },
 
-    // Clear session
     clearSession() {
         localStorage.removeItem('phantom_session');
         localStorage.removeItem('phantom_public_key');
@@ -129,7 +115,6 @@ const PhantomUtils = {
     }
 };
 
-// Export for use
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = PhantomUtils;
 }
