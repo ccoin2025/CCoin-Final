@@ -54,7 +54,7 @@ def check_duplicate_pattern(db: Session, telegram_id: str, ip_address: str = Non
         return True
 
 def check_wallet_activity(wallet_address: str) -> dict:
-   """Check wallet activity"""
+    """Check wallet activity"""
     try:
         response = solana_client.get_signatures_for_address(wallet_address, limit=100)
         
