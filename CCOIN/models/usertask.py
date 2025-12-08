@@ -8,15 +8,13 @@ class UserTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    platform = Column(String, nullable=False)  # platform name (telegram, instagram, x, youtube)
+    platform = Column(String, nullable=False) 
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime, nullable=True)
 
-    # New fields for attempt tracking
-    attempt_count = Column(Integer, default=0)  # تعداد دفعات کلیک روی دکمه
-    last_attempt_at = Column(DateTime, nullable=True)  # آخرین زمان کلیک
-
-    # Relationships
+    attempt_count = Column(Integer, default=0)  
+    last_attempt_at = Column(DateTime, nullable=True) 
+    
     user = relationship("User", back_populates="tasks")
 
     def __repr__(self):
