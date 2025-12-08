@@ -5,10 +5,10 @@ import structlog
 logger = structlog.get_logger()
 
 async def verify_recaptcha(token: str, remote_ip: str) -> bool:
-    """تأیید reCAPTCHA token"""
+    """Verify reCAPTCHA token"""
     if not RECAPTCHA_SECRET_KEY:
         logger.warning("reCAPTCHA not configured")
-        return True  # اگر تنظیم نشده، اجازه بده
+        return True  
     
     try:
         async with httpx.AsyncClient() as client:
@@ -30,4 +30,4 @@ async def verify_recaptcha(token: str, remote_ip: str) -> bool:
                 return False
     except Exception as e:
         logger.error("reCAPTCHA verification error", extra={"error": str(e)})
-        return True  # در صورت خطا، اجازه بده
+        return True  
