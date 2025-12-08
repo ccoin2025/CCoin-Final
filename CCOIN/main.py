@@ -49,7 +49,6 @@ import mimetypes
 
 load_dotenv()
 
-# Logging Configuration
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
@@ -66,7 +65,6 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-# Redis و Rate Limiting Setup
 RATE_LIMITING_ENABLED = False
 limiter = None
 
@@ -79,7 +77,7 @@ try:
         limiter = Limiter(
             key_func=get_remote_address,
             storage_uri=REDIS_URL,
-            default_limits=[GLOBAL_RATE_LIMIT]  # Global rate limit
+            default_limits=[GLOBAL_RATE_LIMIT] 
         )
         RATE_LIMITING_ENABLED = True
         logger.info("✅ Redis connected - Rate limiting enabled")
@@ -90,7 +88,6 @@ except ImportError:
 except Exception as e:
     logger.error(f"⚠️ Redis connection failed - Rate limiting disabled", extra={"error": str(e)})
 
-# Telegram IP Ranges (برای تایید webhook)
 TELEGRAM_IP_RANGES = [
     ipaddress.IPv4Network("149.154.160.0/20"),
     ipaddress.IPv4Network("91.108.4.0/22"),
@@ -99,7 +96,6 @@ TELEGRAM_IP_RANGES = [
     ipaddress.IPv6Network("2001:b28:f23f::/48"),
 ]
 
-# FastAPI App
 app = FastAPI(
     debug=ENV == "development",
     title="CCoin API",
@@ -126,18 +122,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ CSRF Settings
 class CsrfSettings(BaseModel):
     secret_key: str = SECRET_KEY
     cookie_samesite: str = 'lax'
     cookie_secure: bool = ENV == "production"
 
-# ✅ Middleware برای اضافه کردن CORS headers به static files
 class StaticFilesCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         
-        # اضافه کردن CORS headers برای static files و metadata
         if request.url.path.startswith('/static/') or request.url.path == '/metadata.html':
             response.headers['Access-Control-Allow-Origin'] = '*'
             response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
@@ -160,7 +153,6 @@ async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError
         content={"detail": "CSRF validation failed"}
     )
     
-# فقط اگر Rate Limiting فعال باشد
 if RATE_LIMITING_ENABLED and limiter:
     app.state.limiter = limiter
 
@@ -172,42 +164,35 @@ if RATE_LIMITING_ENABLED and limiter:
             content={"detail": "Too many requests. Please try again later."}
         )
 
-# Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Static files
 app.mount("/static", StaticFiles(directory="CCOIN/static"), name="static")
 templates = Jinja2Templates(directory="CCOIN/templates")
 
-# Middlewares
-app.add_middleware(GZipMiddleware, minimum_size=1000)  # فشرده‌سازی response
+app.add_middleware(GZipMiddleware, minimum_size=1000) 
 
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     https_only=True if ENV == "production" else False,
-    max_age=86400,  # 24 ساعت
+    max_age=86400, 
     same_site="lax"
 )
 
 if ENV == "production":
-    # محدود کردن hostname های مجاز
     allowed_hosts = [APP_DOMAIN.replace("https://", "").replace("http://", "")]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
-# Security Headers Middleware (جدید)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     """Add security headers to all responses"""
     response = await call_next(request)
     
-    # Security headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     
-    # ✅ اصلاح CSP برای اجازه دادن به CDN آیکون‌ها
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
@@ -220,7 +205,6 @@ async def add_security_headers(request: Request, call_next):
     
     return response
 
-# Request timing middleware (جدید)
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     start_time = time.time()
@@ -228,7 +212,6 @@ async def add_process_time_header(request: Request, call_next):
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
     
-    # Log slow requests
     if process_time > 1.0:
         logger.warning("Slow request detected", extra={
             "path": request.url.path,
@@ -238,7 +221,6 @@ async def add_process_time_header(request: Request, call_next):
     
     return response
 
-# Redirect root based on first_login
 @app.get("/")
 async def root(request: Request, db: Session = Depends(get_db)):
     telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
@@ -247,10 +229,9 @@ async def root(request: Request, db: Session = Depends(get_db)):
         logger.info("No telegram_id in session for root, rendering landing.html")
         return templates.TemplateResponse("landing.html", {
             "request": request,
-            "bot_username": BOT_USERNAME  # ✅ اضافه شد
+            "bot_username": BOT_USERNAME  
         })
 
-    # Sanitize input
     telegram_id = str(telegram_id).strip()
     request.session["telegram_id"] = telegram_id
 
@@ -259,10 +240,9 @@ async def root(request: Request, db: Session = Depends(get_db)):
         logger.info("User not found for root", extra={"telegram_id": telegram_id})
         return templates.TemplateResponse("landing.html", {
             "request": request,
-            "bot_username": BOT_USERNAME  # ✅ اضافه شد
+            "bot_username": BOT_USERNAME 
         })
 
-    # هدایت براساس وضعیت first_login
     if user.first_login:
         logger.info("User first login, redirecting to load", extra={"telegram_id": telegram_id})
         return RedirectResponse(url=f"/load?telegram_id={telegram_id}")
@@ -270,14 +250,12 @@ async def root(request: Request, db: Session = Depends(get_db)):
         logger.info("User returning, redirecting to home", extra={"telegram_id": telegram_id})
         return RedirectResponse(url=f"/home?telegram_id={telegram_id}")
         
-# Telegram webhook با امنیت بهبود یافته
 @app.api_route("/telegram_webhook", methods=["POST"])
 async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Webhook endpoint با تایید هویت بهتر
-    از X-Telegram-Bot-Api-Secret-Token استفاده می‌کند
+    Webhook endpoint with better authentication
+    Uses X-Telegram-Bot-Api-Secret-Token
     """
-    # بررسی Secret Token از header
     secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     expected_token = os.getenv("WEBHOOK_TOKEN")
     
@@ -292,7 +270,6 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=403, detail="Invalid webhook token")
 
-    # بررسی IP (اختیاری - برای امنیت بیشتر)
     client_ip = request.client.host
     is_telegram_ip = False
     
@@ -305,11 +282,9 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         
         if not is_telegram_ip and ENV == "production":
             logger.warning("Request from non-Telegram IP", extra={"ip": client_ip})
-            # در حالت development این رو نادیده می‌گیریم
     except ValueError:
         logger.error("Invalid IP address", extra={"ip": client_ip})
 
-    # پردازش update
     try:
         update_data = await request.json()
         logger.debug("Received webhook data", extra={"update_id": update_data.get("update_id")})
@@ -322,7 +297,6 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             logger.warning("Invalid Telegram update received")
             raise HTTPException(status_code=400, detail="Invalid Telegram update")
 
-        # پردازش update
         await telegram_app.process_update(update)
         await bot.shutdown()
 
@@ -333,7 +307,6 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         logger.error("Error processing Telegram update", extra={"error": str(e)}, exc_info=True)
         return {"ok": False, "error": "Internal error"}
 
-# Health check endpoint (بهبود یافته)
 @app.get("/health")
 async def health_check():
     """
@@ -358,12 +331,11 @@ async def health_check():
     
     return JSONResponse(content=health_status, status_code=status_code)
 
-# Metrics endpoint (جدید - فقط برای monitoring)
 @app.get("/metrics")
 async def metrics(db: Session = Depends(get_db)):
     """
     Endpoint برای monitoring
-    در production باید با authentication محافظت بشه
+    In production, should be protected with authentication
     """
     if ENV == "production":
         raise HTTPException(status_code=404)
@@ -383,7 +355,6 @@ async def metrics(db: Session = Depends(get_db)):
         logger.error("Error fetching metrics", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal error")
 
-# Include routers
 app.include_router(load.router)
 app.include_router(home.router, prefix="/home")
 app.include_router(leaders.router, prefix="/leaders")
@@ -396,7 +367,6 @@ app.include_router(users.router, prefix="/users")
 app.include_router(wallet.router, prefix="/wallet")
 app.include_router(commission.router, prefix="/commission")
 
-# Scheduler
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
 scheduler.start()
 
@@ -419,7 +389,6 @@ async def startup():
     webhook_url = f"{APP_DOMAIN}/telegram_webhook"
 
     try:
-        # تنظیم webhook با secret token
         await bot.set_webhook(
             url=webhook_url,
             secret_token=webhook_token,
@@ -427,7 +396,6 @@ async def startup():
         )
         logger.info("✅ Telegram webhook set successfully", extra={"url": webhook_url})
 
-        # تنظیم Menu Button
         try:
             from telegram import MenuButtonWebApp, WebAppInfo
             menu_button = MenuButtonWebApp(
