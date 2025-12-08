@@ -1,4 +1,3 @@
-# routes/commission.py
 import os
 import time
 import secrets
@@ -11,7 +10,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-# solana-py (نسخهٔ پروژه‌ات)
 from solana.rpc.async_api import AsyncClient
 from solders.pubkey import Pubkey
 from solders.keypair import Keypair
@@ -20,18 +18,16 @@ from solders.transaction import Transaction
 from solders.message import Message
 import base58
 
-# project imports - مطمئن شو این مسیرها با پروژه‌ات همخوانی دارد
 from CCOIN.database import get_db
 from CCOIN.models.user import User
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, BOT_USERNAME, BOT_TOKEN
 from CCOIN.utils.telegram_security import send_commission_payment_link
 
 logger = structlog.get_logger(__name__)
-router = APIRouter()  # main.py شامل خواهد کرد با prefix="/commission"
+router = APIRouter() 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# ساده‌سازی: session های پرداخت در مموری (TTL)
-_SESSION_STORE = {}  # session_id -> {"data": {...}, "expires_at": ts}
+_SESSION_STORE = {} 
 
 
 def _set_session(session_id: str, data: dict, ttl: int = 600):
@@ -51,10 +47,6 @@ def _get_session(session_id: str):
 def _pop_session(session_id: str):
     return _SESSION_STORE.pop(session_id, None)
 
-
-# -------------------------
-# Render payment page
-# -------------------------
 @router.get("/browser/pay", response_class=HTMLResponse)
 async def commission_browser_pay(
         request: Request,
@@ -88,10 +80,6 @@ async def commission_browser_pay(
         "solana_rpc": SOLANA_RPC
     })
 
-
-# -------------------------
-# Create payment session (server builds unsigned tx and returns base64)
-# -------------------------
 @router.post("/create_payment_session", response_class=JSONResponse)
 async def create_payment_session(request: Request, db: Session = Depends(get_db)):
     try:
@@ -117,16 +105,13 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
 
         client = AsyncClient(SOLANA_RPC)
         try:
-            # get latest blockhash
             blockhash_resp = await client.get_latest_blockhash()
             recent_blockhash = blockhash_resp.value.blockhash
 
-            # ✅ اصلاح شده: استفاده از Pubkey.from_string
             from_pubkey = Pubkey.from_string(user.wallet_address)
             to_pubkey = Pubkey.from_string(recipient)
             lamports = int(amount * 1_000_000_000)
 
-            # ✅ ساخت transfer instruction
             transfer_ix = transfer(
                 TransferParams(
                     from_pubkey=from_pubkey,
@@ -135,17 +120,14 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
                 )
             )
 
-            # ✅ ساخت Message
             message = Message.new_with_blockhash(
                 [transfer_ix],
                 from_pubkey,
                 recent_blockhash
             )
 
-            # ✅ ساخت Transaction
             tx = Transaction.new_unsigned(message)
 
-            # ✅ Serialize transaction
             tx_bytes = bytes(tx)
             tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
 
@@ -173,10 +155,6 @@ async def create_payment_session(request: Request, db: Session = Depends(get_db)
         logger.error("create_payment_session error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# -------------------------
-# Phantom callback (render)
-# -------------------------
 @router.get("/phantom_callback", response_class=HTMLResponse)
 async def phantom_callback(request: Request):
     """
@@ -192,7 +170,6 @@ async def phantom_callback(request: Request):
     signature = params.get("signature")
     telegram_id = params.get("telegram_id")
 
-    # phantom error
     if params.get("errorCode") or params.get("errorMessage"):
         err = params.get("errorMessage") or f"Phantom error {params.get('errorCode')}"
         return templates.TemplateResponse("commission_callback.html", {
@@ -225,10 +202,6 @@ async def phantom_callback(request: Request):
         "bot_username": BOT_USERNAME
     })
 
-
-# -------------------------
-# Verify signature (explicit verification)
-# -------------------------
 @router.post("/verify_signature", response_class=JSONResponse)
 async def verify_signature(request: Request, db: Session = Depends(get_db)):
     """
@@ -263,7 +236,6 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
             user_wallet = session_data.get("wallet_address")
             admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
 
-            # robust instruction reading
             instructions = []
             try:
                 parsed_msg = tx_resp.value.transaction.transaction.message
@@ -315,10 +287,6 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# -------------------------
-# Fallback verify (scan recent txs)
-# -------------------------
 @router.post("/verify", response_class=JSONResponse)
 async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
     try:
@@ -385,10 +353,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
         logger.error("verify payment error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# -------------------------
-# Success page
-# -------------------------
 @router.get("/success", response_class=HTMLResponse)
 async def commission_success(request: Request, telegram_id: str = Query(..., description="Telegram user ID"),
                              db: Session = Depends(get_db)):
@@ -401,10 +365,6 @@ async def commission_success(request: Request, telegram_id: str = Query(..., des
         "bot_username": BOT_USERNAME
     })
 
-
-# -------------------------
-# Quick check status
-# -------------------------
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(request: Request, telegram_id: str = Query(..., description="Telegram user ID"),
                                   db: Session = Depends(get_db)):
@@ -418,13 +378,9 @@ async def check_commission_status(request: Request, telegram_id: str = Query(...
         "commission_amount": COMMISSION_AMOUNT
     }
 
-
-# -------------------------
-# Send payment link to Telegram
-# -------------------------
 @router.post("/send_payment_link", response_class=JSONResponse)
 async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
-    """ارسال لینک پرداخت به تلگرام"""
+    """Send payment link to Telegram"""
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
@@ -441,7 +397,6 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         if user.commission_paid:
             return {"success": False, "message": "Commission already paid"}
         
-        # ارسال لینک به تلگرام
         success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
         
         if success:
@@ -457,16 +412,12 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         logger.error("send_payment_link error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# -------------------------
-# Check payment status
-# -------------------------
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(
     telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """بررسی وضعیت پرداخت کمیسیون"""
+    """Check commission payment status"""
     try:
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
