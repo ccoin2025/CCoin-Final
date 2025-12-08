@@ -1,4 +1,3 @@
-/* Global Styles */
 body {
 background-color: #000;
 color: #fff;
@@ -8,7 +7,6 @@ padding-bottom: 100px;
 position: relative;
 }
 
-/* ایجاد یک overlay برای مخفی کردن متن زیر دکمه‌ها */
 .header-overlay {
 position: fixed;
 top: 0;
@@ -17,10 +15,9 @@ right: 0;
 height: 80px;
 background-color: #000;
 z-index: 999;
-pointer-events: none; /* تا دکمه‌ها قابل کلیک باشند */
+pointer-events: none; 
 }
 
-/* دکمه‌ها - حذف hover effects */
 .close-btn, .link-btn {
 background: none;
 border: none;
@@ -34,27 +31,25 @@ height: 44px;
 display: flex;
 align-items: center;
 justify-content: center;
-transition: none; /* حذف transition */
+transition: none; 
 position: fixed;
 top: 20px;
 z-index: 1000;
 }
 
-/* دکمه بک اسپیس سمت چپ */
 .close-btn {
 left: 15px;
 }
 
-/* دکمه لینک سمت راست */
 .link-btn {
 right: 15px;
 }
 
 .about-container {
 padding: 20px;
-padding-top: 80px; /* فاصله از بالا برای جای دکمه‌ها */
+padding-top: 80px; 
 position: relative;
-z-index: 1; /* زیر overlay قرار گیرد */
+z-index: 1; 
 }
 
 .about-container h1 {
@@ -72,7 +67,6 @@ margin-bottom: 15px;
 text-align: justify;
 }
 
-/* Responsive Design */
 @media (max-width: 480px) {
 .header-overlay {
 height: 70px;
@@ -98,7 +92,6 @@ padding-top: 70px;
 }
 }
 
-/* حذف کامل همه افکت‌های hover و focus */
 *, *:before, *:after {
 -webkit-tap-highlight-color: transparent !important;
 outline: none !important;
