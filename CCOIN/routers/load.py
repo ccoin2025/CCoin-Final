@@ -31,14 +31,12 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), ".
 @router.get("/load", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def get_load(request: Request, db: Session = Depends(get_db)):
-    # ابتدا telegram_id را از query parameter بگیرید
     telegram_id = request.query_params.get("telegram_id") or request.session.get("telegram_id")
     
     if not telegram_id:
         logger.info("No telegram_id found, redirecting to bot")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
     
-    # telegram_id را در session تنظیم کنید
     request.session["telegram_id"] = telegram_id
     
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -46,14 +44,12 @@ async def get_load(request: Request, db: Session = Depends(get_db)):
         logger.info(f"User not found for telegram_id: {telegram_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
-    # بررسی کنید که آیا این اولین ورود است
     if not user.first_login:
         logger.info(f"User {telegram_id} is not first login, redirecting to home")
         return RedirectResponse(url="/home")
     
     reward = user.tokens
     
-    # فقط اگر first_login=True باشد، آن را False کنید
     if user.first_login:
         user.first_login = False
         db.commit()
