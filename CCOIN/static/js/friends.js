@@ -1,25 +1,21 @@
 console.log("Friends.js loaded - Simple version");
 
-// متغیرهای global
 let REFERRAL_CODE = null;
 let REFERRAL_LINK = null;
 
-// تابع دعوت دوست - بدون validation
 function inviteFriend() {
     console.log("=== INVITE BUTTON CLICKED ===");
     console.log("REFERRAL_LINK:", REFERRAL_LINK);
     
-    // فقط چک می‌کنیم که لینک خالی نباشد
     if (!REFERRAL_LINK) {
         console.error("REFERRAL_LINK is null/undefined");
-        alert('لینک رفرال موجود نیست!');
+        alert("Referral link does not exist!");
         return;
     }
 
     console.log("Opening referral link:", REFERRAL_LINK);
 
     try {
-        // تلاش اول: Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
             console.log("Using Telegram WebApp.openLink");
             window.Telegram.WebApp.openLink(REFERRAL_LINK);
@@ -29,35 +25,31 @@ function inviteFriend() {
         }
     } catch (error) {
         console.error("Error opening link:", error);
-        // fallback
         try {
             window.open(REFERRAL_LINK, '_blank');
         } catch (fallbackError) {
             console.error("Fallback also failed:", fallbackError);
-            alert('خطا در باز کردن لینک');
+            alert("Error opening the link");
         }
     }
 }
 
-// تابع کپی لینک - بدون validation
 function copyLink() {
     console.log("=== COPY BUTTON CLICKED ===");
     console.log("REFERRAL_LINK:", REFERRAL_LINK);
     
-    // فقط چک می‌کنیم که لینک خالی نباشد
     if (!REFERRAL_LINK) {
         console.error("REFERRAL_LINK is null/undefined");
-        alert('لینک رفرال موجود نیست!');
+        alert("Referral link not found!");
         return;
     }
 
     console.log("Copying referral link:", REFERRAL_LINK);
 
-    // تلاش برای کپی
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(REFERRAL_LINK).then(() => {
             console.log("Link copied successfully");
-            alert('لینک کپی شد!');
+            alert("Link copied!");
         }).catch((error) => {
             console.error("Clipboard API failed:", error);
             fallbackCopy();
@@ -68,7 +60,6 @@ function copyLink() {
     }
 }
 
-// تابع fallback برای کپی
 function fallbackCopy() {
     try {
         const textArea = document.createElement('textarea');
@@ -83,29 +74,26 @@ function fallbackCopy() {
         
         if (successful) {
             console.log("Fallback copy successful");
-            alert('لینک کپی شد!');
+            alert("Link copied!");
         } else {
             console.error("Fallback copy failed");
-            alert('خطا در کپی کردن');
+            alert("Copy error");
         }
     } catch (error) {
         console.error("Fallback copy error:", error);
-        alert('خطا در کپی کردن');
+        alert("Copy error");
     }
 }
 
-// وقتی DOM آماده شد
 document.addEventListener('DOMContentLoaded', function() {
     console.log("=== DOM READY ===");
     
-    // دریافت داده‌ها از body
     REFERRAL_CODE = document.body.getAttribute('data-referral-code');
     REFERRAL_LINK = document.body.getAttribute('data-referral-link');
     
     console.log("Retrieved REFERRAL_CODE:", REFERRAL_CODE);
     console.log("Retrieved REFERRAL_LINK:", REFERRAL_LINK);
     
-    // پیدا کردن دکمه‌ها
     const inviteButton = document.getElementById('inviteButton');
     const copyButton = document.getElementById('copyButton');
 
@@ -126,6 +114,5 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log("Setup completed");
 });
 
-// تابع‌های global
 window.inviteFriend = inviteFriend;
 window.copyLink = copyLink;
