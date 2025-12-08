@@ -60,7 +60,7 @@ display: flex;
 align-items: center;
 flex: 1;
 margin-right: 10px;
-min-width: 0; /* مهم: اجازه می‌ده flex item کوچکتر از محتوا بشه */
+min-width: 0; 
 }
 
 .user-info span:nth-child(1) {
@@ -71,8 +71,8 @@ margin-right: 15px;
 overflow: hidden;
 text-overflow: ellipsis;
 white-space: nowrap;
-min-width: 0; /* مهم: برای عملکرد صحیح ellipsis */
-max-width: 150px; /* تغییر: حداکثر عرض اسم 150 پیکسل */
+min-width: 0; 
+max-width: 150px; 
 }
 
 .user-info span:nth-child(2) {
@@ -120,7 +120,7 @@ display: flex;
 align-items: center;
 flex: 1;
 margin-right: 10px;
-min-width: 0; /* مهم: اجازه می‌ده flex item کوچکتر از محتوا بشه */
+min-width: 0; 
 }
 
 .leader-info span:nth-child(1) {
@@ -131,8 +131,8 @@ margin-right: 15px;
 overflow: hidden;
 text-overflow: ellipsis;
 white-space: nowrap;
-min-width: 0; /* مهم: برای عملکرد صحیح ellipsis */
-max-width: 150px; /* تغییر: حداکثر عرض اسم 150 پیکسل */
+min-width: 0; 
+max-width: 150px; 
 }
 
 .leader-info span:nth-child(2) {
@@ -206,7 +206,6 @@ font-size: 20px;
 margin-bottom: 2px;
 }
 
-/* حذف کامل همه افکت‌های hover و focus */
 *, *:before, *:after {
 -webkit-tap-highlight-color: transparent !important;
 outline: none !important;
