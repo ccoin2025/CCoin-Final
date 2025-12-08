@@ -1,4 +1,3 @@
-// تشخیص وجود APP_CONFIG و ایجاد fallback در صورت عدم وجود
 if (typeof window.APP_CONFIG === 'undefined') {
     console.error('❌ APP_CONFIG not found! Using fallback values.');
     window.APP_CONFIG = {
@@ -14,7 +13,6 @@ if (typeof window.APP_CONFIG === 'undefined') {
     };
 }
 
-// Use global variables from HTML
 const {
     USER_ID,
     SOLANA_RPC_URL,
@@ -43,10 +41,8 @@ function log(msg) {
     console.log('[Airdrop] ' + msg);
 }
 
-// **تابع شمارش معکوس اصلاح شده**
 function updateCountdown() {
     try {
-        // تاریخ هدف: 06 مارس 2026 (اصلاح شده)
         const targetDate = new Date('2026-03-06T23:59:59Z').getTime();
         const now = new Date().getTime();
         const distance = targetDate - now;
@@ -57,13 +53,11 @@ function updateCountdown() {
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            // بروزرسانی المان‌های HTML
             const daysElement = document.getElementById('days');
             const hoursElement = document.getElementById('hours');
             const minutesElement = document.getElementById('minutes');
             const secondsElement = document.getElementById('seconds');
 
-            // بروزرسانی با انیمیشن
             if (daysElement) {
                 const newValue = days.toString().padStart(2, '0');
                 if (daysElement.textContent !== newValue) {
@@ -116,13 +110,11 @@ function updateCountdown() {
                 }
             }
 
-            // فقط هر 30 ثانیه log کن تا spam نشود
             if (seconds % 30 === 0) {
                 console.log(`⏰ Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`);
             }
 
         } else {
-            // تمام شد
             const elements = ['days', 'hours', 'minutes', 'seconds'];
             elements.forEach(id => {
                 const element = document.getElementById(id);
@@ -131,14 +123,12 @@ function updateCountdown() {
 
             console.log('🎉 Countdown finished!');
 
-            // تغییر عنوان countdown
             const countdownTitle = document.querySelector('.countdown-title');
             if (countdownTitle) {
                 countdownTitle.textContent = '🎉 Airdrop is LIVE!';
                 countdownTitle.style.color = '#ffd700';
             }
 
-            // متوقف کردن شمارش معکوس
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
@@ -150,14 +140,11 @@ function updateCountdown() {
     }
 }
 
-// **شروع شمارش معکوس**
 function startCountdown() {
     log('⏰ Starting countdown timer...');
     
-    // اجرا فوری
     updateCountdown();
     
-    // شروع interval
     if (countdownInterval) {
         clearInterval(countdownInterval);
     }
@@ -166,7 +153,6 @@ function startCountdown() {
     log('✅ Countdown timer started successfully');
 }
 
-// **متوقف کردن شمارش معکوس**
 function stopCountdown() {
     if (countdownInterval) {
         clearInterval(countdownInterval);
@@ -560,7 +546,6 @@ window.addEventListener('beforeunload', function() {
 });
 
 
-// تابع برای باز کردن مودال کمیسیون
 function openCommissionModal() {
     console.log('🔵 Opening commission modal');
     const modal = document.getElementById('commission-modal');
@@ -572,7 +557,6 @@ function openCommissionModal() {
     }
 }
 
-// تابع برای بستن مودال کمیسیون
 function closeCommissionModal() {
     console.log('🔵 Closing commission modal');
     const modal = document.getElementById('commission-modal');
@@ -615,26 +599,22 @@ async function handleCommissionClick() {
 }
 console.log('✅ airdrop.js loaded');
 
-// تابع تست ساده برای دکمه کمیسیون
 function testCommissionButton() {
     console.log('🟢 Button clicked!');
     alert('Button works! Telegram ID: ' + USER_ID);
     
-    // تست اتصال کیف پول
     if (!tasksCompleted.wallet || !connectedWallet) {
         alert('❌ Please connect your wallet first!');
         console.log('❌ Wallet not connected');
         return;
     }
     
-    // تست پرداخت قبلی
     if (tasksCompleted.pay) {
         alert('✅ Commission already paid!');
         console.log('✅ Already paid');
         return;
     }
     
-    // ارسال درخواست
     console.log('🔵 Sending request to server...');
     
     fetch('/commission/send_payment_link', {
