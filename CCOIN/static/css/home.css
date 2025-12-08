@@ -112,7 +112,6 @@ font-size: 20px;
 margin-bottom: 2px;
 }
 
-/* حذف کامل همه افکت‌های hover و focus - تمرکز ویژه روی دکمه‌های About و Join */
 *, *:before, *:after {
 -webkit-tap-highlight-color: transparent !important;
 outline: none !important;
@@ -124,7 +123,6 @@ transition: none !important;
 outline: none !important;
 }
 
-/* قوانین قوی برای جلوگیری از تغییر رنگ دکمه‌های About و Join */
 .about-btn:hover, .about-btn:focus, .about-btn:active, .about-btn:visited,
 .join-community-btn:hover, .join-community-btn:focus, .join-community-btn:active, .join-community-btn:visited {
 background-color: #111 !important;
