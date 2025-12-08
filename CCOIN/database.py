@@ -14,18 +14,16 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
 
-# بهبود Connection Pool
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_size=20,  # افزایش یافت از 5 به 20
-    max_overflow=40,  # افزایش یافت از 10 به 40
+    pool_size=20, 
+    max_overflow=40, 
     pool_timeout=30,
-    pool_pre_ping=True,  # جدید: بررسی سلامت connection قبل از استفاده
-    pool_recycle=3600,  # جدید: recycle connections هر ساعت
-    echo=False,  # غیرفعال کردن SQL logging در production
+    pool_pre_ping=True,  
+    pool_recycle=3600, 
+    echo=False,
 )
 
-# Event listener برای logging connection pool
 @event.listens_for(Pool, "connect")
 def receive_connect(dbapi_conn, connection_record):
     logger.debug("New database connection established")
@@ -39,8 +37,8 @@ Base = declarative_base()
 
 def get_db():
     """
-    Dependency برای دریافت database session
-    با مدیریت خودکار close
+    Dependency for getting a database session
+    with automatic close management
     """
     db = SessionLocal()
     try:
@@ -54,7 +52,7 @@ def get_db():
 
 def get_db_health():
     """
-    بررسی سلامت اتصال دیتابیس
+    Check database connection health
     """
     try:
         db = SessionLocal()
