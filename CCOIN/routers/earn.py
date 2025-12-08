@@ -31,9 +31,8 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
 
-# Memory cache برای جایگزین Redis
 memory_cache = {}
-CACHE_EXPIRY = 300  # 5 دقیقه
+CACHE_EXPIRY = 300  
 
 def get_from_cache(key: str) -> Optional[any]:
     """دریافت از memory cache با expiry check"""
@@ -46,11 +45,11 @@ def get_from_cache(key: str) -> Optional[any]:
     return None
 
 def set_in_cache(key: str, value: any, ttl: int = CACHE_EXPIRY):
-    """ذخیره در memory cache"""
+    """Store in memory cache"""
     memory_cache[key] = (value, time.time() + ttl)
 
 def clear_user_cache(telegram_id: str):
-    """پاک کردن تمام cache های یک کاربر"""
+    """Clear all caches of a user"""
     keys_to_delete = [k for k in memory_cache.keys() if telegram_id in k]
     for key in keys_to_delete:
         del memory_cache[key]
@@ -59,7 +58,7 @@ def clear_user_cache(telegram_id: str):
 @limiter.limit("20/minute")
 async def get_earn(request: Request, db: Session = Depends(get_db)):
     """
-    صفحه Earn با cache و بررسی خودکار
+    Earn page with cache and automatic checks
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -74,12 +73,10 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
         logger.error("User not found", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
 
-    # بررسی cache برای tasks
     cache_key = f"tasks:{telegram_id}"
     cached_tasks = get_from_cache(cache_key)
 
     if not cached_tasks:
-        # بررسی و به‌روزرسانی وضعیت همه تسک‌ها
         try:
             update_result = check_and_update_all_user_tasks(telegram_id, db)
         except Exception as e:
@@ -88,10 +85,8 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
                 "error": str(e)
             })
 
-        # دریافت تسک‌های کاربر از دیتابیس
         user_tasks = db.query(UserTask).filter(UserTask.user_id == user.id).all()
         
-        # ایجاد دیکشنری برای دسترسی سریع
         task_dict = {task.platform: task for task in user_tasks}
 
         tasks = [
@@ -129,8 +124,7 @@ async def get_earn(request: Request, db: Session = Depends(get_db)):
             },
         ]
 
-        # Cache tasks
-        set_in_cache(cache_key, tasks, ttl=60)  # 1 دقیقه
+        set_in_cache(cache_key, tasks, ttl=60)  
     else:
         tasks = cached_tasks
 
@@ -149,7 +143,7 @@ async def verify_task(
     db: Session = Depends(get_db)
 ):
     """
-    تایید انجام task با سیستم 3 بار کلیک برای شبکه‌های اجتماعی غیر Telegram
+    Task confirmation with 3-click system for non-Telegram social networks
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -166,7 +160,6 @@ async def verify_task(
 
     platform = task_data.platform
 
-    # یافتن یا ایجاد task
     task = db.query(UserTask).filter(
         UserTask.user_id == user.id,
         UserTask.platform == platform
@@ -177,7 +170,6 @@ async def verify_task(
         db.add(task)
         db.flush()
 
-    # ✅ اگر task قبلاً complete شده، دوباره verify نکن
     if task.completed:
         logger.info("Task already completed", extra={
             "telegram_id": telegram_id,
@@ -185,7 +177,6 @@ async def verify_task(
         })
         return {"success": True, "already_completed": True}
 
-    # 🔄 افزایش تعداد attempt
     task.attempt_count += 1
     task.last_attempt_at = datetime.now(timezone.utc)
     db.commit()
@@ -196,22 +187,18 @@ async def verify_task(
         "attempt_count": task.attempt_count
     })
 
-    # 🎯 منطق سه بار کلیک فقط برای Instagram, X, YouTube
     if platform in ['instagram', 'x', 'youtube']:
-        # فقط در بار سوم واقعاً verify کن
         if task.attempt_count < 3:
             logger.info(f"Fake verification - attempt {task.attempt_count}/3", extra={
                 "telegram_id": telegram_id,
                 "platform": platform
             })
-            # Fake verification - برگردان false تا کاربر فکر کنه داره چک میکنه
             return {
                 "success": False,
                 "attempt_count": task.attempt_count,
                 "message": "Verification in progress. Please try again."
             }
         else:
-            # در بار سوم، واقعاً verify کن (که همیشه true برمی‌گردونه چون API نداریم)
             logger.info(f"Real verification on attempt 3", extra={
                 "telegram_id": telegram_id,
                 "platform": platform
@@ -230,7 +217,6 @@ async def verify_task(
                 "attempt_count": task.attempt_count
             }
     
-    # 📱 برای Telegram همیشه verify واقعی (بدون تغییر)
     elif platform == 'telegram':
         result = check_social_follow(telegram_id, platform, force_refresh=True)
         
@@ -256,7 +242,7 @@ async def claim_reward(
     db: Session = Depends(get_db)
 ):
     """
-    دریافت reward با امنیت کامل
+    Receive reward with full security
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -271,14 +257,12 @@ async def claim_reward(
 
     platform = task_data.platform
 
-    # Query task
     task = db.query(UserTask).filter(
         UserTask.user_id == user.id,
         UserTask.platform == platform
     ).first()
 
     if not task:
-        # ایجاد task جدید
         task = UserTask(user_id=user.id, platform=platform, completed=False)
         db.add(task)
         db.flush()
@@ -290,7 +274,6 @@ async def claim_reward(
         })
         return {"success": False, "error": "Task already claimed"}
 
-    # بررسی مجدد follow status
     try:
         result = check_social_follow(telegram_id, platform, force_refresh=True)
 
@@ -302,7 +285,6 @@ async def claim_reward(
             user.updated_at = datetime.now(timezone.utc)
             db.commit()
 
-            # پاک کردن cache
             background_tasks.add_task(clear_user_cache, telegram_id)
 
             logger.info("Reward claimed", extra={
@@ -338,7 +320,7 @@ async def claim_reward(
 @limiter.limit("10/minute")
 async def check_all_tasks(request: Request, db: Session = Depends(get_db)):
     """
-    بررسی وضعیت همه تسک‌ها
+    Check status of all tasks
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -365,7 +347,7 @@ async def refresh_task_status(
     db: Session = Depends(get_db)
 ):
     """
-    بررسی و به‌روزرسانی وضعیت همه تسک‌ها
+    Check and update status of all tasks
     """
     telegram_id = request.session.get("telegram_id")
 
@@ -379,10 +361,8 @@ async def refresh_task_status(
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
-        # بررسی و به‌روزرسانی
         update_result = check_and_update_all_user_tasks(telegram_id, db)
 
-        # پاک کردن cache در background
         background_tasks.add_task(clear_user_cache, telegram_id)
 
         if update_result.get("success"):
