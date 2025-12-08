@@ -25,9 +25,8 @@ async def get_home(
     db: Session = Depends(get_db)
 ):
     """
-    Home page با امنیت بهبود یافته
+    Home page with enhanced security
     """
-    # دریافت telegram_id از query یا session
     if not telegram_id:
         telegram_id = request.session.get("telegram_id")
 
@@ -35,19 +34,15 @@ async def get_home(
         logger.warning("No telegram_id found for home")
         return RedirectResponse(url="https://t.me/CTG_COIN_BOT")
 
-    # Sanitize input
     telegram_id = str(telegram_id).strip()
     
-    # ذخیره در session
     request.session["telegram_id"] = telegram_id
 
-    # Query user
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
         logger.error("User not found", extra={"telegram_id": telegram_id})
         raise HTTPException(status_code=404, detail="User not found")
 
-    # بررسی first_login
     if user.first_login:
         logger.info("User first login, redirecting", extra={"telegram_id": telegram_id})
         return RedirectResponse(url=f"/load?telegram_id={telegram_id}")
