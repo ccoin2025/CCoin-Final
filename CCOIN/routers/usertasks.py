@@ -55,7 +55,7 @@ async def get_task_status(request: Request, user_id: str, db: Session = Depends(
     cache_key = f"task_status:{user_id}"
     cached_status = redis_client.get(cache_key)
     if cached_status:
-        return eval(cached_status.decode())  # Convert string back to dict
+        return eval(cached_status.decode()) 
     status = {
         "task": any(t.completed for t in user.tasks),
         "invite": len(user.referrals) > 0,
