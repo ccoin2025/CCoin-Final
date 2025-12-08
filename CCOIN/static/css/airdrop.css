@@ -6,12 +6,10 @@ background-color: #000;
 color: #fff;
 overflow-x: hidden;
 }
-/* Container */
 .airdrop-container {
 padding: 20px;
 padding-bottom: 100px;
 }
-/* Title */
 .box {
 width: 100%;
 margin: 20px auto;
@@ -53,6 +51,7 @@ align-items: center;
 margin: 15px 0;
 padding: 10px 0;
 }
+
 .airdrop-criteria .task button {
 display: flex;
 justify-content: space-between;
@@ -67,9 +66,8 @@ padding: 10px 8px;
 box-sizing: border-box;
 line-height: .4;
 font-size: 18px;
-transition: none; /* حذف transition */
+transition: none; 
 }
-/* فواصل برابر بین دکمه‌ها - اصلاح شده */
 .task-box {
 margin-bottom: 15px;
 position: relative;
@@ -88,9 +86,8 @@ border: none;
 border-radius: 12px;
 margin-bottom: 0;
 cursor: pointer;
-transition: none; /* حذف transition */
+transition: none; 
 }
-/* نوار سبز دور همه دکمه‌های تکمیل شده */
 .task-button.tasks-completed {
 background: rgba(40, 167, 69, 0.1) !important;
 border: 1px solid #28a745 !important;
@@ -103,7 +100,6 @@ border: 1px solid #28a745 !important;
 background: rgba(40, 167, 69, 0.1) !important;
 border: 1px solid #28a745 !important;
 }
-/* استایل برای دکمه wallet connected */
 .task-button.wallet-connected {
 background: rgba(40, 167, 69, 0.1) !important;
 border: 1px solid #28a745 !important;
@@ -112,14 +108,12 @@ color: #28a745;
 .task-button.wallet-connected .right-icon {
 color: #28a745 !important;
 }
-/* اطمینان از سبز شدن همه آیکون‌های completed */
 .task-button.tasks-completed .right-icon,
 .task-button.friends-invited .right-icon,
 .task-button.commission-paid .right-icon,
 .task-button.wallet-connected .right-icon {
 color: #28a745 !important;
 }
-/* استایل برای status indicator */
 .wallet-status-indicator {
 position: absolute;
 top: -3px;
@@ -160,14 +154,13 @@ font-size: 16px;
 font-weight: bold;
 cursor: pointer;
 width: 100%;
-transition: none; /* حذف transition */
+transition: none; 
 }
 .claim-btn:disabled {
 background: rgba(255, 255, 255, 0.1);
 color: rgba(255, 255, 255, 0.5);
 cursor: not-allowed;
 }
-/* نوار سبز دور پیام تبریک */
 .congratulations-message {
 background: linear-gradient(135deg, #28a745, #20c997);
 color: white;
@@ -187,7 +180,6 @@ to {
 box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
 }
 }
-/* استایل منوی کشویی کیف پول */
 .wallet-dropdown {
 position: relative;
 display: inline-block;
@@ -234,7 +226,7 @@ padding: 10px 20px;
 border-radius: 6px;
 cursor: pointer;
 font-size: 14px;
-transition: none; /* حذف transition */
+transition: none; 
 flex: 1;
 display: flex;
 align-items: center;
@@ -244,7 +236,6 @@ gap: 5px;
 .disconnect-btn {
 background: #dc3545 !important;
 }
-/* Responsive */
 @media (max-width: 480px) {
 .container {
 padding: 15px;
@@ -262,7 +253,6 @@ flex-direction: column;
 margin-bottom: 12px;
 }
 }
-/* Footer styles */
 .footer-icons {
 position: fixed;
 bottom: 0;
@@ -283,8 +273,8 @@ align-items: center;
 color: #aaa;
 font-size: 12px;
 text-decoration: none;
-transition: none; /* حذف transition */
-}
+transition: none;
+  
 .footer-btn i {
 font-size: 18px;
 margin-bottom: 4px;
@@ -292,7 +282,6 @@ margin-bottom: 4px;
 .footer-btn.active {
 color: #fff;
 }
-/* حذف کامل همه افکت‌های hover و focus */
 *, *:before, *:after {
 -webkit-tap-highlight-color: transparent !important;
 outline: none !important;
