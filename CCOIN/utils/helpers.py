@@ -23,7 +23,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 def generate_referral_link(code: str) -> str:
-"""Generate referral link with thorough validation"""
+    """Generate referral link with thorough validation"""
     logger.info(f"generate_referral_link called with code: '{code}'")
     
     if not code or str(code).strip() == "" or str(code).strip() == "None":
@@ -40,7 +40,7 @@ def generate_referral_link(code: str) -> str:
     return final_link
 
 def generate_unique_referral_code(db: Session) -> str:
-"""Separate function for generating a unique referral code"""
+    """Separate function for generating a unique referral code"""
     logger.info("Starting to generate unique referral code")
     
     max_attempts = 20
