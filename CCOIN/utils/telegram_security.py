@@ -26,7 +26,6 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-# Initialize Telegram Bot Application
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
@@ -68,13 +67,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"Processing /start command for user {telegram_id}")
         
-        # بررسی اینکه آیا کاربر قبلاً وجود دارد
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         
         is_new_user = False
         
         if not user:
-            # کاربر جدید است
             is_new_user = True
             logger.info(f"Creating new user: {telegram_id}")
             
@@ -84,16 +81,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 first_name=first_name,
                 last_name=last_name,
                 referral_code=str(uuid.uuid4())[:8],
-                tokens=2000,  # welcome bonus
+                tokens=2000,  
                 first_login=True,
             )
             
-            # فقط برای کاربران جدید کد رفرال پردازش می‌شود
             if referral_code:
                 referrer = db.query(User).filter(User.referral_code == referral_code).first()
                 if referrer:
                     user.referred_by = referrer.id
-                    referrer.tokens += 50  # جایزه برای صاحب رفرال
+                    referrer.tokens += 50  
                     logger.info(f"New user {telegram_id} referred by {referrer.telegram_id}")
                 else:
                     logger.warning(f"Invalid referral code: {referral_code}")
@@ -106,14 +102,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"New user created: {telegram_id} with 2000 tokens")
         
         else:
-            # کاربر قبلاً وجود داشته
             logger.info(f"Existing user: {telegram_id}, first_login={user.first_login}")
             
-            # اگر کاربر قبلاً وجود داشته باشد، کد رفرال پردازش نمی‌شود
             if referral_code:
                 logger.info(f"Ignoring referral code {referral_code} for existing user {telegram_id}")
             
-            # فقط اطلاعات کاربر را به‌روزرسانی می‌کنیم (در صورت نیاز)
             if user.username != username:
                 user.username = username
             if user.first_name != first_name:
@@ -124,16 +117,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db.commit()
             db.refresh(user)
         
-        # Create Web App URL based on user status
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         
-        # اگر کاربر جدید است یا first_login=True است، به load برود
         if user.first_login:
             web_app_url = f"{base_url}/load?telegram_id={telegram_id}"
         else:
             web_app_url = f"{base_url}/home?telegram_id={telegram_id}"
         
-        # استفاده از WebAppInfo
         try:
             from telegram import WebAppInfo
             web_app = WebAppInfo(url=web_app_url)
@@ -185,25 +175,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     except Exception as e:
         logger.error(f"Error in start command: {e}")
-        await update.message.reply_text("خطایی رخ داد. لطفاً دوباره تلاش کنید.")
+        await update.message.reply_text("An error occurred. Please try again.")
     
     finally:
         db.close()
 
 async def send_commission_payment_link(telegram_id: str, bot_token: str):
     """
-    ارسال لینک پرداخت کمیشن به کاربر از طریق Bot
+    Send the commission payment link to the user via the bot
     """
     from telegram import Bot
 
     try:
         bot = Bot(token=bot_token)
         
-        # ساخت URL کامل
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
 
-        # ✅ پیام با لینک کپی‌شدنی
         message_text = (
             "💰 <b>Commission Payment Required</b>\n\n"
             "To pay the commission fee:\n\n"
