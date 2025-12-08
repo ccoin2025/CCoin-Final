@@ -23,18 +23,15 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 def generate_referral_link(code: str) -> str:
-    """تولید لینک رفرال با بررسی دقیق"""
+"""Generate referral link with thorough validation"""
     logger.info(f"generate_referral_link called with code: '{code}'")
     
-    # بررسی کنید که کد خالی نباشد
     if not code or str(code).strip() == "" or str(code).strip() == "None":
         logger.error(f"Invalid referral code provided: '{code}'")
         return "https://t.me/CTG_COIN_BOT"
     
-    # نام Bot واقعی شما را از متغیر محیطی بگیرید
     bot_username = os.getenv("BOT_USERNAME", "CTG_COIN_BOT")
     
-    # اطمینان از اینکه کد شامل فضای خالی نباشد
     clean_code = str(code).strip()
     
     final_link = f"https://t.me/{bot_username}?start={clean_code}"
@@ -43,17 +40,15 @@ def generate_referral_link(code: str) -> str:
     return final_link
 
 def generate_unique_referral_code(db: Session) -> str:
-    """تابع جداگانه برای تولید کد رفرال یکتا"""
+"""Separate function for generating a unique referral code"""
     logger.info("Starting to generate unique referral code")
     
     max_attempts = 20
     
     for attempt in range(max_attempts):
-        # تولید کد 8 کاراختری
         new_code = secrets.token_hex(4).upper()
         logger.info(f"Attempt {attempt + 1}: Generated code {new_code}")
         
-        # بررسی یکتا بودن
         existing = db.query(User).filter(User.referral_code == new_code).first()
         
         if not existing:
@@ -62,7 +57,6 @@ def generate_unique_referral_code(db: Session) -> str:
         else:
             logger.warning(f"Code {new_code} already exists, trying again")
     
-    # اگر پس از 20 تلاش موفق نشد، از timestamp استفاده کنید
     fallback_code = f"REF{int(time.time())}"[-8:]
     logger.warning(f"Using fallback code: {fallback_code}")
     return fallback_code
