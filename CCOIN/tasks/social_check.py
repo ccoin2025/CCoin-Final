@@ -34,7 +34,7 @@ PLATFORM_REWARD = {
 }
 
 def get_from_cache(key):
-    """دریافت از memory cache"""
+    """Retrieve from memory cache"""
     if key in memory_cache:
         value, expiry = memory_cache[key]
         if time.time() < expiry:
@@ -44,11 +44,11 @@ def get_from_cache(key):
     return None
 
 def set_in_cache(key, value, ttl):
-    """ذخیره در memory cache"""
+    """Store in memory cache"""
     memory_cache[key] = (value, time.time() + ttl)
 
 def clear_expired_cache():
-    """پاک کردن cache های منقضی شده"""
+    """Store in memory cache"""
     current_time = time.time()
     expired_keys = []
     for key, (value, expiry) in memory_cache.items():
@@ -62,7 +62,7 @@ def clear_expired_cache():
         logger.info(f"Cleared {len(expired_keys)} expired cache entries")
 
 def is_user_in_telegram_channel(user_id: int) -> bool:
-    """بررسی عضویت کاربر در کانال تلگرام CCOIN_OFFICIAL"""
+    """Check if user is a member of the CCOIN_OFFICIAL Telegram channel"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": "@CCOIN_OFFICIAL", "user_id": user_id}
@@ -94,7 +94,7 @@ def is_user_in_telegram_channel(user_id: int) -> bool:
         return False
 
 def check_instagram_follow(user_id: str) -> bool:
-    """بررسی فالو کردن اینستاگرام ccoin_official"""
+    """Check if user follows Instagram ccoin_official"""
     try:
 
         logger.info(f"Instagram follow check for user {user_id}: Mock verification - returning True")
@@ -105,7 +105,7 @@ def check_instagram_follow(user_id: str) -> bool:
         return False
 
 def check_x_follow(user_id: str) -> bool:
-    """بررسی فالو کردن X OFFICIAL_CCOIN"""
+    """Check if user follows X CCOIN_OFFICIAL"""
     try:
 
         logger.info(f"X follow check for user {user_id}: Mock verification - returning True")
@@ -116,7 +116,7 @@ def check_x_follow(user_id: str) -> bool:
         return False
 
 def check_youtube_subscribe(user_id: str) -> bool:
-    """بررسی subscribe کردن یوتیوب @CCOIN_OFFICIAL"""
+    """Check if user follows youtube CCOIN_OFFICIAL"""
     try:
     
         logger.info(f"YouTube subscribe check for user {user_id}: Mock verification - returning True")
@@ -127,7 +127,7 @@ def check_youtube_subscribe(user_id: str) -> bool:
         return False
 
 def check_social_follow(user_id: str, platform: str, force_refresh: bool = False) -> bool:
-    """تابع اصلی برای بررسی follow status در پلتفرم‌های مختلف"""
+    """Main function to check follow status on different platforms"""
     clear_expired_cache()
     
     cache_key = f"social_check:{user_id}:{platform}"
@@ -168,7 +168,7 @@ def check_social_follow(user_id: str, platform: str, force_refresh: bool = False
     return result
 
 def check_and_update_all_user_tasks(user_id: str, db_session: Session = None) -> dict:
-    """بررسی همه تسک‌های کاربر و به‌روزرسانی وضعیت آن‌ها"""
+    """Check all user tasks and update their status"""
     if not db_session:
         db_session = SessionLocal()
         should_close = True
@@ -302,7 +302,7 @@ def clear_user_cache(user_id: str, platform: str = None):
             logger.info(f"🧹 Cleared {cleared_count} cache entries for user {user_id}")
 
 def get_cache_stats():
-    """دریافت آمار cache"""
+    """Retrieve cache statistics"""
     current_time = time.time()
     active_entries = 0
     expired_entries = 0
@@ -321,7 +321,7 @@ def get_cache_stats():
     }
 
 def verify_bot_access():
-    """بررسی دسترسی بات به کانال"""
+    """Check bot access to the channel"""
     try:
         if not BOT_TOKEN:
             return {
@@ -367,7 +367,7 @@ def verify_bot_access():
         }
 
 def manual_verify_user_task(user_id: str, platform: str, force: bool = False):
-    """تایید دستی task کاربر"""
+    """Manual verification of user task"""
     try:
         clear_user_cache(user_id, platform)
         
