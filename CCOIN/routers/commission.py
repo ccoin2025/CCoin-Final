@@ -204,20 +204,25 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         if not telegram_id or not signature:
             raise HTTPException(status_code=400, detail="Missing parameters")
 
-        # استفاده از AsyncClient مستقیم
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
         from solana.rpc.async_api import AsyncClient
+        from solders.signature import Signature
         from CCOIN.config import SOLANA_RPC
         
         client = AsyncClient(SOLANA_RPC)
 
-        # Wait for transaction finalization
         logger.info(f"Waiting {TX_FINALIZATION_WAIT} seconds for transaction finalization", 
                    signature=signature)
         await asyncio.sleep(TX_FINALIZATION_WAIT)
 
         try:
+            sig_obj = Signature.from_string(signature)
+            
             tx_resp = await client.get_transaction(
-                signature, 
+                sig_obj,
                 encoding="jsonParsed", 
                 max_supported_transaction_version=0
             )
@@ -225,11 +230,6 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
             if not tx_resp.value:
                 await client.close()
                 return {"verified": False, "message": "Transaction not found on chain yet. Please wait and try again."}
-
-            user = db.query(User).filter(User.telegram_id == telegram_id).first()
-            if not user:
-                await client.close()
-                raise HTTPException(status_code=404, detail="User not found")
 
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             user_wallet = user.wallet_address
@@ -292,7 +292,7 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 
 @router.post("/verify", response_class=JSONResponse)
 async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
@@ -316,8 +316,8 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
 
-        # استفاده از AsyncClient مستقیم
         from solana.rpc.async_api import AsyncClient
+        from solders.signature import Signature
         from CCOIN.config import SOLANA_RPC
         
         client = AsyncClient(SOLANA_RPC)
@@ -327,7 +327,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
             logger.info("Scanning recent transactions", 
                        extra={"user_wallet": user.wallet_address, "scan_limit": TX_SCAN_LIMIT})
             
-            # استفاده از TX_SCAN_LIMIT (100 یا هر عددی که تنظیم کردید)
             signatures_resp = await client.get_signatures_for_address(user_pubkey, limit=TX_SCAN_LIMIT)
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             
@@ -335,18 +334,17 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                 for sig_info in signatures_resp.value:
                     sig = str(sig_info.signature)
                     
-                    # Check if signature already used
                     existing_user = db.query(User).filter(User.commission_transaction_hash == sig).first()
                     if existing_user:
-                        logger.debug("Signature already used", signature=sig)
                         continue
                     
-                    # Wait a bit to avoid rate limiting
                     await asyncio.sleep(0.5)
                     
                     try:
+                        sig_obj = Signature.from_string(sig)
+                        
                         tx_resp = await client.get_transaction(
-                            sig, 
+                            sig_obj,
                             encoding="jsonParsed", 
                             max_supported_transaction_version=0
                         )
@@ -359,7 +357,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                     if not tx_resp.value:
                         continue
                     
-                    # Parse instructions
                     instructions = []
                     try:
                         parsed_msg = tx_resp.value.transaction.transaction.message
@@ -372,7 +369,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                     
                     admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
                     
-                    # Check each instruction
                     for ix in instructions:
                         parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
                         if isinstance(parsed, dict) and parsed.get("type") == "transfer":
@@ -381,16 +377,7 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                             destination = info.get("destination")
                             lamports = info.get("lamports", 0)
                             
-                            logger.info("Checking transfer", 
-                                       source=source,
-                                       destination=destination,
-                                       lamports=lamports,
-                                       expected_source=user.wallet_address,
-                                       expected_dest=admin_addr,
-                                       expected_lamports=expected_lamports)
-                            
                             if source == user.wallet_address and destination == admin_addr:
-                                # Allow 2% tolerance for fees
                                 if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
                                     user.commission_paid = True
                                     user.commission_transaction_hash = sig
@@ -419,7 +406,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
     except Exception as e:
         logger.error("verify_commission_payment error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/send_payment_link", response_class=JSONResponse)
 async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
