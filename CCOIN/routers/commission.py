@@ -207,7 +207,6 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         if session_data.get("telegram_id") != telegram_id:
             raise HTTPException(status_code=400, detail="Session does not belong to telegram_id")
 
-        # Wait for transaction finalization
         logger.info(f"Waiting {TX_FINALIZATION_WAIT} seconds for transaction finalization", signature=signature)
         await asyncio.sleep(TX_FINALIZATION_WAIT)
 
@@ -305,7 +304,6 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
             user_pubkey = Pubkey.from_string(user.wallet_address)
             logger.info("Scanning recent transactions", extra={"user_wallet": user.wallet_address, "scan_limit": TX_SCAN_LIMIT})
             
-            # Use increased limit
             signatures_resp = await rpc_client.get_signatures_for_address(user_pubkey, limit=TX_SCAN_LIMIT)
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             
@@ -313,13 +311,11 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                 for sig_info in signatures_resp.value:
                     sig = str(sig_info.signature)
                     
-                    # Check if signature already used
                     existing_user = db.query(User).filter(User.commission_transaction_hash == sig).first()
                     if existing_user:
                         logger.debug("Signature already used", signature=sig)
                         continue
                     
-                    # Wait a bit to avoid rate limiting
                     await asyncio.sleep(0.5)
                     
                     try:
