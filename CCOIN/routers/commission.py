@@ -23,12 +23,16 @@ from CCOIN.models.user import User
 from CCOIN.config import (
     COMMISSION_AMOUNT, 
     ADMIN_WALLET, 
-    BOT_USERNAME, 
+    BOT_USERNAME,
+    BOT_TOKEN,
+    APP_DOMAIN,
     TX_SCAN_LIMIT,
     TX_FINALIZATION_WAIT
 )
-from CCOIN.utils.redis_session import session_store
-from CCOIN.utils.solana_rpc import rpc_client
+#from CCOIN.utils.redis_session import session_store
+#from CCOIN.utils.solana_rpc import rpc_client
+from CCOIN.utils.telegram_security import send_commission_payment_link
+
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
