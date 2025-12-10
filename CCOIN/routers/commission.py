@@ -367,15 +367,51 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/send_payment_link", response_class=JSONResponse)
+async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
+    """Send payment link to Telegram"""
+    try:
+        body = await request.json()
+        telegram_id = body.get("telegram_id")
+        
+        logger.info("send_payment_link called", extra={"telegram_id": telegram_id})
+        
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="Missing telegram_id")
+        
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.commission_paid:
+            return {"success": False, "message": "Commission already paid"}
+        
+        if not user.wallet_address:
+            return {"success": False, "message": "Wallet not connected. Please connect your wallet first."}
+        
+        # Send link via telegram utility
+        success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
+        
+        if success:
+            logger.info("Payment link sent successfully", extra={"telegram_id": telegram_id})
+            return {"success": True, "message": "Payment link sent to Telegram"}
+        else:
+            logger.error("Failed to send payment link", extra={"telegram_id": telegram_id})
+            return {"success": False, "message": "Failed to send payment link"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("send_payment_link error", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(
     telegram_id: str = Query(..., description="Telegram user ID"),
     db: Session = Depends(get_db)
 ):
-    """
-    Check if commission has been paid for a user
-    This endpoint was missing but used in frontend templates
-    """
+    """Check commission payment status"""
     try:
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
