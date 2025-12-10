@@ -201,27 +201,38 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         session_id = body.get("session_id")
         signature = body.get("signature")
 
-        if not telegram_id or not session_id or not signature:
+        if not telegram_id or not signature:
             raise HTTPException(status_code=400, detail="Missing parameters")
 
-        session_data = session_store.get_session(session_id)
-        if not session_data:
-            raise HTTPException(status_code=400, detail="Invalid or expired session")
+        # استفاده از AsyncClient مستقیم
+        from solana.rpc.async_api import AsyncClient
+        from CCOIN.config import SOLANA_RPC
+        
+        client = AsyncClient(SOLANA_RPC)
 
-        if session_data.get("telegram_id") != telegram_id:
-            raise HTTPException(status_code=400, detail="Session does not belong to telegram_id")
-
-        logger.info(f"Waiting {TX_FINALIZATION_WAIT} seconds for transaction finalization", signature=signature)
+        # Wait for transaction finalization
+        logger.info(f"Waiting {TX_FINALIZATION_WAIT} seconds for transaction finalization", 
+                   signature=signature)
         await asyncio.sleep(TX_FINALIZATION_WAIT)
 
         try:
-            tx_resp = await rpc_client.get_transaction(signature, encoding="jsonParsed", max_supported_transaction_version=0)
+            tx_resp = await client.get_transaction(
+                signature, 
+                encoding="jsonParsed", 
+                max_supported_transaction_version=0
+            )
             
             if not tx_resp.value:
+                await client.close()
                 return {"verified": False, "message": "Transaction not found on chain yet. Please wait and try again."}
 
-            expected_lamports = int(float(session_data.get("amount", COMMISSION_AMOUNT)) * 1_000_000_000)
-            user_wallet = session_data.get("wallet_address")
+            user = db.query(User).filter(User.telegram_id == telegram_id).first()
+            if not user:
+                await client.close()
+                raise HTTPException(status_code=404, detail="User not found")
+
+            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
+            user_wallet = user.wallet_address
             admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
 
             instructions = []
@@ -229,8 +240,10 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
                 parsed_msg = tx_resp.value.transaction.transaction.message
                 instructions = getattr(parsed_msg, "instructions", []) or []
             except Exception:
-                instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get(
-                    "instructions", [])
+                try:
+                    instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+                except:
+                    pass
 
             found = False
             for ix in instructions:
@@ -254,24 +267,23 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
                             found = True
                             break
 
-            if found:
-                user = db.query(User).filter(User.telegram_id == telegram_id).first()
-                if not user:
-                    raise HTTPException(status_code=404, detail="User not found")
+            await client.close()
 
+            if found:
                 if not user.commission_paid:
                     user.commission_paid = True
                     user.commission_transaction_hash = signature
                     user.commission_payment_date = datetime.utcnow()
                     db.commit()
 
-                session_store.delete_session(session_id)
-                logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": signature})
+                logger.info("Payment verified and recorded", 
+                           extra={"telegram_id": telegram_id, "signature": signature})
                 return {"verified": True, "signature": signature}
 
             return {"verified": False, "message": "Transaction does not match expected transfer"}
 
         except Exception as e:
+            await client.close()
             logger.error("verify_signature RPC error", extra={"error": str(e)}, exc_info=True)
             raise HTTPException(status_code=500, detail=f"RPC Error: {str(e)}")
 
@@ -304,42 +316,63 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
 
+        # استفاده از AsyncClient مستقیم
+        from solana.rpc.async_api import AsyncClient
+        from CCOIN.config import SOLANA_RPC
+        
+        client = AsyncClient(SOLANA_RPC)
+        
         try:
             user_pubkey = Pubkey.from_string(user.wallet_address)
-            logger.info("Scanning recent transactions", extra={"user_wallet": user.wallet_address, "scan_limit": TX_SCAN_LIMIT})
+            logger.info("Scanning recent transactions", 
+                       extra={"user_wallet": user.wallet_address, "scan_limit": TX_SCAN_LIMIT})
             
-            signatures_resp = await rpc_client.get_signatures_for_address(user_pubkey, limit=TX_SCAN_LIMIT)
+            # استفاده از TX_SCAN_LIMIT (100 یا هر عددی که تنظیم کردید)
+            signatures_resp = await client.get_signatures_for_address(user_pubkey, limit=TX_SCAN_LIMIT)
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             
             if signatures_resp.value:
                 for sig_info in signatures_resp.value:
                     sig = str(sig_info.signature)
                     
+                    # Check if signature already used
                     existing_user = db.query(User).filter(User.commission_transaction_hash == sig).first()
                     if existing_user:
                         logger.debug("Signature already used", signature=sig)
                         continue
                     
+                    # Wait a bit to avoid rate limiting
                     await asyncio.sleep(0.5)
                     
                     try:
-                        tx_resp = await rpc_client.get_transaction(sig, encoding="jsonParsed", max_supported_transaction_version=0)
+                        tx_resp = await client.get_transaction(
+                            sig, 
+                            encoding="jsonParsed", 
+                            max_supported_transaction_version=0
+                        )
                     except Exception as tx_error:
-                        logger.warning("Failed to get transaction", signature=sig, error=str(tx_error))
+                        logger.warning("Failed to get transaction", 
+                                     signature=sig, 
+                                     error=str(tx_error))
                         continue
                     
                     if not tx_resp.value:
                         continue
                     
+                    # Parse instructions
                     instructions = []
                     try:
                         parsed_msg = tx_resp.value.transaction.transaction.message
                         instructions = getattr(parsed_msg, "instructions", []) or []
                     except Exception:
-                        instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+                        try:
+                            instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+                        except:
+                            continue
                     
                     admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
                     
+                    # Check each instruction
                     for ix in instructions:
                         parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
                         if isinstance(parsed, dict) and parsed.get("type") == "transfer":
@@ -348,19 +381,36 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
                             destination = info.get("destination")
                             lamports = info.get("lamports", 0)
                             
+                            logger.info("Checking transfer", 
+                                       source=source,
+                                       destination=destination,
+                                       lamports=lamports,
+                                       expected_source=user.wallet_address,
+                                       expected_dest=admin_addr,
+                                       expected_lamports=expected_lamports)
+                            
                             if source == user.wallet_address and destination == admin_addr:
+                                # Allow 2% tolerance for fees
                                 if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
                                     user.commission_paid = True
                                     user.commission_transaction_hash = sig
                                     user.commission_payment_date = datetime.utcnow()
                                     db.commit()
                                     
-                                    logger.info("Payment verified and recorded", extra={"telegram_id": telegram_id, "signature": sig})
+                                    await client.close()
+                                    
+                                    logger.info("Payment verified and recorded", 
+                                               extra={"telegram_id": telegram_id, "signature": sig})
                                     return {"success": True, "verified": True, "signature": sig}
                 
+                await client.close()
                 return {"success": False, "verified": False, "message": "No matching payment found in recent transactions"}
+            
+            await client.close()
+            return {"success": False, "verified": False, "message": "No transactions found"}
                 
         except Exception as e:
+            await client.close()
             logger.error("verify RPC error", extra={"error": str(e)}, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to verify payment: {str(e)}")
 
