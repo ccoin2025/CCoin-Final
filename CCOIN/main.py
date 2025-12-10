@@ -19,7 +19,7 @@ from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, us
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import (
-    BOT_TOKEN, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, 
+    BOT_TOKEN, BOT_USERNAME, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, 
     ADMIN_WALLET, REDIS_URL, ENV, CACHE_ENABLED, RATE_LIMIT_ENABLED,
     GLOBAL_RATE_LIMIT, APP_DOMAIN, TELEGRAM_CHANNEL_USERNAME
 )
