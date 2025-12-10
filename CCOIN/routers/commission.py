@@ -386,10 +386,6 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         if user.commission_paid:
             return {"success": False, "message": "Commission already paid"}
         
-        if not user.wallet_address:
-            return {"success": False, "message": "Wallet not connected. Please connect your wallet first."}
-        
-        # Send link via telegram utility
         success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
         
         if success:
@@ -405,7 +401,6 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
         logger.error("send_payment_link error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(
     telegram_id: str = Query(..., description="Telegram user ID"),
@@ -418,13 +413,9 @@ async def check_commission_status(
             raise HTTPException(status_code=404, detail="User not found")
         
         return {
-            "success": True,
             "commission_paid": user.commission_paid,
-            "transaction_hash": user.commission_transaction_hash if user.commission_paid else None,
-            "payment_date": user.commission_payment_date.isoformat() if user.commission_paid and user.commission_payment_date else None
+            "transaction_hash": user.commission_transaction_hash if user.commission_paid else None
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error("check_status error", extra={"error": str(e), "telegram_id": telegram_id}, exc_info=True)
+        logger.error("check_status error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
