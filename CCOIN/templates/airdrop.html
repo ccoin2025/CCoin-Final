@@ -604,7 +604,7 @@
             }
 
             if (userStatuses.commission_paid) {
-                markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
+                markCommissionAsCompleted(); 
             }
 
             checkAllTasksCompletion();
@@ -620,6 +620,18 @@
             button.classList.add('tasks-completed');
             icon.className = 'fas fa-check right-icon';
             leftText.textContent = text;
+        }
+
+        function markCommissionAsCompleted() {
+            const taskBox = document.getElementById('pay-commission');
+            const button = taskBox.querySelector('.task-button');
+            const icon = document.getElementById('commission-icon');
+            const leftText = button.querySelector('.left-text');
+
+            taskBox.classList.add('completed');
+            button.classList.add('commission-paid'); 
+            icon.className = 'fas fa-check right-icon';
+            leftText.textContent = 'Commission Paid';
         }
 
         function markWalletAsConnected() {
@@ -795,11 +807,13 @@
             const claimBtn = document.getElementById('claimBtn');
 
             if (allCompleted) {
-                claimBtn.innerHTML = '🎉 Congratulations! You have completed all tasks and are eligible to receive tokens!';
+                claimBtn.innerHTML = "🎉 Congratulations, you are now eligible to receive the airdrop! 🎉";
                 claimBtn.disabled = false;
-                claimBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                claimBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; 
                 claimBtn.style.color = 'white';
                 claimBtn.style.cursor = 'pointer';
+                claimBtn.style.fontWeight = 'bold';  
+                claimBtn.style.fontSize = '16px';  
                 claimBtn.onclick = claimAirdrop;
             } else {
                 claimBtn.innerHTML = 'Complete All Tasks to Claim';
@@ -807,11 +821,13 @@
                 claimBtn.style.background = '#e0e7ff';
                 claimBtn.style.color = '#9ca3af';
                 claimBtn.style.cursor = 'not-allowed';
+                claimBtn.style.fontWeight = 'normal';
+                claimBtn.style.fontSize = '14px';
             }
         }
 
         function claimAirdrop() {
-            showToast('🎉 Congratulations! Your airdrop claim has been registered!', 'success');
+            showToast("🎉 Congratulations! Your airdrop claim request has been submitted!", "success");
         }
 
         function showToast(message, type = 'info') {
@@ -848,9 +864,9 @@
                     
                     if (data.commission_paid && !userStatuses.commission_paid) {
                         userStatuses.commission_paid = true;
-                        markTaskAsCompleted('pay-commission', 'commission-icon', 'Commission Paid');
+                        markCommissionAsCompleted();  
                         checkAllTasksCompletion();
-                        showToast('✅ Commission payment confirmed!', 'success');
+                        showToast("✅ Commission payment confirmed!", "success");
                     }
                 } catch (error) {
                     console.error('Error checking commission status:', error);
@@ -859,6 +875,10 @@
         }
 
         setInterval(checkCommissionStatus, 10000);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTaskStatuses();
+        });
     </script>
     <script src="/static/js/airdrop.js?v=4"></script>
 </body>
