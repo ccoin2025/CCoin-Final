@@ -865,3 +865,36 @@ async def check_eligibility(
     except Exception as e:
         logger.error("check_eligibility error", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/claim")
+async def claim_airdrop(request: Request):
+    telegram_id = request.session.get("telegram_id")
+    
+    if not telegram_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        tasks_completed = await check_tasks_completion(telegram_id, db)
+        invited = user.invited_count >= 3
+        wallet_connected = user.wallet_address is not None
+        commission_paid = user.commission_paid
+        
+        if not (tasks_completed and invited and wallet_connected and commission_paid):
+            raise HTTPException(status_code=400, detail="All tasks must be completed")
+        
+        user.airdrop_claimed = True
+        db.commit()
+        
+        logger.info("Airdrop claimed successfully", extra={"telegram_id": telegram_id})
+        
+        return {"success": True, "message": "Airdrop claimed successfully!"}
+        
+    finally:
+        db.close()
