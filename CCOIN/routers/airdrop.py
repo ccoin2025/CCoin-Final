@@ -8,7 +8,7 @@ import os
 import redis
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from CCOIN.database import get_db
+from CCOIN.database import get_db, SessionLocal
 from CCOIN.models.user import User
 from CCOIN.utils.telegram_security import get_current_user, send_commission_payment_link
 from CCOIN.config import SOLANA_RPC, COMMISSION_AMOUNT, ADMIN_WALLET, REDIS_URL, BOT_TOKEN
@@ -869,6 +869,7 @@ async def check_eligibility(
 
 @router.post("/claim")
 async def claim_airdrop(request: Request):
+    """Endpoint for claiming airdrop after all tasks completed"""
     telegram_id = request.session.get("telegram_id")
     
     if not telegram_id:
@@ -883,18 +884,48 @@ async def claim_airdrop(request: Request):
         
         tasks_completed = await check_tasks_completion(telegram_id, db)
         invited = user.invited_count >= 3
-        wallet_connected = user.wallet_address is not None
+        wallet_connected = user.wallet_address is not None and user.wallet_address != ""
         commission_paid = user.commission_paid
         
         if not (tasks_completed and invited and wallet_connected and commission_paid):
-            raise HTTPException(status_code=400, detail="All tasks must be completed")
+            logger.warning(
+                "Claim attempt with incomplete tasks",
+                extra={
+                    "telegram_id": telegram_id,
+                    "tasks": tasks_completed,
+                    "invited": invited,
+                    "wallet": wallet_connected,
+                    "commission": commission_paid
+                }
+            )
+            raise HTTPException(
+                status_code=400, 
+                detail="All tasks must be completed before claiming"
+            )
         
-        user.airdrop_claimed = True
-        db.commit()
+        if not hasattr(user, 'airdrop_claimed'):
+            logger.warning("User model doesn't have airdrop_claimed field")
+        else:
+            user.airdrop_claimed = True
+            db.commit()
         
-        logger.info("Airdrop claimed successfully", extra={"telegram_id": telegram_id})
+        logger.info(
+            "Airdrop claimed successfully",
+            extra={"telegram_id": telegram_id}
+        )
         
-        return {"success": True, "message": "Airdrop claimed successfully!"}
+        return {
+            "success": True,
+            "message": "🎉 Congratulations! Your airdrop claim request has been submitted!"
+        }
         
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Error claiming airdrop",
+            extra={"telegram_id": telegram_id, "error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()
