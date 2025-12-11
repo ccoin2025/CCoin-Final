@@ -826,3 +826,42 @@ async def send_commission_link(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("Error in send_commission_link", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/check_eligibility", response_class=JSONResponse)
+async def check_eligibility(
+    telegram_id: str = Query(..., description="Telegram user ID"),
+    db: Session = Depends(get_db)
+):
+    """Check if user is eligible for airdrop claim"""
+    try:
+        user = db.query(User).filter(User.telegram_id == telegram_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        all_tasks_completed = all([
+            user.telegram_follow,
+            user.instagram_follow,
+            user.x_follow,
+            user.youtube_follow
+        ])
+        
+        eligible = (
+            all_tasks_completed and
+            user.invited_user and
+            user.wallet_address and
+            user.commission_paid
+        )
+        
+        return {
+            "success": True,
+            "eligible": eligible,
+            "tasks_completed": all_tasks_completed,
+            "invited": user.invited_user,
+            "wallet_connected": bool(user.wallet_address),
+            "commission_paid": user.commission_paid
+        }
+        
+    except Exception as e:
+        logger.error("check_eligibility error", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
