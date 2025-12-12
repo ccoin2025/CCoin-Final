@@ -869,11 +869,14 @@ async def check_eligibility(
 
 @router.post("/claim")
 async def claim_airdrop(request: Request):
-    """Endpoint for claiming airdrop after all tasks completed"""
+    """Claim airdrop after completing all tasks"""
     telegram_id = request.session.get("telegram_id")
     
     if not telegram_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    from CCOIN.database import SessionLocal
+    from CCOIN.models.user import User
     
     db = SessionLocal()
     try:
@@ -882,41 +885,42 @@ async def claim_airdrop(request: Request):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        tasks_completed = await check_tasks_completion(telegram_id, db)
+        
+        tasks_completed = getattr(user, 'tasks_completed', False)
+        
         invited = user.invited_count >= 3
+        
         wallet_connected = user.wallet_address is not None and user.wallet_address != ""
+        
         commission_paid = user.commission_paid
         
+        logger.info(
+            "Claim attempt",
+            extra={
+                "telegram_id": telegram_id,
+                "tasks": tasks_completed,
+                "invited": invited,
+                "wallet": wallet_connected,
+                "commission": commission_paid
+            }
+        )
+        
         if not (tasks_completed and invited and wallet_connected and commission_paid):
-            logger.warning(
-                "Claim attempt with incomplete tasks",
-                extra={
-                    "telegram_id": telegram_id,
-                    "tasks": tasks_completed,
-                    "invited": invited,
-                    "wallet": wallet_connected,
-                    "commission": commission_paid
-                }
-            )
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="All tasks must be completed before claiming"
             )
         
-        if not hasattr(user, 'airdrop_claimed'):
-            logger.warning("User model doesn't have airdrop_claimed field")
-        else:
+        if hasattr(user, 'airdrop_claimed'):
             user.airdrop_claimed = True
             db.commit()
+            logger.info("Airdrop claim status saved", extra={"telegram_id": telegram_id})
         
-        logger.info(
-            "Airdrop claimed successfully",
-            extra={"telegram_id": telegram_id}
-        )
+        logger.info("Airdrop claimed successfully", extra={"telegram_id": telegram_id})
         
         return {
             "success": True,
-            "message": "🎉 Congratulations! Your airdrop claim request has been submitted!"
+            "message": "Congratulations! Your request has been registered"
         }
         
     except HTTPException:
