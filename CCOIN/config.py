@@ -26,7 +26,7 @@ RPC_RETRY_DELAY = int(os.getenv("RPC_RETRY_DELAY", "2"))
 RPC_TIMEOUT = int(os.getenv("RPC_TIMEOUT", "30")) 
 
 TX_SCAN_LIMIT = int(os.getenv("TX_SCAN_LIMIT", "5"))  
-TX_FINALIZATION_WAIT = int(os.getenv("TX_FINALIZATION_WAIT", "10"))  
+TX_FINALIZATION_WAIT = int(os.getenv("TX_FINALIZATION_WAIT", "5"))  
 
 ADMIN_WALLET = os.getenv("ADMIN_WALLET", "5YFFCvmi2f4ZWZYUWWBuMSmmjXrYA1QptaTaLG8vi15K")
 COMMISSION_AMOUNT = float(os.getenv("COMMISSION_AMOUNT", "0.01"))
