@@ -443,6 +443,132 @@ async function disconnectWallet() {
     }
 }
 
+async function payCommission() {
+    const telegramId = getTelegramId(); 
+    
+    try {
+        const provider = window.phantom?.solana;
+        
+        if (!provider) {
+            alert('Please install Phantom Wallet');
+            return;
+        }
+        
+        if (!provider.isConnected) {
+            await provider.connect();
+        }
+        
+        const createResponse = await fetch('/commission/create_payment_session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: telegramId
+            })
+        });
+        
+        if (!createResponse.ok) {
+            throw new Error('Failed to create payment session');
+        }
+        
+        const { transaction, session_id } = await createResponse.json();
+        
+        const transactionBuffer = Uint8Array.from(atob(transaction), c => c.charCodeAt(0));
+        const tx = window.solanaWeb3.Transaction.from(transactionBuffer);
+        
+        const { signature } = await provider.signAndSendTransaction(tx);
+        
+        console.log('Transaction sent:', signature);
+        
+        document.getElementById('payButton').innerHTML = '⏳ Verifying payment...';
+        document.getElementById('payButton').disabled = true;
+        
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        const verifyResponse = await fetch('/commission/verify_signature', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: telegramId,
+                signature: signature
+            })
+        });
+        
+        const verifyResult = await verifyResponse.json();
+        
+        if (verifyResult.verified) {
+            document.getElementById('payButton').innerHTML = '✅ Payment Verified';
+            document.getElementById('payButton').classList.add('success');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            if (verifyResult.retry_after) {
+                document.getElementById('payButton').innerHTML = `⏳ Please wait ${verifyResult.retry_after}s...`;
+                
+                setTimeout(() => {
+                    checkPaymentStatus(signature);
+                }, verifyResult.retry_after * 1000);
+            } else {
+                alert(verifyResult.message || 'Payment verification failed');
+                document.getElementById('payButton').innerHTML = 'Pay Commission';
+                document.getElementById('payButton').disabled = false;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Payment error:', error);
+        alert('Payment failed: ' + error.message);
+        document.getElementById('payButton').innerHTML = 'Pay Commission';
+        document.getElementById('payButton').disabled = false;
+    }
+}
+
+async function checkPaymentStatus(signature) {
+    const telegramId = getTelegramId();
+    
+    try {
+        const response = await fetch('/commission/verify_signature', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                telegram_id: telegramId,
+                signature: signature
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.verified) {
+            document.getElementById('payButton').innerHTML = '✅ Payment Verified';
+            setTimeout(() => window.location.reload(), 2000);
+        } else {
+            if (result.retry_after) {
+                setTimeout(() => {
+                    checkPaymentStatus(signature);
+                }, result.retry_after * 1000);
+            } else {
+                alert(result.message);
+                document.getElementById('payButton').innerHTML = 'Pay Commission';
+                document.getElementById('payButton').disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Check status error:', error);
+    }
+}
+
+function getTelegramId() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('telegram_id');
+}
+
 async function claimAirdrop() {
     log('🎁 Claim button clicked');
     
