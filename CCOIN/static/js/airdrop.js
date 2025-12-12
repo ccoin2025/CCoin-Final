@@ -306,44 +306,36 @@ function updateInviteFriendsUI() {
 
 function updateClaimButton() {
     const claimButton = document.getElementById('claimBtn');
-    if (!claimButton) return;
+    if (!claimButton) {
+        log('⚠️ Claim button not found');
+        return;
+    }
 
     const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
 
+    log(`📊 Claim check - Tasks: ${tasksCompleted.task}, Invite: ${tasksCompleted.invite}, Wallet: ${tasksCompleted.wallet}, Pay: ${tasksCompleted.pay}, All: ${allCompleted}`);
+
     if (allCompleted) {
         claimButton.disabled = false;
-        claimButton.textContent = 'Claim Airdrop';
-        claimButton.style.background = 'linear-gradient(45deg, #ffd700, #ffed4e)';
-        claimButton.style.color = '#000';
+        claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+        claimButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        claimButton.style.color = 'white';
+        claimButton.style.fontWeight = 'bold';
+        claimButton.style.fontSize = '16px';
+        claimButton.style.cursor = 'pointer';
+        claimButton.onclick = claimAirdrop;  
+        log('✅ Claim button enabled!');
     } else {
         claimButton.disabled = true;
-        claimButton.textContent = 'Complete all tasks to claim';
+        claimButton.innerHTML = 'Complete All Tasks to Claim';
         claimButton.style.background = 'rgba(255, 255, 255, 0.1)';
         claimButton.style.color = 'rgba(255, 255, 255, 0.5)';
+        claimButton.style.fontWeight = 'normal';
+        claimButton.style.fontSize = '14px';
+        claimButton.style.cursor = 'not-allowed';
+        claimButton.onclick = null;
+        log('⏳ Claim button disabled');
     }
-}
-
-function updateAllTasksUI() {
-    updateTaskCompleteUI();
-    updateInviteFriendsUI();
-    updateWalletUI();
-    updateCommissionUI();
-    updateClaimButton();
-}
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => toast.classList.add('show'), 100);
-
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
 }
 
 async function detectPhantom() {
@@ -425,20 +417,18 @@ async function disconnectWallet() {
 }
 
 async function claimAirdrop() {
+    log('🎁 Claiming airdrop...');
+
+    if (!(tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay)) {
+        showToast('Please complete all tasks first', 'error');
+        return;
+    }
+
     try {
-        log('🎉 Claiming airdrop...');
-
-        const allCompleted = tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay;
-
-        if (!allCompleted) {
-            showToast('Please complete all tasks first!', 'error');
-            return;
-        }
-
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
             claimButton.disabled = true;
-            claimButton.textContent = 'Processing...';
+            claimButton.innerHTML = '⏳ Submitting request...';
         }
 
         const response = await fetch('/airdrop/claim', {
@@ -448,35 +438,46 @@ async function claimAirdrop() {
             }
         });
 
-        if (!response.ok) {
-            throw new Error('Server error: ' + response.statusText);
-        }
+        if (response.ok) {
+            const data = await response.json();
+            log('✅ Claim successful: ' + JSON.stringify(data));
 
-        const data = await response.json();
-        log('✅ Claim response: ' + JSON.stringify(data));
+            showToast('🎉 Congratulations! Your request has been submitted', 'success');
 
-        if (data.success) {
-            showToast('🎉 Airdrop claimed successfully!', 'success');
-            
             if (claimButton) {
-                claimButton.textContent = '✅ Claimed!';
-                claimButton.style.background = '#28a745';
+                claimButton.innerHTML = '✅ Your request has been submitted';
+                claimButton.style.background = 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)';
+                claimButton.style.color = '#000';
+                claimButton.disabled = true;
             }
+
         } else {
-            throw new Error(data.message || 'Claim failed');
+            const error = await response.json();
+            log('❌ Claim failed: ' + JSON.stringify(error));
+
+            showToast(
+                'Error submitting request: ' + (error.detail || 'Please try again'),
+                'error'
+            );
+
+            if (claimButton) {
+                claimButton.disabled = false;
+                claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+            }
         }
 
     } catch (error) {
         log('❌ Claim error: ' + error.message);
-        showToast('Failed to claim airdrop: ' + error.message, 'error');
+        showToast('Server connection error', 'error');
 
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
             claimButton.disabled = false;
-            claimButton.textContent = 'Claim Airdrop';
+            claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
         }
     }
 }
+
 
 function checkWalletStatus() {
     const urlParams = new URLSearchParams(window.location.search);
