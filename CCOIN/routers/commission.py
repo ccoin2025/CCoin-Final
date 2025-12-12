@@ -192,107 +192,169 @@ async def phantom_callback(request: Request):
 @router.post("/verify_signature", response_class=JSONResponse)
 async def verify_signature(request: Request, db: Session = Depends(get_db)):
     """
-    Body: { telegram_id, session_id, signature }
-    Verifies provided signature on-chain and marks user as paid if valid.
+    Verify commission payment using transaction signature from frontend
+    This is the most efficient method - only 1 RPC call per user
     """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-        session_id = body.get("session_id")
         signature = body.get("signature")
-
+        
         if not telegram_id or not signature:
-            raise HTTPException(status_code=400, detail="Missing parameters")
-
+            raise HTTPException(status_code=400, detail="Missing telegram_id or signature")
+        
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
+        
+        if user.commission_paid:
+            return {
+                "verified": True, 
+                "message": "Commission already paid",
+                "already_paid": True
+            }
+        
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="Wallet not connected")
+        
         from solana.rpc.async_api import AsyncClient
-        from solders.signature import Signature
-        from CCOIN.config import SOLANA_RPC
+        from solders.signature import Signature as SigObj
         
         client = AsyncClient(SOLANA_RPC)
-
-        logger.info(f"Waiting {TX_FINALIZATION_WAIT} seconds for transaction finalization", 
-                   signature=signature)
-        await asyncio.sleep(TX_FINALIZATION_WAIT)
-
+        
         try:
-            sig_obj = Signature.from_string(signature)
+            logger.info("Waiting for transaction finalization", extra={
+                "signature": signature,
+                "wait_time": TX_FINALIZATION_WAIT
+            })
+            await asyncio.sleep(TX_FINALIZATION_WAIT)
             
+            existing_user = db.query(User).filter(
+                User.commission_transaction_hash == signature
+            ).first()
+            
+            if existing_user:
+                await client.close()
+                logger.warning("Transaction signature already used", extra={
+                    "signature": signature,
+                    "used_by": existing_user.telegram_id
+                })
+                return {
+                    "verified": False,
+                    "message": "This transaction has already been used by another user"
+                }
+            
+            sig_obj = SigObj.from_string(signature)
             tx_resp = await client.get_transaction(
                 sig_obj,
-                encoding="jsonParsed", 
+                encoding="jsonParsed",
                 max_supported_transaction_version=0
             )
             
             if not tx_resp.value:
                 await client.close()
-                return {"verified": False, "message": "Transaction not found on chain yet. Please wait and try again."}
-
+                logger.warning("Transaction not found or not finalized", extra={
+                    "signature": signature
+                })
+                return {
+                    "verified": False,
+                    "message": "Transaction not found on blockchain yet. Please wait 30 seconds and try again.",
+                    "retry_after": 30
+                }
+            
+            if tx_resp.value.meta and tx_resp.value.meta.err:
+                await client.close()
+                logger.error("Transaction failed on blockchain", extra={
+                    "signature": signature,
+                    "error": str(tx_resp.value.meta.err)
+                })
+                return {
+                    "verified": False,
+                    "message": "Transaction failed on blockchain"
+                }
+            
             expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
-            user_wallet = user.wallet_address
-            admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
-
             instructions = []
+            
             try:
                 parsed_msg = tx_resp.value.transaction.transaction.message
                 instructions = getattr(parsed_msg, "instructions", []) or []
             except Exception:
                 try:
-                    instructions = (tx_resp.value.transaction.get("transaction", {}) or {}).get("message", {}).get("instructions", [])
+                    tx_data = tx_resp.value.transaction
+                    if isinstance(tx_data, dict):
+                        instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
                 except:
                     pass
-
-            found = False
+            
+            admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
+            
             for ix in instructions:
                 parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
+                
                 if isinstance(parsed, dict) and parsed.get("type") == "transfer":
                     info = parsed.get("info", {})
                     source = info.get("source")
                     destination = info.get("destination")
                     lamports = info.get("lamports", 0)
                     
-                    logger.info("Checking transfer instruction", 
-                               source=source, 
-                               destination=destination, 
-                               lamports=lamports,
-                               expected_source=user_wallet,
-                               expected_destination=admin_addr,
-                               expected_lamports=expected_lamports)
+                    logger.info("Checking transfer instruction", extra={
+                        "source": source,
+                        "destination": destination,
+                        "lamports": lamports,
+                        "expected_source": user.wallet_address,
+                        "expected_destination": admin_addr,
+                        "expected_lamports": expected_lamports
+                    })
                     
-                    if source == user_wallet and destination == admin_addr:
-                        if int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02):
-                            found = True
-                            break
-
+                    if (source == user.wallet_address and 
+                        destination == admin_addr and
+                        int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02)):
+                        
+                        user.commission_paid = True
+                        user.commission_transaction_hash = signature
+                        user.commission_payment_date = datetime.now(timezone.utc)
+                        db.commit()
+                        
+                        await client.close()
+                        
+                        logger.info("Commission payment verified successfully", extra={
+                            "telegram_id": telegram_id,
+                            "signature": signature,
+                            "amount": lamports / 1_000_000_000
+                        })
+                        
+                        return {
+                            "verified": True,
+                            "signature": signature,
+                            "message": "Commission payment verified successfully"
+                        }
+            
             await client.close()
-
-            if found:
-                if not user.commission_paid:
-                    user.commission_paid = True
-                    user.commission_transaction_hash = signature
-                    user.commission_payment_date = datetime.utcnow()
-                    db.commit()
-
-                logger.info("Payment verified and recorded", 
-                           extra={"telegram_id": telegram_id, "signature": signature})
-                return {"verified": True, "signature": signature}
-
-            return {"verified": False, "message": "Transaction does not match expected transfer"}
-
+            
+            logger.warning("Transaction does not match expected transfer", extra={
+                "signature": signature,
+                "telegram_id": telegram_id
+            })
+            
+            return {
+                "verified": False,
+                "message": "Transaction does not match expected payment details"
+            }
+            
         except Exception as e:
             await client.close()
-            logger.error("verify_signature RPC error", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=f"RPC Error: {str(e)}")
-
+            logger.error("RPC error during verification", extra={
+                "error": str(e),
+                "signature": signature
+            }, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+            
     except HTTPException:
         raise
     except Exception as e:
         logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-        
 
 @router.post("/verify", response_class=JSONResponse)
 async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
@@ -433,6 +495,9 @@ async def verify_commission_payment(request: Request, db: Session = Depends(get_
 
 @router.post("/send_payment_link", response_class=JSONResponse)
 async def send_payment_link_endpoint(request: Request, db: Session = Depends(get_db)):
+    """
+    Send commission payment link to user via Telegram bot
+    """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
@@ -444,17 +509,35 @@ async def send_payment_link_endpoint(request: Request, db: Session = Depends(get
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
+        if user.commission_paid:
+            return {
+                "success": True,
+                "message": "Commission already paid"
+            }
+        
         success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
         
         if success:
-            logger.info("Payment link sent successfully", extra={"telegram_id": telegram_id})
-            return {"success": True, "message": "Payment link sent to Telegram"}
+            logger.info("Payment link sent successfully", extra={
+                "telegram_id": telegram_id
+            })
+            return {
+                "success": True,
+                "message": "Payment link sent to your Telegram"
+            }
         else:
-            logger.error("Failed to send payment link", extra={"telegram_id": telegram_id})
-            return {"success": False, "error": "Failed to send payment link"}
+            logger.error("Failed to send payment link", extra={
+                "telegram_id": telegram_id
+            })
+            return {
+                "success": False,
+                "error": "Failed to send payment link. Please try again."
+            }
             
     except Exception as e:
-        logger.error("send_payment_link error", extra={"error": str(e)}, exc_info=True)
+        logger.error("send_payment_link error", extra={
+            "error": str(e)
+        }, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
