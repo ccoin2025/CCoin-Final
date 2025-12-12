@@ -316,7 +316,7 @@ function updateClaimButton() {
 
     if (allCompleted) {
         claimButton.disabled = false;
-        claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+        claimButton.innerHTML = '🎉 Congratulations! You are eligible to receive the airdrop! 🎉';
         claimButton.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
         claimButton.style.color = 'white';
         claimButton.style.fontWeight = 'bold';
@@ -444,13 +444,18 @@ async function disconnectWallet() {
 }
 
 async function claimAirdrop() {
-    log('🎁 Claiming airdrop...');
-
+    log('🎁 Claim button clicked');
+    
     if (!(tasksCompleted.task && tasksCompleted.invite && tasksCompleted.wallet && tasksCompleted.pay)) {
         showToast('Please complete all tasks first', 'error');
         return;
     }
 
+    showToast('🎉 Congratulations! You are eligible to receive the airdrop!', 'success');
+    log('✅ User is eligible for airdrop');
+    
+    /* FUTURE: Uncomment when ready to distribute tokens
+    
     try {
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
@@ -481,12 +486,11 @@ async function claimAirdrop() {
         } else {
             const error = await response.json();
             log('❌ Claim failed: ' + JSON.stringify(error));
-
             showToast('Error: ' + (error.detail || 'Please try again'), 'error');
 
             if (claimButton) {
                 claimButton.disabled = false;
-                claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+                claimButton.innerHTML = '🎉 Congratulations! You are eligible to receive the airdrop! 🎉';
             }
         }
 
@@ -497,9 +501,11 @@ async function claimAirdrop() {
         const claimButton = document.getElementById('claimBtn');
         if (claimButton) {
             claimButton.disabled = false;
-            claimButton.innerHTML = '🎉 Congratulations, you are eligible to receive the airdrop! 🎉';
+            claimButton.innerHTML = '🎉 Congratulations! You are eligible to receive the airdrop! 🎉';
         }
     }
+    
+    */
 }
 
 function handleTaskCompletion() {
