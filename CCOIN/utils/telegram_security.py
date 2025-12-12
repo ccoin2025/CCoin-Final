@@ -174,20 +174,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Start message sent to user {telegram_id}")
     
     except Exception as e:
-        logger.error(f"Error in start command: {e}")
+        logger.error(f"Error in start command: {e}", exc_info=True)
         await update.message.reply_text("An error occurred. Please try again.")
     
     finally:
         db.close()
 
+
 async def send_commission_payment_link(telegram_id: str, bot_token: str):
     """
-    Send the commission payment link to the user via the bot
+    ✅ FIXED: Send the commission payment link to the user via the bot with proper Bot instance managemen
     """
-    from telegram import Bot
-
+    bot = None
+    
     try:
         bot = Bot(token=bot_token)
+        
+        await bot.initialize()
         
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
         commission_url = f"{base_url}/commission/browser/pay?telegram_id={telegram_id}"
@@ -210,12 +213,28 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
             parse_mode='HTML'
         )
         
-        logger.info(f"✅ Commission payment link sent to user {telegram_id}")
+        logger.info("✅ Commission payment link sent successfully", extra={
+            "telegram_id": telegram_id
+        })
+        
         return True
         
     except Exception as e:
-        logger.error(f"❌ Error sending payment link to {telegram_id}: {e}", exc_info=True)
+        logger.error("❌ Error sending payment link", extra={
+            "telegram_id": telegram_id,
+            "error": str(e)
+        }, exc_info=True)
         return False
+    
+    finally:
+        if bot:
+            try:
+                await bot.shutdown()
+                logger.debug("Bot instance shutdown successfully")
+            except Exception as shutdown_error:
+                logger.warning("Error shutting down bot", extra={
+                    "error": str(shutdown_error)
+                })
 
 
 app.add_handler(CommandHandler("start", start))
