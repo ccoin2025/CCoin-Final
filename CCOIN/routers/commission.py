@@ -4,7 +4,7 @@ import secrets
 import base64
 import structlog
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -27,7 +27,8 @@ from CCOIN.config import (
     BOT_TOKEN,
     APP_DOMAIN,
     TX_SCAN_LIMIT,
-    TX_FINALIZATION_WAIT
+    TX_FINALIZATION_WAIT,
+    SOLANA_RPC
 )
 #from CCOIN.utils.redis_session import session_store
 #from CCOIN.utils.solana_rpc import rpc_client
@@ -193,12 +194,16 @@ async def phantom_callback(request: Request):
 async def verify_signature(request: Request, db: Session = Depends(get_db)):
     """
     Verify commission payment using transaction signature from frontend
-    This is the most efficient method - only 1 RPC call per user
     """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
         signature = body.get("signature")
+        
+        logger.info("Verify signature request", extra={
+            "telegram_id": telegram_id,
+            "signature": signature
+        })
         
         if not telegram_id or not signature:
             raise HTTPException(status_code=400, detail="Missing telegram_id or signature")
@@ -217,6 +222,21 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
         
+        existing_user = db.query(User).filter(
+            User.commission_transaction_hash == signature
+        ).first()
+        
+        if existing_user:
+            logger.warning("Transaction signature already used", extra={
+                "signature": signature,
+                "used_by": existing_user.telegram_id,
+                "attempted_by": telegram_id
+            })
+            return {
+                "verified": False,
+                "message": "This transaction has already been used by another user"
+            }
+        
         from solana.rpc.async_api import AsyncClient
         from solders.signature import Signature as SigObj
         
@@ -228,21 +248,6 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
                 "wait_time": TX_FINALIZATION_WAIT
             })
             await asyncio.sleep(TX_FINALIZATION_WAIT)
-            
-            existing_user = db.query(User).filter(
-                User.commission_transaction_hash == signature
-            ).first()
-            
-            if existing_user:
-                await client.close()
-                logger.warning("Transaction signature already used", extra={
-                    "signature": signature,
-                    "used_by": existing_user.telegram_id
-                })
-                return {
-                    "verified": False,
-                    "message": "This transaction has already been used by another user"
-                }
             
             sig_obj = SigObj.from_string(signature)
             tx_resp = await client.get_transaction(
@@ -279,7 +284,10 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
             try:
                 parsed_msg = tx_resp.value.transaction.transaction.message
                 instructions = getattr(parsed_msg, "instructions", []) or []
-            except Exception:
+            except Exception as e:
+                logger.error("Failed to parse transaction instructions", extra={
+                    "error": str(e)
+                })
                 try:
                     tx_data = tx_resp.value.transaction
                     if isinstance(tx_data, dict):
@@ -327,34 +335,38 @@ async def verify_signature(request: Request, db: Session = Depends(get_db)):
                         return {
                             "verified": True,
                             "signature": signature,
-                            "message": "Commission payment verified successfully"
+                            "message": "Payment verified successfully! You can now return to the app."
                         }
             
             await client.close()
             
-            logger.warning("Transaction does not match expected transfer", extra={
+            logger.warning("No valid transfer instruction found", extra={
                 "signature": signature,
                 "telegram_id": telegram_id
             })
             
             return {
                 "verified": False,
-                "message": "Transaction does not match expected payment details"
+                "message": "Transaction found but does not match expected payment details"
             }
             
         except Exception as e:
             await client.close()
-            logger.error("RPC error during verification", extra={
+            logger.error("Error verifying transaction", extra={
                 "error": str(e),
                 "signature": signature
             }, exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
-            
+            return {
+                "verified": False,
+                "message": f"Error verifying transaction: {str(e)}"
+            }
+    
     except HTTPException:
         raise
     except Exception as e:
         logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/verify", response_class=JSONResponse)
 async def verify_commission_payment(request: Request, db: Session = Depends(get_db)):
@@ -599,19 +611,18 @@ async def send_payment_link_to_telegram(request: Request, db: Session = Depends(
 
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(
-    telegram_id: str = Query(..., description="Telegram user ID"),
+    telegram_id: str = Query(...),
     db: Session = Depends(get_db)
 ):
-    """Check commission payment status"""
-    try:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        return {
-            "commission_paid": user.commission_paid,
-            "transaction_hash": user.commission_transaction_hash if user.commission_paid else None
-        }
-    except Exception as e:
-        logger.error("check_status error", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=str(e))
+    """
+    Check if user has paid commission
+    """
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "commission_paid": user.commission_paid,
+        "transaction_hash": user.commission_transaction_hash,
+        "payment_date": user.commission_payment_date.isoformat() if user.commission_payment_date else None
+    }
