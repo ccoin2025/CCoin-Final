@@ -183,13 +183,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_commission_payment_link(telegram_id: str, bot_token: str):
     """
-    ✅ FIXED: Send the commission payment link to the user via the bot with proper Bot instance managemen
+    Send commission payment link to user via Telegram bot
+    Properly manages Bot instance lifecycle
     """
     bot = None
     
     try:
         bot = Bot(token=bot_token)
-        
         await bot.initialize()
         
         base_url = os.getenv('APP_DOMAIN', 'https://ccoin2025.onrender.com')
@@ -213,14 +213,14 @@ async def send_commission_payment_link(telegram_id: str, bot_token: str):
             parse_mode='HTML'
         )
         
-        logger.info("✅ Commission payment link sent successfully", extra={
+        logger.info("Commission payment link sent successfully", extra={
             "telegram_id": telegram_id
         })
         
         return True
         
     except Exception as e:
-        logger.error("❌ Error sending payment link", extra={
+        logger.error("Error sending payment link", extra={
             "telegram_id": telegram_id,
             "error": str(e)
         }, exc_info=True)
