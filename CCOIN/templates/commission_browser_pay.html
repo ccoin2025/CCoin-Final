@@ -478,14 +478,58 @@
         }
 
         async function checkPayment() {
-            const signature = localStorage.getItem(STORAGE_KEYS.SIGNATURE);
+            try {
+                showStatus('🔍 Checking for transaction...', 'info');
 
-            if (!signature) {
-                showStatus('❌ No payment signature found. Please make payment first.', 'error');
-                return;
+                const verifyBtn = document.getElementById('verify-btn');
+                verifyBtn.disabled = true;
+                verifyBtn.innerHTML = '<span class="spinner"></span> Checking...';
+
+                // Try to get signature from localStorage first
+                let signature = localStorage.getItem(STORAGE_KEYS.SIGNATURE);
+
+                if (!signature) {
+                    // No signature stored - need to scan blockchain
+                    showStatus('🔎 Scanning blockchain for your payment...', 'info');
+
+                    // Get wallet address from user record
+                    const statusResponse = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
+                    const statusData = await statusResponse.json();
+
+                    // Call backend to scan for transaction
+                    const scanResponse = await fetch('/commission/scan_transaction', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            telegram_id: CONFIG.telegramId
+                        })
+                    });
+
+                    const scanResult = await scanResponse.json();
+
+                    if (scanResult.signature) {
+                        signature = scanResult.signature;
+                        localStorage.setItem(STORAGE_KEYS.SIGNATURE, signature);
+                        showStatus('✅ Transaction found! Verifying...', 'info');
+                    } else {
+                        showStatus('⚠️ ' + (scanResult.message || 'No recent payment found. Please wait 10-30 seconds after payment and try again.'), 'error');
+                        verifyBtn.disabled = false;
+                        verifyBtn.innerHTML = '✅ Check Payment Status';
+                        return;
+                    }
+                }
+
+                // Now verify the signature
+                await verifyStoredSignature(signature);
+
+            } catch (error) {
+                console.error('Check payment error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+
+                const verifyBtn = document.getElementById('verify-btn');
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = '✅ Check Payment Status';
             }
-
-            await verifyStoredSignature(signature);
         }
 
         async function verifyStoredSignature(signature) {
