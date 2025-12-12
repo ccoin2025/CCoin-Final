@@ -445,7 +445,7 @@
 
         async function payWithPhantomMobile() {
             try {
-                showStatus('📱 Preparing payment...', 'info');
+                showStatus('📱 Opening Phantom app...', 'info');
 
                 // Mark payment as initiated
                 localStorage.setItem(STORAGE_KEYS.INITIATED, Date.now().toString());
@@ -455,7 +455,7 @@
                 const label = encodeURIComponent('CCoin Commission Payment');
                 const message = encodeURIComponent(`Payment from user ${CONFIG.telegramId}`);
 
-                // Option 1: Direct Solana Pay URL (بهترین روش)
+                // Direct Solana Pay URL
                 const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=ccoin_commission`;
 
                 console.log('Opening Solana Pay URL:', solanaPayUrl);
