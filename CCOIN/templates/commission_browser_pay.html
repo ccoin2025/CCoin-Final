@@ -445,27 +445,35 @@
 
         async function payWithPhantomMobile() {
             try {
-                showStatus('📱 Preparing mobile payment...', 'info');
+                showStatus('📱 Preparing payment...', 'info');
 
-                const recipient = CONFIG.adminWallet;
+                // Mark payment as initiated
+                localStorage.setItem(STORAGE_KEYS.INITIATED, Date.now().toString());
+
                 const amount = CONFIG.commissionAmount;
-                const label = encodeURIComponent('CCoin Commission');
-                const message = encodeURIComponent('Pay commission to unlock airdrop');
+                const recipient = CONFIG.adminWallet;
+                const label = encodeURIComponent('CCoin Commission Payment');
+                const message = encodeURIComponent(`Payment from user ${CONFIG.telegramId}`);
 
-                const phantomUrl = `https://phantom.app/ul/browse/${encodeURIComponent(window.location.href)}?ref=${encodeURIComponent(window.location.origin)}`;
+                // Option 1: Direct Solana Pay URL (بهترین روش)
+                const solanaPayUrl = `solana:${recipient}?amount=${amount}&label=${label}&message=${message}&memo=ccoin_commission`;
 
-                showStatus('🔗 Opening Phantom app...', 'info');
+                console.log('Opening Solana Pay URL:', solanaPayUrl);
 
-                window.location.href = phantomUrl;
+                showStatus('🔗 Opening Phantom wallet...', 'info');
+
+                // Try to open with Solana Pay protocol
+                window.location.href = solanaPayUrl;
 
                 setTimeout(() => {
-                    showStatus('📋 Complete payment in Phantom, then click "Check Payment Status"', 'info');
+                    showStatus('📋 Complete the payment in Phantom wallet, then return here and click "Check Payment Status"', 'info');
                     setButtonLoading(false);
                 }, 2000);
 
             } catch (error) {
                 console.error('Phantom mobile payment error:', error);
-                throw error;
+                showStatus('❌ Error opening Phantom. Please try again.', 'error');
+                setButtonLoading(false);
             }
         }
 
