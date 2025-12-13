@@ -457,53 +457,51 @@
             <div id="task-completion" class="task-box">
                 <button onclick="handleTaskCompletion()" class="task-button">
                     <span class="left-text">Tasks Completion</span>
-                    <i id="tasks-icon" class="fas fa-chevron-right right-icon"></i>
+                    <i class="fas fa-chevron-right right-icon" id="tasks-icon"></i>
                 </button>
             </div>
 
             <div id="inviting-friends" class="task-box">
                 <button onclick="handleInviteCheck()" class="task-button">
                     <span class="left-text">Inviting Friends</span>
-                    <i id="friends-icon" class="fas fa-chevron-right right-icon"></i>
+                    <i class="fas fa-chevron-right right-icon" id="friends-icon"></i>
                 </button>
             </div>
 
             <div id="connect-wallet" class="task-box">
                 <div class="wallet-dropdown">
                     <button onclick="handleWalletConnection()" class="task-button wallet-connect-button">
-                        <span class="left-text">
-                            <span id="wallet-button-text">Connect Wallet</span>
-                        </span>
-                        <i id="wallet-icon" class="fas fa-chevron-right right-icon"></i>
-                        <span id="wallet-status-indicator" class="wallet-status-indicator"></span>
+                        <span class="left-text" id="wallet-button-text">Connect Wallet</span>
+                        <div class="wallet-status-indicator" id="wallet-status-indicator"></div>
+                        <i class="fas fa-chevron-right right-icon" id="wallet-icon"></i>
                     </button>
-                    <div id="wallet-dropdown-content" class="wallet-dropdown-content">
+
+                    <div class="wallet-dropdown-content" id="wallet-dropdown-content">
                         <div class="wallet-info-dropdown">
-                            <p style="font-size: 12px; opacity: 0.8; margin-bottom: 10px;">Connected Wallet</p>
-                            <p style="font-weight: 600; margin-bottom: 15px;" id="dropdown-wallet-address"></p>
                             <div class="wallet-actions-dropdown">
                                 <button class="wallet-action-btn" onclick="changeWallet()">
-                                    <i class="fas fa-sync-alt"></i>
-                                    Change
+                                    <i class="fas fa-exchange-alt"></i> Change
                                 </button>
                                 <button class="wallet-action-btn disconnect-btn" onclick="disconnectWallet()">
-                                    <i class="fas fa-sign-out-alt"></i>
-                                    Disconnect
+                                    <i class="fas fa-unlink"></i> Disconnect
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            
+        <div id="pay-commission" class="task-box">     
+            <button onclick="handleCommissionClick()" class="task-button" id="commission-button">
+                <span class="left-text">Pay for Commission</span>
+                <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
+            </button>
+        </div>
 
-            <div id="pay-commission" class="task-box">
-                <button onclick="handleCommissionPayment()" class="task-button">
-                    <span class="left-text">Pay Commission</span>
-                    <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
-                </button>
-            </div>
-
-            <button id="claimBtn" disabled>Complete All Tasks to Claim</button>
+        <div class="claim-section">
+            <button class="claim-btn" id="claimBtn" disabled>
+                Complete All Tasks to Claim
+            </button>
         </div>
 
         <div class="footer-icons">
@@ -553,14 +551,16 @@
                 <div class="info-box"
                      style="background: rgba(33, 150, 243, 0.2); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: left;">
                     <h3 style="color: #ffd700; margin-bottom: 15px; text-align: center;">📋 How it works</h3>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• You will receive a payment link in your Telegram chat</p>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• You will receive a payment link in your Telegram
+                        chat</p>
                     <p style="line-height: 1.6; margin-bottom: 10px;">• The link will open in an external browser</p>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• Complete the payment using your Phantom wallet</p>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• Complete the payment using your Phantom
+                        wallet</p>
                     <p style="line-height: 1.6; margin-bottom: 10px;">• Return to the app after successful payment</p>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-                    <button class="modal-btn pay" onclick="sendPaymentLinkToTelegram()"
+                    <button class="modal-btn pay" onclick="handleCommissionPayment()"
                             style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000;">
                         💳 Send Payment Link
                     </button>
@@ -584,13 +584,13 @@
 
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         const telegramId = tg ? tg.initDataUnsafe.user?.id : null;
-        let isPaymentLinkSending = false;
 
         function getCsrfToken() {
             const metaTag = document.querySelector('meta[name="csrf-token"]');
             return metaTag ? metaTag.getAttribute('content') : '';
         }
 
+        
         function updateTaskStatuses() {
             if (userStatuses.tasks_completed) {
                 markTaskAsCompleted('task-completion', 'tasks-icon', 'Tasks Completed');
@@ -751,74 +751,66 @@
             }
         }
 
+        let isCommissionProcessing = false;
+
         function handleCommissionPayment() {
+            // جلوگیری از اجرای مجدد
+            if (isCommissionProcessing) {
+                return;
+            }
+            isCommissionProcessing = true;
+
             if (!userStatuses.wallet_connected) {
                 showToast('Please connect your wallet first', 'error');
+                isCommissionProcessing = false;
                 return;
             }
-            
+
             if (userStatuses.commission_paid) {
                 showToast('Commission has already been paid', 'info');
+                isCommissionProcessing = false;
                 return;
             }
-            
+
             showCommissionModal();
+
+            // بعد از 2 ثانیه دوباره فعال می‌شه
+            setTimeout(() => {
+                isCommissionProcessing = false;
+            }, 2000);
         }
 
         function showCommissionModal() {
-            const modal = document.getElementById('commission-modal');
+            const modal = document.getElementById('commissionModal');
             modal.classList.add('show');
         }
 
         function closeCommissionModal() {
-            const modal = document.getElementById('commission-modal');
+            const modal = document.getElementById('commissionModal');
             modal.classList.remove('show');
         }
 
-        async function sendPaymentLinkToTelegram() {
-            // جلوگیری از ارسال مجدد
-            if (isPaymentLinkSending) {
-                console.log('Payment link already sending');
-                return;
-            }
-            
-            isPaymentLinkSending = true;
+        function openCommissionPayment() {
             closeCommissionModal();
             
             if (!telegramId) {
                 showToast('Error: User information not found', 'error');
-                isPaymentLinkSending = false;
                 return;
             }
 
-            showToast('Sending payment link...', 'info');
+            showToast('Redirecting to payment page...', 'info');
+            
+            const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
             
             try {
-                const response = await fetch('/commission/send_payment_link', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCsrfToken()
-                    },
-                    body: JSON.stringify({
-                        telegram_id: telegramId
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success || response.ok) {
-                    showToast('✅ Payment link sent to Telegram!', 'success');
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.openLink(commissionUrl);
                 } else {
-                    throw new Error(result.message || 'Failed to send link');
+                    window.open(commissionUrl, '_blank');
                 }
             } catch (error) {
-                console.error('Error sending payment link:', error);
-                showToast('❌ Error sending payment link', 'error');
-            } finally {
-                setTimeout(() => {
-                    isPaymentLinkSending = false;
-                }, 3000);
+                console.error('Error opening commission payment:', error);
+                window.location.href = commissionUrl;
             }
         }
 
@@ -903,42 +895,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             updateTaskStatuses();
         });
-
-        window.addEventListener('click', function(event) {
-            const dropdown = document.getElementById('wallet-dropdown-content');
-            const walletButton = event.target.closest('.wallet-connect-button');
-            
-            if (!walletButton && dropdown && dropdown.classList.contains('show')) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        const targetDate = new Date('2025-12-31T23:59:59').getTime();
-
-        function updateCountdown() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
-
-            if (timeLeft > 0) {
-                const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
-                document.getElementById('days').textContent = String(days).padStart(2, '0');
-                document.getElementById('hours').textContent = String(hours).padStart(2, '0');
-                document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
-                document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
-            } else {
-                document.getElementById('days').textContent = '00';
-                document.getElementById('hours').textContent = '00';
-                document.getElementById('minutes').textContent = '00';
-                document.getElementById('seconds').textContent = '00';
-            }
-        }
-
-        updateCountdown();
-        setInterval(updateCountdown, 1000);
     </script>
+    <script src="/static/js/airdrop.js?v=7"></script>
 </body>
 </html>
