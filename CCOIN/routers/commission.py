@@ -611,11 +611,13 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                 "expected_lamports": expected_lamports
             })
             
+            # Check each recent transaction
             for sig_info in signatures.value:
                 sig_str = str(sig_info.signature)
                 
                 logger.info("Checking signature", extra={"signature": sig_str})
                 
+                # Skip if already used
                 existing = db.query(User).filter(
                     User.commission_transaction_hash == sig_str
                 ).first()
@@ -623,6 +625,7 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                     logger.info("Signature already used", extra={"signature": sig_str})
                     continue
                 
+                # Get transaction details
                 from solders.signature import Signature as SigObj
                 sig_obj = SigObj.from_string(sig_str)
                 
@@ -632,28 +635,51 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                     max_supported_transaction_version=0
                 )
                 
-                if not tx_resp.value:
+                if not tx_resp or not tx_resp.value:
+                    logger.info("Transaction not found", extra={"signature": sig_str})
                     continue
-                    
-                if tx_resp.value.meta and tx_resp.value.meta.err:
+                
+                # Fix: Check meta attribute properly
+                tx_meta = None
+                try:
+                    tx_meta = getattr(tx_resp.value, 'meta', None)
+                except:
+                    pass
+                
+                # Check if transaction failed
+                if tx_meta and hasattr(tx_meta, 'err') and tx_meta.err:
                     logger.info("Transaction failed", extra={"signature": sig_str})
                     continue
                 
+                # Parse instructions
                 instructions = []
                 try:
-                    parsed_msg = tx_resp.value.transaction.transaction.message
-                    instructions = getattr(parsed_msg, "instructions", []) or []
+                    # Try different ways to access instructions
+                    if hasattr(tx_resp.value, 'transaction'):
+                        tx_data = tx_resp.value.transaction
+                        if hasattr(tx_data, 'transaction'):
+                            msg = tx_data.transaction.message
+                            instructions = getattr(msg, "instructions", []) or []
+                        elif hasattr(tx_data, 'message'):
+                            instructions = getattr(tx_data.message, "instructions", []) or []
                 except Exception as e:
                     logger.error("Failed to parse instructions", extra={"error": str(e)})
+                    continue
+                
+                logger.info("Found instructions", extra={
+                    "signature": sig_str,
+                    "instruction_count": len(instructions)
+                })
+                
+                # Check each instruction
+                for ix in instructions:
+                    parsed = None
                     try:
-                        tx_data = tx_resp.value.transaction
-                        if isinstance(tx_data, dict):
-                            instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
+                        parsed = getattr(ix, "parsed", None)
+                        if not parsed and isinstance(ix, dict):
+                            parsed = ix.get("parsed")
                     except:
                         pass
-                
-                for ix in instructions:
-                    parsed = getattr(ix, "parsed", None) or (ix.get("parsed") if isinstance(ix, dict) else None)
                     
                     if isinstance(parsed, dict) and parsed.get("type") == "transfer":
                         info = parsed.get("info", {})
@@ -662,6 +688,7 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                         lamports = info.get("lamports", 0)
                         
                         logger.info("Found transfer", extra={
+                            "signature": sig_str,
                             "source": source,
                             "destination": destination,
                             "lamports": lamports,
@@ -670,12 +697,16 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                             "expected_lamports": expected_lamports
                         })
                         
+                        # Verify transfer matches expected payment
                         if (source == wallet_address and 
                             destination == admin_addr and
                             int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02)):
                             
                             await client.close()
-                            logger.info("Matching transaction found!", extra={"signature": sig_str})
+                            logger.info("✅ Matching transaction found!", extra={
+                                "signature": sig_str,
+                                "lamports": lamports
+                            })
                             return {
                                 "signature": sig_str,
                                 "message": "Transaction found"
