@@ -751,33 +751,34 @@
             }
         }
 
-        let isCommissionProcessing = false;
+        let commissionClickCount = 0;
 
         function handleCommissionPayment() {
-            // جلوگیری از اجرای مجدد
-            if (isCommissionProcessing) {
+            commissionClickCount++;
+            console.log('handleCommissionPayment called - Count:', commissionClickCount);
+
+            if (commissionClickCount > 1) {
+                console.warn('⚠️ Multiple calls detected! Blocking...');
                 return;
             }
-            isCommissionProcessing = true;
 
             if (!userStatuses.wallet_connected) {
                 showToast('Please connect your wallet first', 'error');
-                isCommissionProcessing = false;
+                commissionClickCount = 0;
                 return;
             }
 
             if (userStatuses.commission_paid) {
                 showToast('Commission has already been paid', 'info');
-                isCommissionProcessing = false;
+                commissionClickCount = 0;
                 return;
             }
 
             showCommissionModal();
 
-            // بعد از 2 ثانیه دوباره فعال می‌شه
             setTimeout(() => {
-                isCommissionProcessing = false;
-            }, 2000);
+                commissionClickCount = 0;
+            }, 3000);
         }
 
         function showCommissionModal() {
