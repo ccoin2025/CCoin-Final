@@ -492,10 +492,6 @@
                     // No signature stored - need to scan blockchain
                     showStatus('🔎 Scanning blockchain for your payment...', 'info');
 
-                    // Get wallet address from user record
-                    const statusResponse = await fetch(`/commission/check_status?telegram_id=${CONFIG.telegramId}`);
-                    const statusData = await statusResponse.json();
-
                     // Call backend to scan for transaction
                     const scanResponse = await fetch('/commission/scan_transaction', {
                         method: 'POST',
