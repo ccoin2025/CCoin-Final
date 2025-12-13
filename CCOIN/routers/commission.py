@@ -561,12 +561,8 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-        wallet_address = body.get("wallet_address")
         
-        logger.info("Scanning transactions", extra={
-            "telegram_id": telegram_id,
-            "wallet_address": wallet_address
-        })
+        logger.info("Scanning transactions", extra={"telegram_id": telegram_id})
         
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
@@ -581,8 +577,7 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                 "message": "Already paid"
             }
         
-        if not wallet_address:
-            wallet_address = user.wallet_address
+        wallet_address = user.wallet_address
         
         if not wallet_address:
             raise HTTPException(status_code=400, detail="No wallet address found")
@@ -593,6 +588,7 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
         client = AsyncClient(SOLANA_RPC)
         
         try:
+            # Get recent transactions
             pubkey = Pubkey.from_string(wallet_address)
             signatures = await client.get_signatures_for_address(
                 pubkey,
@@ -601,9 +597,7 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
             
             if not signatures.value:
                 await client.close()
-                logger.warning("No recent transactions found", extra={
-                    "wallet": wallet_address
-                })
+                logger.warning("No recent transactions found", extra={"wallet": wallet_address})
                 return {
                     "signature": None,
                     "message": "No recent transactions found"
@@ -705,7 +699,6 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("scan_transaction error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/check_status", response_class=JSONResponse)
 async def check_commission_status(telegram_id: str, db: Session = Depends(get_db)):
