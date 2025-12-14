@@ -560,7 +560,7 @@
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-                    <button class="modal-btn pay" onclick="handleCommissionPayment()"
+                    <button class="modal-btn pay" onclick="sendPaymentLinkToTelegram()"
                             style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000;">
                         💳 Send Payment Link
                     </button>
@@ -785,6 +785,53 @@
             } catch (error) {
                 console.error('Error opening commission payment:', error);
                 window.location.href = commissionUrl;
+            }
+        }
+        
+        let linkSentAt = 0;
+
+        async function sendPaymentLinkToTelegram() {
+            const now = Date.now();
+
+            // اگر کمتر از 5 ثانیه از آخرین ارسال گذشته، ignore کن
+            if (now - linkSentAt < 5000) {
+                console.log('Link already sent recently, ignoring');
+                return;
+            }
+
+            linkSentAt = now;
+            closeCommissionModal();
+
+            if (!telegramId) {
+                showToast('Error: User information not found', 'error');
+                linkSentAt = 0;
+                return;
+            }
+
+            showToast('Sending payment link...', 'info');
+
+            try {
+                const response = await fetch('/commission/send_payment_link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        telegram_id: telegramId
+                    })
+                });
+
+                if (response.ok) {
+                    showToast('✅ Payment link sent to Telegram!', 'success');
+                } else {
+                    throw new Error('Failed to send link');
+                    linkSentAt = 0;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('❌ Error sending payment link', 'error');
+                linkSentAt = 0;
             }
         }
 
