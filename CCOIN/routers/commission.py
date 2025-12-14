@@ -4,7 +4,8 @@ import secrets
 import base64
 import structlog
 import asyncio
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -37,7 +38,6 @@ from CCOIN.utils.telegram_security import send_commission_payment_link
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
-
 
 @router.get("/browser/pay", response_class=HTMLResponse)
 async def commission_browser_pay(
@@ -767,34 +767,80 @@ async def check_commission_status(telegram_id: str, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=str(e))
 
 
+last_sent = {}
+lock = threading.Lock()
+
 @router.post("/send_payment_link", response_class=JSONResponse)
-async def send_payment_link_to_telegram(request: Request, db: Session = Depends(get_db)):
-    """Send payment link to Telegram"""
+async def send_payment_link(request: Request, db: Session = Depends(get_db)):
+    """
+    Send commission payment link to user's Telegram
+    """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
-
-        logger.info("send_payment_link called", extra={"telegram_id": telegram_id})
-
+        
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
-
+        
+        with lock:
+            now = datetime.now()
+            last_time = last_sent.get(telegram_id)
+            
+            if last_time and (now - last_time).total_seconds() < 5:
+                logger.warning("Duplicate request blocked", extra={
+                    "telegram_id": telegram_id,
+                    "seconds_since_last": (now - last_time).total_seconds()
+                })
+                return {
+                    "success": True,
+                    "message": "Link already sent recently"
+                }
+            
+            last_sent[telegram_id] = now
+        
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
+        
         if user.commission_paid:
-            return {"success": False, "message": "Commission already paid"}
-
-        success = await send_commission_payment_link(telegram_id, BOT_TOKEN)
-
+            return {
+                "success": False,
+                "message": "Commission already paid"
+            }
+        
+        if not user.wallet_address:
+            return {
+                "success": False,
+                "message": "Wallet not connected"
+            }
+        
+        payment_url = f"{request.base_url}commission/browser/pay?telegram_id={telegram_id}"
+        
+        message = (
+            f"💰 *Commission Payment Required*\n\n"
+            f"To unlock your airdrop, please pay the commission fee of *{COMMISSION_AMOUNT} SOL*\n\n"
+            f"Click the link below to proceed with payment:\n"
+            f"{payment_url}\n\n"
+            f"⚠️ This link will open in your browser. Complete the payment and return to the app."
+        )
+        
+        success = await send_telegram_message(
+            telegram_id,
+            message,
+            parse_mode="Markdown"
+        )
+        
         if success:
-            logger.info("Payment link sent successfully", extra={"telegram_id": telegram_id})
-            return {"success": True, "message": "Payment link sent to Telegram"}
+            logger.info("Payment link sent successfully", extra={
+                "telegram_id": telegram_id
+            })
+            return {
+                "success": True,
+                "message": "Payment link sent to Telegram"
+            }
         else:
-            logger.error("Failed to send payment link", extra={"telegram_id": telegram_id})
-            return {"success": False, "message": "Failed to send payment link"}
-
+            raise HTTPException(status_code=500, detail="Failed to send Telegram message")
+    
     except HTTPException:
         raise
     except Exception as e:
