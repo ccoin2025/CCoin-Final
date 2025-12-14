@@ -751,44 +751,17 @@
             }
         }
 
-        let commissionClickCount = 0;
-
-        function handleCommissionPayment() {
-            commissionClickCount++;
-            console.log('handleCommissionPayment called - Count:', commissionClickCount);
-
-            if (commissionClickCount > 1) {
-                console.warn('⚠️ Multiple calls detected! Blocking...');
-                return;
-            }
-
-            if (!userStatuses.wallet_connected) {
-                showToast('Please connect your wallet first', 'error');
-                commissionClickCount = 0;
-                return;
-            }
-
-            if (userStatuses.commission_paid) {
-                showToast('Commission has already been paid', 'info');
-                commissionClickCount = 0;
-                return;
-            }
-
-            showCommissionModal();
-
-            setTimeout(() => {
-                commissionClickCount = 0;
-            }, 3000);
-        }
+        
 
         function showCommissionModal() {
-            const modal = document.getElementById('commissionModal');
+            const modal = document.getElementById('commission-modal');
             modal.classList.add('show');
         }
-
+        
         function closeCommissionModal() {
-            const modal = document.getElementById('commissionModal');
+            const modal = document.getElementById('commission-modal');
             modal.classList.remove('show');
+            isModalOpen = false;
         }
 
         function openCommissionPayment() {
