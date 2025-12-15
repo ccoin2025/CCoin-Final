@@ -678,12 +678,30 @@ async function handleCommissionClick() {
     }
 }
 
+let isCommissionProcessing = false;
+
 function handleCommissionPayment() {
+    if (isCommissionProcessing) {
+        console.log('⚠️ Commission already processing');
+        return;
+    }
+    
     if (!USER_ID) {
         showToast('Error: User information not found', 'error');
         return;
     }
 
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Please connect your wallet first', 'error');
+        return;
+    }
+    
+    if (tasksCompleted.pay) {
+        showToast('Commission has already been paid', 'info');
+        return;
+    }
+
+    isCommissionProcessing = true;
     showToast('Redirecting to payment page...', 'info');
     
     const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
@@ -698,6 +716,10 @@ function handleCommissionPayment() {
         log('Error opening commission payment: ' + error.message);
         window.location.href = commissionUrl;
     }
+    
+    setTimeout(() => {
+        isCommissionProcessing = false;
+    }, 5000);
 }
 
 function openCommissionModal() {
