@@ -492,7 +492,7 @@
             </div>
             
         <div id="pay-commission" class="task-box">
-            <button onclick="openCommissionModal()" class="task-button">
+            <button onclick="handleCommissionClick()" class="task-button">
                 <span class="left-text">Pay Commission</span>
                 <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
             </button>
@@ -540,20 +540,6 @@
                     </button>
                 </div>
             </div>
-        </div>
-
-       <div id="commission-modal" class="commission-modal">
-    <div class="commission-modal-content">
-        <div class="logo">💰</div>
-        <h1>Commission Payment</h1>
-        <p class="subtitle">Send payment link to Telegram</p>
-
-        <div class="info-box">
-            <h3>📋 How it works</h3>
-            <p>• You will receive a payment link in your Telegram chat</p>
-            <p>• The link will open in an external browser</p>
-            <p>• Complete the payment using your Phantom wallet</p>
-            <p>• Return to the app after successful payment</p>
         </div>
 
         <div>
@@ -788,7 +774,6 @@
         async function sendPaymentLinkToTelegram() {
             const now = Date.now();
 
-            // اگر کمتر از 5 ثانیه از آخرین ارسال گذشته، ignore کن
             if (now - linkSentAt < 5000) {
                 console.log('Link already sent recently, ignoring');
                 return;
