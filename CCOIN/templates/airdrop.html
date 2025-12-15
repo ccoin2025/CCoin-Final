@@ -492,7 +492,7 @@
             </div>
             
         <div id="pay-commission" class="task-box">
-            <button onclick="handleCommissionPayment()" class="task-button">
+            <button onclick="openCommissionModal()" class="task-button">
                 <span class="left-text">Pay Commission</span>
                 <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
             </button>
@@ -542,35 +542,30 @@
             </div>
         </div>
 
-        <div id="commission-modal" class="commission-modal">
-            <div class="commission-modal-content">
-                <div class="logo">💰</div>
-                <h1>Commission Payment</h1>
-                <p class="subtitle">Send payment link to Telegram</p>
+       <div id="commission-modal" class="commission-modal">
+    <div class="commission-modal-content">
+        <div class="logo">💰</div>
+        <h1>Commission Payment</h1>
+        <p class="subtitle">Send payment link to Telegram</p>
 
-                <div class="info-box"
-                     style="background: rgba(33, 150, 243, 0.2); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: left;">
-                    <h3 style="color: #ffd700; margin-bottom: 15px; text-align: center;">📋 How it works</h3>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• You will receive a payment link in your Telegram
-                        chat</p>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• The link will open in an external browser</p>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• Complete the payment using your Phantom
-                        wallet</p>
-                    <p style="line-height: 1.6; margin-bottom: 10px;">• Return to the app after successful payment</p>
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-                    <button class="modal-btn pay" onclick="sendPaymentLinkToTelegram()"
-                            style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000;">
-                        💳 Send Payment Link
-                    </button>
-                    <button class="modal-btn cancel" onclick="closeCommissionModal()"
-                            style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: rgba(255, 255, 255, 0.2); color: white;">
-                        Cancel
-                    </button>
-                </div>
-            </div>
+        <div class="info-box">
+            <h3>📋 How it works</h3>
+            <p>• You will receive a payment link in your Telegram chat</p>
+            <p>• The link will open in an external browser</p>
+            <p>• Complete the payment using your Phantom wallet</p>
+            <p>• Return to the app after successful payment</p>
         </div>
+
+        <div>
+            <button class="modal-btn pay" onclick="sendPaymentLinkOnly()">
+                💳 Send Payment Link
+            </button>
+            <button class="modal-btn cancel" onclick="closeCommissionModal()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div> 
     </div>
 
     <script>
