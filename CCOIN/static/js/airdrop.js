@@ -678,6 +678,52 @@ async function handleCommissionClick() {
     }
 }
 
+let isLinkSending = false;
+
+async function sendPaymentLinkOnly() {
+    // جلوگیری از ارسال مجدد
+    if (isLinkSending) {
+        console.log('⚠️ Link already sending');
+        return;
+    }
+    
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Please connect your wallet first', 'error');
+        return;
+    }
+    
+    if (tasksCompleted.pay) {
+        showToast('Commission has already been paid', 'info');
+        return;
+    }
+    
+    isLinkSending = true;
+    closeCommissionModal();
+    showToast('Sending payment link to Telegram...', 'info');
+    
+    try {
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Payment link sent! Check your Telegram chat', 'success');
+        } else {
+            showToast('❌ ' + data.message, 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    } finally {
+        setTimeout(() => {
+            isLinkSending = false;
+        }, 3000);
+    }
+}
+
 let isCommissionProcessing = false;
 
 function handleCommissionPayment() {
