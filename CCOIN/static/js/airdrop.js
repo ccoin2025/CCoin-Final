@@ -681,7 +681,6 @@ async function handleCommissionClick() {
 let isLinkSending = false;
 
 async function sendPaymentLinkOnly() {
-    // جلوگیری از ارسال مجدد
     if (isLinkSending) {
         console.log('⚠️ Link already sending');
         return;
@@ -724,65 +723,6 @@ async function sendPaymentLinkOnly() {
     }
 }
 
-let isCommissionProcessing = false;
-
-function handleCommissionPayment() {
-    if (isCommissionProcessing) {
-        console.log('⚠️ Commission already processing');
-        return;
-    }
-    
-    if (!USER_ID) {
-        showToast('Error: User information not found', 'error');
-        return;
-    }
-
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        showToast('Please connect your wallet first', 'error');
-        return;
-    }
-    
-    if (tasksCompleted.pay) {
-        showToast('Commission has already been paid', 'info');
-        return;
-    }
-
-    isCommissionProcessing = true;
-    showToast('Redirecting to payment page...', 'info');
-    
-    const commissionUrl = `/commission/browser/pay?telegram_id=${USER_ID}`;
-    
-    try {
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.openLink(commissionUrl);
-        } else {
-            window.open(commissionUrl, '_blank');
-        }
-    } catch (error) {
-        log('Error opening commission payment: ' + error.message);
-        window.location.href = commissionUrl;
-    }
-    
-    setTimeout(() => {
-        isCommissionProcessing = false;
-    }, 5000);
-}
-
-function openCommissionModal() {
-    log('Opening commission modal');
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.add('show');
-    }
-}
-
-function closeCommissionModal() {
-    log('Closing commission modal');
-    const modal = document.getElementById('commission-modal');
-    if (modal) {
-        modal.classList.remove('show');
-    }
-}
 
 async function checkCommissionStatus() {
     if (!tasksCompleted.pay && tasksCompleted.wallet && USER_ID) {
