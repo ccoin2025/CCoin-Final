@@ -642,41 +642,6 @@ function handleInviteCheck() {
     window.location.href = '/friends';
 }
 
-async function handleCommissionClick() {
-    log('🔵 Commission button clicked');
-    
-    if (!tasksCompleted.wallet || !connectedWallet) {
-        showToast('Please connect your wallet first', 'error');
-        return;
-    }
-    
-    if (tasksCompleted.pay) {
-        showToast('Commission has already been paid', 'info');
-        return;
-    }
-    
-    showToast('Sending payment link to Telegram...', 'info');
-    
-    try {
-        const response = await fetch('/commission/send_payment_link', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({telegram_id: USER_ID})
-        });
-        
-        const data = await response.json();
-        log('Payment link response: ' + JSON.stringify(data));
-        
-        if (data.success) {
-            showToast('✅ Payment link sent! Check your Telegram chat', 'success');
-        } else {
-            showToast('❌ ' + data.message, 'error');
-        }
-    } catch (error) {
-        log('Error sending payment link: ' + error.message);
-        showToast('Error: ' + error.message, 'error');
-    }
-}
 
 let isLinkSending = false;
 
@@ -814,3 +779,73 @@ window.addEventListener('beforeunload', function() {
 });
 
 log('✅ airdrop.js loaded successfully');
+
+let isLinkSending = false;
+
+
+async function sendCommissionLink() {
+    log('💰 Pay Commission clicked');
+    
+    if (isLinkSending) {
+        log('⚠️ Already sending... Blocked!');
+        return false;
+    }
+    
+    if (!tasksCompleted.wallet || !connectedWallet) {
+        showToast('Please connect your wallet first', 'error');
+        return false;
+    }
+    
+    if (tasksCompleted.pay) {
+        showToast('Commission has already been paid', 'info');
+        return false;
+    }
+    
+    isLinkSending = true;
+    const button = document.getElementById('commission-button');
+    if (button) button.disabled = true;
+    
+    showToast('Sending payment link to Telegram...', 'info');
+    
+    try {
+        const response = await fetch('/commission/send_payment_link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_id: USER_ID})
+        });
+        
+        const data = await response.json();
+        log('📨 Response: ' + JSON.stringify(data));
+        
+        if (data.success) {
+            showToast('✅ Payment link sent! Check your Telegram chat', 'success');
+        } else {
+            showToast('❌ ' + data.message, 'error');
+        }
+    } catch (error) {
+        log('❌ Error: ' + error.message);
+        showToast('Error: ' + error.message, 'error');
+    } finally {
+        setTimeout(() => {
+            isLinkSending = false;
+            if (button) button.disabled = false;
+        }, 5000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const commissionButton = document.getElementById('commission-button');
+    if (commissionButton) {
+        commissionButton.replaceWith(commissionButton.cloneNode(true));
+        
+        const newButton = document.getElementById('commission-button');
+        
+        newButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            sendCommissionLink();
+        }, {once: false});
+        
+        log('✅ Commission button listener attached');
+    }
+});
