@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from CCOIN.database import Base, engine, get_db, get_db_health
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
 from CCOIN.models.user import User
+from CCOIN.models.transaction import Transaction
 from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import (
     BOT_TOKEN, BOT_USERNAME, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, 
