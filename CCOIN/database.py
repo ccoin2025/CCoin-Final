@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import structlog
 from CCOIN.config import BOT_USERNAME
+from CCOIN.models.transaction import Transaction
 
 logger = structlog.get_logger()
 
