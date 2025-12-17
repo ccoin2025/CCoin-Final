@@ -11,16 +11,19 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from solders.pubkey import Pubkey
 from solders.keypair import Keypair
 from solders.system_program import TransferParams, transfer
-from solders.transaction import Transaction
+from solders.transaction import Transaction as SolanaTransaction
 from solders.message import Message
 import base58
 
 from CCOIN.database import get_db
 from CCOIN.models.user import User
+from CCOIN.models.transaction import Transaction 
+from CCOIN.utils.transaction_validator import TransactionValidator  
 from CCOIN.config import (
     COMMISSION_AMOUNT,
     ADMIN_WALLET,
@@ -31,9 +34,10 @@ from CCOIN.config import (
     TX_FINALIZATION_WAIT,
     SOLANA_RPC
 )
+from CCOIN.utils.telegram_security import send_commission_payment_link
+
 # from CCOIN.utils.redis_session import session_store
 # from CCOIN.utils.solana_rpc import rpc_client
-from CCOIN.utils.telegram_security import send_commission_payment_link
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
