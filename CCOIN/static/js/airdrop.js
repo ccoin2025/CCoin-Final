@@ -444,48 +444,74 @@ async function disconnectWallet() {
 }
 
 async function payCommission() {
-    const telegramId = getTelegramId(); 
-    
+    const telegramId = USER_ID;
+
     try {
-        const provider = window.phantom?.solana;
+        log('💰 Starting commission payment...');
         
+        const provider = window.phantom?.solana;
+
         if (!provider) {
-            alert('Please install Phantom Wallet');
+            showToast('Please install Phantom Wallet', 'error');
             return;
         }
-        
+
         if (!provider.isConnected) {
+            log('📱 Connecting to Phantom...');
             await provider.connect();
         }
-        
+
+        log('🔄 Creating payment session...');
         const createResponse = await fetch('/commission/create_payment_session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                telegram_id: telegramId
+                telegram_id: telegramId,
+                amount: COMMISSION_AMOUNT,
+                recipient: ADMIN_WALLET
             })
         });
-        
+
         if (!createResponse.ok) {
-            throw new Error('Failed to create payment session');
+            const errorData = await createResponse.json();
+            throw new Error(errorData.error || 'Failed to create payment session');
         }
+
+        const { session_id } = await createResponse.json();
+        log(`✅ Session created: ${session_id}`);
+
+        log('📝 Building transaction...');
         
-        const { transaction, session_id } = await createResponse.json();
-        
-        const transactionBuffer = Uint8Array.from(atob(transaction), c => c.charCodeAt(0));
-        const tx = window.solanaWeb3.Transaction.from(transactionBuffer);
-        
-        const { signature } = await provider.signAndSendTransaction(tx);
-        
-        console.log('Transaction sent:', signature);
-        
-        document.getElementById('payButton').innerHTML = '⏳ Verifying payment...';
-        document.getElementById('payButton').disabled = true;
-        
+        const connection = new window.solanaWeb3.Connection(SOLANA_RPC_URL);
+        const transaction = new window.solanaWeb3.Transaction().add(
+            window.solanaWeb3.SystemProgram.transfer({
+                fromPubkey: provider.publicKey,
+                toPubkey: new window.solanaWeb3.PublicKey(ADMIN_WALLET),
+                lamports: COMMISSION_AMOUNT * window.solanaWeb3.LAMPORTS_PER_SOL
+            })
+        );
+
+        transaction.feePayer = provider.publicKey;
+        const { blockhash } = await connection.getRecentBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        log('📤 Sending transaction...');
+        const { signature } = await provider.signAndSendTransaction(transaction);
+
+        log(`✅ Transaction sent: ${signature}`);
+        showToast('Transaction sent! Verifying...', 'info');
+
+        const payButton = document.getElementById('payButton');
+        if (payButton) {
+            payButton.innerHTML = '⏳ Verifying payment...';
+            payButton.disabled = true;
+        }
+
         await new Promise(resolve => setTimeout(resolve, 5000));
-        
+
+        log('🔍 Verifying signature...');
         const verifyResponse = await fetch('/commission/verify_signature', {
             method: 'POST',
             headers: {
@@ -493,38 +519,50 @@ async function payCommission() {
             },
             body: JSON.stringify({
                 telegram_id: telegramId,
-                signature: signature
+                signature: signature,
+                session_id: session_id 
             })
         });
-        
+
         const verifyResult = await verifyResponse.json();
-        
+
         if (verifyResult.verified) {
-            document.getElementById('payButton').innerHTML = '✅ Payment Verified';
-            document.getElementById('payButton').classList.add('success');
+            log('✅ Payment verified successfully!');
+            tasksCompleted.pay = true;
+            updateCommissionUI();
+            updateClaimButton();
             
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-        } else {
-            if (verifyResult.retry_after) {
-                document.getElementById('payButton').innerHTML = `⏳ Please wait ${verifyResult.retry_after}s...`;
-                
-                setTimeout(() => {
-                    checkPaymentStatus(signature);
-                }, verifyResult.retry_after * 1000);
-            } else {
-                alert(verifyResult.message || 'Payment verification failed');
-                document.getElementById('payButton').innerHTML = 'Pay Commission';
-                document.getElementById('payButton').disabled = false;
+            if (payButton) {
+                payButton.innerHTML = '✅ Payment Verified';
+                payButton.classList.add('verified');
             }
+            
+            showToast('Payment verified successfully! 🎉', 'success');
+            
+            sessionStorage.removeItem('pendingPayment');
+            
+        } else {
+            log('❌ Payment verification failed: ' + verifyResult.message);
+            
+            if (payButton) {
+                payButton.innerHTML = '❌ Verification Failed';
+                payButton.disabled = false;
+            }
+            
+            showToast(verifyResult.message || 'Payment verification failed', 'error');
+        }
+
+    } catch (error) {
+        log('❌ Payment error: ' + error.message);
+        console.error('Payment error:', error);
+        
+        const payButton = document.getElementById('payButton');
+        if (payButton) {
+            payButton.innerHTML = 'Pay Commission';
+            payButton.disabled = false;
         }
         
-    } catch (error) {
-        console.error('Payment error:', error);
-        alert('Payment failed: ' + error.message);
-        document.getElementById('payButton').innerHTML = 'Pay Commission';
-        document.getElementById('payButton').disabled = false;
+        showToast('Payment failed: ' + error.message, 'error');
     }
 }
 
