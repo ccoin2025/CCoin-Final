@@ -14,19 +14,21 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import datetime, timezone
 from CCOIN.database import Base, engine, get_db, get_db_health
 from CCOIN.routers import home, load, leaders, friends, earn, airdrop, about, usertasks, users, wallet, commission
 from CCOIN.models.user import User
-from CCOIN.models.transaction import Transaction
+from CCOIN.models.transaction import Transaction as TransactionModel 
 from CCOIN.utils.telegram_security import app as telegram_app
 from CCOIN.config import (
-    BOT_TOKEN, BOT_USERNAME, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS, 
+    BOT_TOKEN, BOT_USERNAME, SECRET_KEY, SOLANA_RPC, CONTRACT_ADDRESS,
     ADMIN_WALLET, REDIS_URL, ENV, CACHE_ENABLED, RATE_LIMIT_ENABLED,
     GLOBAL_RATE_LIMIT, APP_DOMAIN, TELEGRAM_CHANNEL_USERNAME
 )
 from apscheduler.schedulers.background import BackgroundScheduler
 from solana.rpc.async_api import AsyncClient
-from solana.transaction import Transaction
+from solana.transaction import Transaction as SolanaTransaction
 from solders.system_program import TransferParams, transfer
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
@@ -34,7 +36,6 @@ from urllib.parse import parse_qs
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import Optional
 import structlog
@@ -45,7 +46,6 @@ import hmac
 import hashlib
 import time
 import mimetypes
-
 
 
 load_dotenv()
