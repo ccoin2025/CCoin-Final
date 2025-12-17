@@ -504,16 +504,18 @@ async def send_payment_link_endpoint(request: Request, db: Session = Depends(get
 @router.post("/scan_transaction", response_class=JSONResponse)
 async def scan_transaction(request: Request, db: Session = Depends(get_db)):
     """
-    Scan recent transactions from wallet to find commission payment
+    ✅ SECURED: Scan wallet for commission payment with duplicate prevention
     """
+    validator = TransactionValidator(db)
+    
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
 
-        logger.info("Scanning transactions", extra={"telegram_id": telegram_id})
-
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
+
+        logger.info("Scanning transactions", extra={"telegram_id": telegram_id})
 
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
@@ -521,88 +523,117 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
 
         if user.commission_paid:
             return {
-                "signature": user.commission_transaction_hash,
-                "message": "Already paid"
+                "success": True,
+                "verified": True,
+                "already_paid": True,
+                "message": "Payment already confirmed"
             }
 
-        wallet_address = user.wallet_address
-
-        if not wallet_address:
-            raise HTTPException(status_code=400, detail="No wallet address found")
+        if not user.wallet_address:
+            raise HTTPException(status_code=400, detail="Wallet not connected")
 
         from solana.rpc.async_api import AsyncClient
-        from solders.pubkey import Pubkey
+        from solders.signature import Signature as SigObj
 
         client = AsyncClient(SOLANA_RPC)
 
         try:
-            # Get recent transactions
-            pubkey = Pubkey.from_string(wallet_address)
-            signatures = await client.get_signatures_for_address(
-                pubkey,
+            user_pubkey = Pubkey.from_string(user.wallet_address)
+            
+            signatures_resp = await client.get_signatures_for_address(
+                user_pubkey,
                 limit=TX_SCAN_LIMIT
             )
 
-            if not signatures.value:
+            if not signatures_resp or not signatures_resp.value:
                 await client.close()
-                logger.warning("No recent transactions found", extra={"wallet": wallet_address})
                 return {
-                    "signature": None,
+                    "success": False,
+                    "verified": False,
                     "message": "No recent transactions found"
                 }
 
-            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
             admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
+            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
 
-            logger.info("Checking recent transactions", extra={
-                "count": len(signatures.value),
-                "expected_lamports": expected_lamports
-            })
-
-            # Check each recent transaction
-            for sig_info in signatures.value:
+            for sig_info in signatures_resp.value:
                 sig_str = str(sig_info.signature)
+                
+                existing_tx = db.query(Transaction).filter(
+                    Transaction.signature == sig_str
+                ).first()
+                
+                if existing_tx:
+                    if existing_tx.user_id != user.id:
+                        logger.warning("Transaction already used by different user", extra={
+                            "signature": sig_str,
+                            "existing_user_id": existing_tx.user_id,
+                            "requesting_user_id": user.id,
+                            "requesting_telegram_id": telegram_id
+                        })
+                        continue  
+                    else:
+                        logger.info("Transaction already processed for this user", extra={
+                            "signature": sig_str,
+                            "user_id": user.id
+                        })
+                        continue
 
-                logger.info("Checking signature", extra={"signature": sig_str})
-
-                # Skip if already used
-                existing = db.query(User).filter(
+                existing_user = db.query(User).filter(
                     User.commission_transaction_hash == sig_str
                 ).first()
-                if existing:
-                    logger.info("Signature already used", extra={"signature": sig_str})
+
+                if existing_user:
+                    if existing_user.id != user.id:
+                        logger.warning("Transaction hash already used by another user", extra={
+                            "signature": sig_str,
+                            "existing_user_id": existing_user.id,
+                            "requesting_user_id": user.id
+                        })
+                        continue
+                    else:
+                        continue
+
+                tx_time = sig_info.block_time
+                if tx_time:
+                    current_time = int(datetime.now(timezone.utc).timestamp())
+                    time_diff = current_time - tx_time
+
+                    if time_diff > 600: 
+                        logger.debug("Transaction too old", extra={
+                            "signature": sig_str,
+                            "age_seconds": time_diff
+                        })
+                        continue
+
+                await asyncio.sleep(0.5)
+
+                try:
+                    sig_obj = SigObj.from_string(sig_str)
+                    tx_resp = await client.get_transaction(
+                        sig_obj,
+                        encoding="jsonParsed",
+                        max_supported_transaction_version=0
+                    )
+                except Exception as tx_error:
+                    logger.warning("Failed to get transaction", extra={
+                        "signature": sig_str,
+                        "error": str(tx_error)
+                    })
                     continue
-
-                # Get transaction details
-                from solders.signature import Signature as SigObj
-                sig_obj = SigObj.from_string(sig_str)
-
-                tx_resp = await client.get_transaction(
-                    sig_obj,
-                    encoding="jsonParsed",
-                    max_supported_transaction_version=0
-                )
 
                 if not tx_resp or not tx_resp.value:
-                    logger.info("Transaction not found", extra={"signature": sig_str})
                     continue
 
-                # Fix: Check meta attribute properly
-                tx_meta = None
-                try:
-                    tx_meta = getattr(tx_resp.value, 'meta', None)
-                except:
-                    pass
-
-                # Check if transaction failed
+                tx_meta = getattr(tx_resp.value, 'meta', None)
                 if tx_meta and hasattr(tx_meta, 'err') and tx_meta.err:
-                    logger.info("Transaction failed", extra={"signature": sig_str})
+                    logger.debug("Transaction failed on blockchain", extra={
+                        "signature": sig_str
+                    })
                     continue
 
-                # Parse instructions
                 instructions = []
                 try:
-                    # Try different ways to access instructions
                     if hasattr(tx_resp.value, 'transaction'):
                         tx_data = tx_resp.value.transaction
                         if hasattr(tx_data, 'transaction'):
@@ -610,24 +641,13 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                             instructions = getattr(msg, "instructions", []) or []
                         elif hasattr(tx_data, 'message'):
                             instructions = getattr(tx_data.message, "instructions", []) or []
-                except Exception as e:
-                    logger.error("Failed to parse instructions", extra={"error": str(e)})
+                except Exception:
                     continue
 
-                logger.info("Found instructions", extra={
-                    "signature": sig_str,
-                    "instruction_count": len(instructions)
-                })
-
-                # Check each instruction
                 for ix in instructions:
-                    parsed = None
-                    try:
-                        parsed = getattr(ix, "parsed", None)
-                        if not parsed and isinstance(ix, dict):
-                            parsed = ix.get("parsed")
-                    except:
-                        pass
+                    parsed = getattr(ix, "parsed", None)
+                    if not parsed and isinstance(ix, dict):
+                        parsed = ix.get("parsed")
 
                     if isinstance(parsed, dict) and parsed.get("type") == "transfer":
                         info = parsed.get("info", {})
@@ -635,47 +655,75 @@ async def scan_transaction(request: Request, db: Session = Depends(get_db)):
                         destination = info.get("destination")
                         lamports = info.get("lamports", 0)
 
-                        logger.info("Found transfer", extra={
-                            "signature": sig_str,
-                            "source": source,
-                            "destination": destination,
-                            "lamports": lamports,
-                            "expected_source": wallet_address,
-                            "expected_destination": admin_addr,
-                            "expected_lamports": expected_lamports
-                        })
+                        min_lamports = int(expected_lamports * 0.98)
+                        max_lamports = int(expected_lamports * 1.02)
 
-                        # Verify transfer matches expected payment
-                        if (source == wallet_address and
-                                destination == admin_addr and
-                                int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02)):
-                            await client.close()
-                            logger.info("✅ Matching transaction found!", extra={
-                                "signature": sig_str,
-                                "lamports": lamports
-                            })
-                            return {
-                                "signature": sig_str,
-                                "message": "Transaction found"
-                            }
+                        if (source == user.wallet_address and
+                            destination == admin_addr and
+                            min_lamports <= int(lamports) <= max_lamports):
+                            
+                            try:
+                                new_tx = validator.create_transaction_record(
+                                    user_id=user.id,
+                                    telegram_id=telegram_id,
+                                    signature=sig_str,
+                                    wallet_address=user.wallet_address,
+                                    amount=lamports / 1_000_000_000,
+                                    recipient=admin_addr,
+                                    status="verified",
+                                    ip_address=request.client.host,
+                                    user_agent=request.headers.get("user-agent")
+                                )
+                                
+                                validator.mark_user_as_paid(user, sig_str)
+                                db.commit()
+
+                                await client.close()
+
+                                logger.info("Commission verified via scan", extra={
+                                    "telegram_id": telegram_id,
+                                    "user_id": user.id,
+                                    "signature": sig_str,
+                                    "amount": lamports / 1_000_000_000
+                                })
+
+                                return {
+                                    "success": True,
+                                    "verified": True,
+                                    "signature": sig_str,
+                                    "message": "Payment verified!"
+                                }
+                                
+                            except IntegrityError as e:
+                                db.rollback()
+                                logger.error("Database integrity error during scan", extra={
+                                    "signature": sig_str,
+                                    "error": str(e)
+                                })
+                                continue
 
             await client.close()
-            logger.warning("No matching transaction found")
+
             return {
-                "signature": None,
-                "message": "No matching payment found. Please wait a moment and try again."
+                "success": False,
+                "verified": False,
+                "message": "No valid payment found in recent transactions"
             }
 
         except Exception as e:
             await client.close()
-            logger.error("Error scanning transactions", extra={"error": str(e)}, exc_info=True)
-            return {
-                "signature": None,
-                "message": f"Scan error: {str(e)}"
-            }
+            logger.error("Error scanning transactions", extra={
+                "error": str(e),
+                "telegram_id": telegram_id
+            }, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error scanning transactions: {str(e)}")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("scan_transaction error", extra={"error": str(e)}, exc_info=True)
+        logger.error("scan_transaction error", extra={
+            "error": str(e)
+        }, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
