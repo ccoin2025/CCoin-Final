@@ -74,74 +74,60 @@ async def commission_browser_pay(
 
 @router.post("/create_payment_session", response_class=JSONResponse)
 async def create_payment_session(request: Request, db: Session = Depends(get_db)):
+    """
+    ✅ SECURED: Create payment session with user validation
+    """
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
         amount = float(body.get("amount", COMMISSION_AMOUNT))
         recipient = body.get("recipient", ADMIN_WALLET)
-
         if not telegram_id:
             raise HTTPException(status_code=400, detail="Missing telegram_id")
-
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
         if user.commission_paid:
-            return JSONResponse({"success": False, "error": "Commission already paid"}, status_code=400)
-
+            return JSONResponse(
+                {"success": False, "error": "Commission already paid"}, 
+                status_code=400
+            )
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
-
         session_id = secrets.token_urlsafe(32)
-
-        try:
-            blockhash_resp = await rpc_client.get_latest_blockhash()
-            recent_blockhash = blockhash_resp.value.blockhash
-
-            from_pubkey = Pubkey.from_string(user.wallet_address)
-            to_pubkey = Pubkey.from_string(recipient)
-            lamports = int(amount * 1_000_000_000)
-
-            transfer_ix = transfer(
-                TransferParams(
-                    from_pubkey=from_pubkey,
-                    to_pubkey=to_pubkey,
-                    lamports=lamports
-                )
-            )
-
-            message = Message.new_with_blockhash(
-                [transfer_ix],
-                from_pubkey,
-                recent_blockhash
-            )
-
-            tx = Transaction.new_unsigned(message)
-            tx_bytes = bytes(tx)
-            tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
-
-        except Exception as e:
-            logger.error("Transaction creation failed", extra={"error": str(e)}, exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
-
+        # Store session with user validation data
         session_data = {
             "telegram_id": telegram_id,
+            "user_id": user.id,  # ⭐ اضافه شده
+            "wallet_address": user.wallet_address,  # ⭐ اضافه شده
             "amount": amount,
             "recipient": recipient,
-            "wallet_address": user.wallet_address,
             "created_at": datetime.utcnow().isoformat()
         }
-        session_store.set_session(session_id, session_data, ttl=1800)  # 30 minutes
-
-        logger.info("Payment session created", extra={"session_id": session_id, "telegram_id": telegram_id})
-        return {"success": True, "session_id": session_id, "transaction": tx_base64, "expires_in": 1800}
-
+        
+        # Save to session store (Redis or similar)
+        # session_store.set_session(session_id, session_data, ttl=1800)
+        
+        # Store in request session temporarily
+        request.session[f"payment_{session_id}"] = session_data
+        logger.info("Payment session created", extra={
+            "session_id": session_id,
+            "telegram_id": telegram_id,
+            "user_id": user.id,
+            "wallet": user.wallet_address
+        })
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "expires_in": 1800
+        }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("create_payment_session error", extra={"error": str(e)}, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/phantom_callback", response_class=HTMLResponse)
@@ -192,192 +178,137 @@ async def phantom_callback(request: Request):
 @router.post("/verify_signature", response_class=JSONResponse)
 async def verify_signature(request: Request, db: Session = Depends(get_db)):
     """
-    Verify commission payment using transaction signature from frontend
+    ✅ SECURED: Verify commission payment with strict validation
     """
+    validator = TransactionValidator(db)
+    
     try:
         body = await request.json()
         telegram_id = body.get("telegram_id")
         signature = body.get("signature")
-
         logger.info("Verify signature request", extra={
             "telegram_id": telegram_id,
-            "signature": signature
+            "signature": signature,
+            "ip": request.client.host
         })
-
         if not telegram_id or not signature:
             raise HTTPException(status_code=400, detail="Missing telegram_id or signature")
-
         user = db.query(User).filter(User.telegram_id == telegram_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
         if user.commission_paid:
             return {
                 "verified": True,
                 "message": "Commission already paid",
                 "already_paid": True
             }
-
         if not user.wallet_address:
             raise HTTPException(status_code=400, detail="Wallet not connected")
-
-        # Check if signature already used by another user
-        existing_user = db.query(User).filter(
-            User.commission_transaction_hash == signature
-        ).first()
-
-        if existing_user:
-            logger.warning("Transaction signature already used", extra={
+        duplicate_check = validator.check_duplicate_signature(signature)
+        if duplicate_check:
+            logger.warning("Duplicate signature attempt", extra={
                 "signature": signature,
-                "used_by": existing_user.telegram_id,
-                "attempted_by": telegram_id
+                "requesting_user": telegram_id,
+                "existing_user": duplicate_check["telegram_id"],
+                "ip": request.client.host
             })
             return {
                 "verified": False,
                 "message": "This transaction has already been used by another user"
             }
-
-        from solana.rpc.async_api import AsyncClient
-        from solders.signature import Signature as SigObj
-
-        client = AsyncClient(SOLANA_RPC)
-
+        ownership = validator.validate_ownership(
+            signature, 
+            telegram_id, 
+            user.wallet_address
+        )
+        
+        if not ownership["valid"]:
+            return {
+                "verified": False,
+                "message": ownership["error"]
+            }
         try:
-            logger.info("Waiting for transaction finalization", extra={
-                "signature": signature,
-                "wait_time": TX_FINALIZATION_WAIT
-            })
-            await asyncio.sleep(TX_FINALIZATION_WAIT)
-
-            sig_obj = SigObj.from_string(signature)
-            tx_resp = await client.get_transaction(
-                sig_obj,
-                encoding="jsonParsed",
-                max_supported_transaction_version=0
+            pending_tx = validator.create_transaction_record(
+                user_id=user.id,
+                telegram_id=telegram_id,
+                signature=signature,
+                wallet_address=user.wallet_address,
+                amount=COMMISSION_AMOUNT,
+                recipient=ADMIN_WALLET,
+                status="pending",
+                ip_address=request.client.host,
+                user_agent=request.headers.get("user-agent")
             )
-
-            if not tx_resp or not tx_resp.value:
-                await client.close()
-                logger.warning("Transaction not found or not finalized", extra={
-                    "signature": signature
-                })
-                return {
-                    "verified": False,
-                    "message": "Transaction not found on blockchain yet. Please wait 30 seconds and try again.",
-                    "retry_after": 30
-                }
-
-            # Fix: Check meta properly  
-            tx_meta = getattr(tx_resp.value, 'meta', None)
-
-            if tx_meta and hasattr(tx_meta, 'err') and tx_meta.err:
-                await client.close()
-                logger.error("Transaction failed on blockchain", extra={
-                    "signature": signature,
-                    "error": str(tx_meta.err)
-                })
-                return {
-                    "verified": False,
-                    "message": "Transaction failed on blockchain"
-                }
-
-            if tx_meta and hasattr(tx_meta, 'err') and tx_meta.err:
-                await client.close()
-                logger.error("Transaction failed on blockchain", extra={
-                    "signature": signature,
-                    "error": str(tx_meta.err)
-                })
-                return {
-                    "verified": False,
-                    "message": "Transaction failed on blockchain"
-                }
-
-            expected_lamports = int(COMMISSION_AMOUNT * 1_000_000_000)
-            instructions = []
-
-            try:
-                if hasattr(tx_resp.value, 'transaction'):
-                    tx_data = tx_resp.value.transaction
-                    if hasattr(tx_data, 'transaction'):
-                        msg = tx_data.transaction.message
-                        instructions = getattr(msg, "instructions", []) or []
-                    elif hasattr(tx_data, 'message'):
-                        instructions = getattr(tx_data.message, "instructions", []) or []
-            except Exception as e:
-                logger.error("Failed to parse instructions", extra={"error": str(e)})
-
-            admin_addr = ADMIN_WALLET if isinstance(ADMIN_WALLET, str) else str(ADMIN_WALLET)
-
-            for ix in instructions:
-                parsed = getattr(ix, "parsed", None)
-                if not parsed and isinstance(ix, dict):
-                    parsed = ix.get("parsed")
-
-                if isinstance(parsed, dict) and parsed.get("type") == "transfer":
-                    info = parsed.get("info", {})
-                    source = info.get("source")
-                    destination = info.get("destination")
-                    lamports = info.get("lamports", 0)
-
-                    logger.info("Checking transfer instruction", extra={
-                        "source": source,
-                        "destination": destination,
-                        "lamports": lamports,
-                        "expected_source": user.wallet_address,
-                        "expected_destination": admin_addr,
-                        "expected_lamports": expected_lamports
-                    })
-
-                    if (source == user.wallet_address and
-                            destination == admin_addr and
-                            int(expected_lamports * 0.98) <= int(lamports) <= int(expected_lamports * 1.02)):
-                        user.commission_paid = True
-                        user.commission_transaction_hash = signature
-                        user.commission_payment_date = datetime.now(timezone.utc)
-                        db.commit()
-
-                        await client.close()
-
-                        logger.info("Commission payment verified successfully", extra={
-                            "telegram_id": telegram_id,
-                            "signature": signature,
-                            "amount": lamports / 1_000_000_000
-                        })
-
-                        return {
-                            "verified": True,
-                            "signature": signature,
-                            "message": "Payment verified successfully! You can now return to the app."
-                        }
-
-            await client.close()
-
-            logger.warning("No valid transfer instruction found", extra={
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            logger.error("Duplicate signature in database", extra={
                 "signature": signature,
-                "telegram_id": telegram_id
+                "error": str(e)
             })
-
             return {
                 "verified": False,
-                "message": "Transaction found but does not match expected payment details"
+                "message": "Transaction signature already exists"
             }
-
-        except Exception as e:
-            await client.close()
-            logger.error("Error verifying transaction", extra={
-                "error": str(e),
-                "signature": signature
-            }, exc_info=True)
+        logger.info("Waiting for transaction finalization", extra={
+            "signature": signature,
+            "wait_time": TX_FINALIZATION_WAIT
+        })
+        await asyncio.sleep(TX_FINALIZATION_WAIT)
+        blockchain_result = await validator.verify_solana_transaction(
+            signature=signature,
+            expected_wallet=user.wallet_address,
+            expected_amount=COMMISSION_AMOUNT,
+            expected_recipient=ADMIN_WALLET
+        )
+        await validator.close_client()
+        if not blockchain_result["verified"]:
+            validator.update_transaction_status(pending_tx, "failed")
+            db.commit()
+            
             return {
                 "verified": False,
-                "message": f"Error verifying transaction: {str(e)}"
+                "message": blockchain_result.get("error", "Transaction verification failed")
             }
-
+        try:
+            validator.update_transaction_status(pending_tx, "verified")
+            validator.mark_user_as_paid(user, signature)
+            db.commit()
+            logger.info("Commission payment verified successfully", extra={
+                "telegram_id": telegram_id,
+                "user_id": user.id,
+                "signature": signature,
+                "amount": blockchain_result["amount"]
+            })
+            for key in list(request.session.keys()):
+                if key.startswith("payment_"):
+                    del request.session[key]
+            return {
+                "verified": True,
+                "signature": signature,
+                "message": "Payment verified successfully! You can now return to the app."
+            }
+            
+        except IntegrityError as e:
+            db.rollback()
+            logger.error("Race condition detected during commit", extra={
+                "signature": signature,
+                "error": str(e)
+            })
+            return {
+                "verified": False,
+                "message": "Transaction already processed"
+            }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("verify_signature error", extra={"error": str(e)}, exc_info=True)
+        logger.error("verify_signature error", extra={
+            "error": str(e),
+            "telegram_id": telegram_id
+        }, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await validator.close_client()
 
 
 @router.post("/verify", response_class=JSONResponse)
