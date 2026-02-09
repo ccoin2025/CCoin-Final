@@ -5,7 +5,7 @@ from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
 ALLOWED_BOT = "CTG_COIN_BOT"
-GROUP_ID = -
+GROUP_ID = -1003758615666
 
 MESSAGE_INTERVAL = 10
 user_last_message = defaultdict(float)
