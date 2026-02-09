@@ -1,31 +1,39 @@
 import re
 import time
+import asyncio
 from collections import defaultdict
 from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
-ALLOWED_BOT = "CTG_COIN_BOT"        # only this bot can be mentioned
-GROUP_ID = -1003758615666            # your supergroup chat ID
-MESSAGE_INTERVAL = 10                # seconds between messages
-WARNING_LIMIT = 3                     # warnings before temporary ban
-TEMP_BAN_DURATION = 12 * 3600        # 12 hours in seconds
-# -------------------------------
+# ===============================
+# CONFIG
+# ===============================
+GROUP_ID = -1003758615666          # YOUR SUPERGROUP ID
+ALLOWED_BOT = "CTG_COIN_BOT"       # ONLY THIS BOT CAN BE MENTIONED
 
-# track last message time per user
+MESSAGE_INTERVAL = 10              # seconds between messages
+WARNING_LIMIT = 3                  # warnings before temp ban
+TEMP_BAN_DURATION = 12 * 3600      # 12 hours (in seconds)
+WARNING_DELETE_DELAY = 10          # delete warning messages after 10 seconds
+# ===============================
+
+# user state
 user_last_message = defaultdict(float)
-
-# track warnings per user
 user_warnings = defaultdict(int)
-
-# track if user was already temp-banned
 user_temp_banned = defaultdict(bool)
 
-# regex to detect links and bot mentions
+# regex rules
 LINK_REGEX = re.compile(r"(http[s]?://|t\.me/|www\.)", re.IGNORECASE)
 BOT_MENTION_REGEX = re.compile(r"@\w+bot", re.IGNORECASE)
+
+
+async def delete_later(message, delay=WARNING_DELETE_DELAY):
+    """Delete a message after delay without blocking"""
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except:
+        pass
 
 
 async def anti_spam_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,76 +45,89 @@ async def anti_spam_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = message.from_user.id
-    username = message.from_user.first_name or message.from_user.username
+    username = message.from_user.first_name or message.from_user.username or "User"
     text = message.text
     now = time.time()
 
-    # -------------------------------
-    # CHECK MESSAGE INTERVAL (SPAM)
-    # -------------------------------
+    # --------------------------------
+    # SPAM: MESSAGE INTERVAL
+    # --------------------------------
     if now - user_last_message[user_id] < MESSAGE_INTERVAL:
-        await handle_violation(context, message, user_id, username, reason="sending messages too fast")
+        await handle_violation(context, message, user_id, username, "sending messages too fast")
         return
 
     user_last_message[user_id] = now
 
-    # -------------------------------
-    # CHECK LINKS
-    # -------------------------------
+    # --------------------------------
+    # LINKS
+    # --------------------------------
     if LINK_REGEX.search(text):
-        await handle_violation(context, message, user_id, username, reason="posting links")
+        await handle_violation(context, message, user_id, username, "posting links")
         return
 
-    # -------------------------------
-    # CHECK OTHER BOT MENTIONS
-    # -------------------------------
+    # --------------------------------
+    # BOT MENTIONS
+    # --------------------------------
     for mention in BOT_MENTION_REGEX.findall(text):
         if ALLOWED_BOT.lower() not in mention.lower():
-            await handle_violation(context, message, user_id, username, reason="mentioning other bots")
+            await handle_violation(context, message, user_id, username, "mentioning other bots")
             return
 
 
 async def handle_violation(context, message, user_id, username, reason):
-    """Handle warnings, temporary and permanent bans"""
-    # delete the offending message
+    # delete offending message
     await message.delete()
 
-    # if user was already temp banned, now permanent ban
+    # --------------------------------
+    # PERMANENT BAN (AFTER TEMP BAN)
+    # --------------------------------
     if user_temp_banned[user_id]:
         await context.bot.restrict_chat_member(
             chat_id=GROUP_ID,
             user_id=user_id,
             permissions=ChatPermissions(can_send_messages=False)
         )
-        await context.bot.send_message(
+
+        ban_msg = await context.bot.send_message(
             chat_id=GROUP_ID,
             text=f"🚫 {username} has been permanently banned for repeated violations ({reason})."
         )
+
+        asyncio.create_task(delete_later(ban_msg))
         return
 
-    # increase warning count
+    # --------------------------------
+    # WARNINGS
+    # --------------------------------
     user_warnings[user_id] += 1
 
-    # check warning limit
     if user_warnings[user_id] < WARNING_LIMIT:
-        await context.bot.send_message(
+        warn_msg = await context.bot.send_message(
             chat_id=GROUP_ID,
             text=f"⚠️ {username}, please stop {reason}! Warning {user_warnings[user_id]}/{WARNING_LIMIT}."
         )
+
+        asyncio.create_task(delete_later(warn_msg))
+
     else:
-        # temporary ban 12 hours
-        now = time.time()
+        # --------------------------------
+        # TEMP BAN (12 HOURS)
+        # --------------------------------
+        until = time.time() + TEMP_BAN_DURATION
+
         await context.bot.restrict_chat_member(
             chat_id=GROUP_ID,
             user_id=user_id,
             permissions=ChatPermissions(can_send_messages=False),
-            until_date=now + TEMP_BAN_DURATION
+            until_date=until
         )
-        await context.bot.send_message(
+
+        ban_msg = await context.bot.send_message(
             chat_id=GROUP_ID,
             text=f"⏰ {username} has been temporarily banned for 12 hours due to repeated violations ({reason})."
         )
-        # mark as temp-banned
+
         user_temp_banned[user_id] = True
-        # reset warnings
         user_warnings[user_id] = 0
+
+        asyncio.create_task(delete_later(ban_msg))
