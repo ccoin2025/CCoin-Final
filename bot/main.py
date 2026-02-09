@@ -9,7 +9,6 @@ def main():
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, anti_spam_handler)
     )
-    print("BOT STARTED")
     print("🤖 Anti-Spam Bot is running...")
     app.run_polling()
 
