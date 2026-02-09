@@ -14,7 +14,6 @@ LINK_REGEX = re.compile(r"(http[s]?://|t\.me/|www\.)", re.IGNORECASE)
 BOT_MENTION_REGEX = re.compile(r"@\w+bot", re.IGNORECASE)
 
 async def anti_spam_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("CHAT ID:", update.message.chat_id)
     message = update.message
     if not message or not message.text:
         return
