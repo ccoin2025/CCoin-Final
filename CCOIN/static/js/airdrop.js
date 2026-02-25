@@ -36,6 +36,7 @@ let connectedWallet = INITIAL_WALLET_ADDRESS;
 let phantomProvider = null;
 let phantomDetected = false;
 let countdownInterval = null;
+let isLinkSending = false;
 
 function log(msg) {
     console.log('[Airdrop] ' + msg);
@@ -617,59 +618,6 @@ async function claimAirdrop() {
 
     showToast('🎉 Congratulations! You are eligible to receive the airdrop!', 'success');
     log('✅ User is eligible for airdrop');
-    
-    /* FUTURE: Uncomment when ready to distribute tokens
-    
-    try {
-        const claimButton = document.getElementById('claimBtn');
-        if (claimButton) {
-            claimButton.disabled = true;
-            claimButton.innerHTML = '⏳ Processing your request...';
-        }
-
-        const response = await fetch('/airdrop/claim', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            log('✅ Claim successful: ' + JSON.stringify(data));
-
-            showToast('🎉 Congratulations! Your request has been registered', 'success');
-
-            if (claimButton) {
-                claimButton.innerHTML = '✅ Your request has been registered';
-                claimButton.style.background = 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)';
-                claimButton.style.color = '#000';
-                claimButton.disabled = true;
-            }
-
-        } else {
-            const error = await response.json();
-            log('❌ Claim failed: ' + JSON.stringify(error));
-            showToast('Error: ' + (error.detail || 'Please try again'), 'error');
-
-            if (claimButton) {
-                claimButton.disabled = false;
-                claimButton.innerHTML = '🎉 Congratulations! You are eligible to receive the airdrop! 🎉';
-            }
-        }
-
-    } catch (error) {
-        log('❌ Claim error: ' + error.message);
-        showToast('Connection error', 'error');
-
-        const claimButton = document.getElementById('claimBtn');
-        if (claimButton) {
-            claimButton.disabled = false;
-            claimButton.innerHTML = '🎉 Congratulations! You are eligible to receive the airdrop! 🎉';
-        }
-    }
-    
-    */
 }
 
 function handleTaskCompletion() {
@@ -679,9 +627,6 @@ function handleTaskCompletion() {
 function handleInviteCheck() {
     window.location.href = '/friends';
 }
-
-
-let isLinkSending = false;
 
 async function sendPaymentLinkOnly() {
     if (isLinkSending) {
@@ -725,7 +670,6 @@ async function sendPaymentLinkOnly() {
         }, 3000);
     }
 }
-
 
 async function checkCommissionStatus() {
     if (!tasksCompleted.pay && tasksCompleted.wallet && USER_ID) {
@@ -817,9 +761,6 @@ window.addEventListener('beforeunload', function() {
 });
 
 log('✅ airdrop.js loaded successfully');
-
-let isLinkSending = false;
-
 
 async function sendCommissionLink() {
     log('💰 Pay Commission clicked');
