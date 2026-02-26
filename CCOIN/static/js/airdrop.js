@@ -882,6 +882,6 @@
             updateTaskStatuses();
         });
     </script>
-    <script src="/static/js/airdrop.js?v=12"></script>
+    <script src="/static/js/airdrop.js?v=13"></script>
 </body>
 </html>
