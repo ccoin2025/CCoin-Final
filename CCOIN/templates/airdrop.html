@@ -631,7 +631,8 @@
             window.location.href = '/friends';
         }
 
-        function handleWalletConnection() {
+        function handleWalletConnection(event) {
+            event.preventDefault();
             if (userStatuses.wallet_connected && currentWalletAddress) {
                 const dropdown = document.getElementById('wallet-dropdown-content');
                 dropdown.classList.toggle('show');
