@@ -490,43 +490,13 @@
                     </div>
                 </div>
             </div>
-            
-        <div id="pay-commission" class="task-box">
-            <button id="commission-button" class="task-button">
-                <span class="left-text">Pay Commission</span>
-                <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
-            </button>
+            <div id="pay-commission" class="task-box">
+                <button id="commission-button" class="task-button">
+                    <span class="left-text">Pay Commission</span>
+                    <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
+                </button>
+            </div>
         </div>
-
-        <div class="claim-section">
-            <button class="claim-btn" id="claimBtn" disabled>
-                Complete All Tasks to Claim
-            </button>
-        </div>
-
-        <div class="footer-icons">
-            <a href="/leaders" class="footer-btn">
-                <i class="fas fa-medal"></i>
-                <span>Leaders</span>
-            </a>
-            <a href="/friends" class="footer-btn">
-                <i class="fas fa-user-friends"></i>
-                <span>Friends</span>
-            </a>
-            <a href="/home" class="footer-btn">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
-            </a>
-            <a href="/earn" class="footer-btn">
-                <i class="fas fa-coins"></i>
-                <span>Earn</span>
-            </a>
-            <a href="/airdrop" class="footer-btn active">
-                <i class="fas fa-gift"></i>
-                <span>Airdrop</span>
-            </a>
-        </div>
-
         <div id="phantomModal" class="phantom-modal">
             <div class="phantom-modal-content">
                 <h3>Open Phantom Wallet</h3>
@@ -542,9 +512,33 @@
             </div>
         </div>
     </div>
-</div> 
+    <div class="claim-section">
+        <button class="claim-btn" id="claimBtn" disabled>
+            Complete All Tasks to Claim
+        </button>
     </div>
-
+    <div class="footer-icons">
+        <a href="/leaders" class="footer-btn">
+            <i class="fas fa-medal"></i>
+            <span>Leaders</span>
+        </a>
+        <a href="/friends" class="footer-btn">
+            <i class="fas fa-user-friends"></i>
+            <span>Friends</span>
+        </a>
+        <a href="/home" class="footer-btn">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/earn" class="footer-btn">
+            <i class="fas fa-coins"></i>
+            <span>Earn</span>
+        </a>
+        <a href="/airdrop" class="footer-btn active">
+            <i class="fas fa-gift"></i>
+            <span>Airdrop</span>
+        </a>
+    </div>
     <script>
         let currentWalletAddress = '{{ user_wallet_address if user_wallet_address else "" }}';
         let userStatuses = {
@@ -562,7 +556,7 @@
             return metaTag ? metaTag.getAttribute('content') : '';
         }
 
-        
+
         function updateTaskStatuses() {
             if (userStatuses.tasks_completed) {
                 markTaskAsCompleted('task-completion', 'tasks-icon', 'Tasks Completed');
@@ -577,7 +571,7 @@
             }
 
             if (userStatuses.commission_paid) {
-                markCommissionAsCompleted(); 
+                markCommissionAsCompleted();
             }
 
             checkAllTasksCompletion();
@@ -602,7 +596,7 @@
             const leftText = button.querySelector('.left-text');
 
             taskBox.classList.add('completed');
-            button.classList.add('commission-paid'); 
+            button.classList.add('commission-paid');
             icon.className = 'fas fa-check right-icon';
             leftText.textContent = 'Commission Paid';
         }
@@ -618,7 +612,7 @@
             button.classList.add('wallet-connected');
             icon.className = 'fas fa-check right-icon';
             statusIndicator.classList.add('connected');
-            
+
             const shortAddress = currentWalletAddress.slice(0, 6) + '...' + currentWalletAddress.slice(-4);
             buttonText.textContent = `Connected: ${shortAddress}`;
         }
@@ -652,16 +646,16 @@
 
         function openPhantomWallet() {
             closePhantomModal();
-            
+
             if (!telegramId) {
                 showToast('Error: User information not found', 'error');
                 return;
             }
 
             showToast('Redirecting to wallet...', 'info');
-            
+
             const walletUrl = `/wallet/browser/connect?telegram_id=${telegramId}`;
-            
+
             try {
                 if (window.Telegram && window.Telegram.WebApp) {
                     window.Telegram.WebApp.openLink(walletUrl);
@@ -683,7 +677,7 @@
         async function disconnectWallet() {
             const dropdown = document.getElementById('wallet-dropdown-content');
             dropdown.classList.remove('show');
-            
+
             try {
                 const response = await fetch('/airdrop/connect_wallet', {
                     method: 'POST',
@@ -699,7 +693,7 @@
                 if (response.ok) {
                     currentWalletAddress = '';
                     userStatuses.wallet_connected = false;
-                    
+
                     const taskBox = document.getElementById('connect-wallet');
                     const button = taskBox.querySelector('.task-button');
                     const icon = document.getElementById('wallet-icon');
@@ -711,7 +705,7 @@
                     icon.className = 'fas fa-chevron-right right-icon';
                     statusIndicator.classList.remove('connected');
                     buttonText.textContent = 'Connect Wallet';
-                    
+
                     showToast('Wallet disconnected', 'success');
                     checkAllTasksCompletion();
                 } else {
@@ -723,13 +717,13 @@
             }
         }
 
-        
+
 
         function showCommissionModal() {
             const modal = document.getElementById('commission-modal');
             modal.classList.add('show');
         }
-        
+
         function closeCommissionModal() {
             const modal = document.getElementById('commission-modal');
             modal.classList.remove('show');
@@ -738,16 +732,16 @@
 
         function openCommissionPayment() {
             closeCommissionModal();
-            
+
             if (!telegramId) {
                 showToast('Error: User information not found', 'error');
                 return;
             }
 
             showToast('Redirecting to payment page...', 'info');
-            
+
             const commissionUrl = `/commission/browser/pay?telegram_id=${telegramId}`;
-            
+
             try {
                 if (window.Telegram && window.Telegram.WebApp) {
                     window.Telegram.WebApp.openLink(commissionUrl);
@@ -759,7 +753,7 @@
                 window.location.href = commissionUrl;
             }
         }
-        
+
         let linkSentAt = 0;
 
         async function sendPaymentLinkToTelegram() {
@@ -807,9 +801,9 @@
         }
 
         function checkAllTasksCompletion() {
-            const allCompleted = userStatuses.tasks_completed && 
-                               userStatuses.friends_invited && 
-                               userStatuses.wallet_connected && 
+            const allCompleted = userStatuses.tasks_completed &&
+                               userStatuses.friends_invited &&
+                               userStatuses.wallet_connected &&
                                userStatuses.commission_paid;
 
             const claimBtn = document.getElementById('claimBtn');
@@ -817,11 +811,11 @@
             if (allCompleted) {
                 claimBtn.innerHTML = "🎉 Congratulations, you are now eligible to receive the airdrop! 🎉";
                 claimBtn.disabled = false;
-                claimBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; 
+                claimBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
                 claimBtn.style.color = 'white';
                 claimBtn.style.cursor = 'pointer';
-                claimBtn.style.fontWeight = 'bold';  
-                claimBtn.style.fontSize = '16px';  
+                claimBtn.style.fontWeight = 'bold';
+                claimBtn.style.fontSize = '16px';
                 claimBtn.onclick = claimAirdrop;
             } else {
                 claimBtn.innerHTML = 'Complete All Tasks to Claim';
@@ -845,7 +839,7 @@
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             toast.textContent = message;
-            
+
             document.body.appendChild(toast);
 
             setTimeout(() => {
@@ -869,10 +863,10 @@
                         }
                     });
                     const data = await response.json();
-                    
+
                     if (data.commission_paid && !userStatuses.commission_paid) {
                         userStatuses.commission_paid = true;
-                        markCommissionAsCompleted();  
+                        markCommissionAsCompleted();
                         checkAllTasksCompletion();
                         showToast("✅ Commission payment confirmed!", "success");
                     }
