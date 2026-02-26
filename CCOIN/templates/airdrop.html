@@ -627,7 +627,7 @@
         }
 
         function handleWalletConnection() {
-            if (userStatuses.wallet_connected && currentWalletAddress) {
+            if (currentWalletAddress && currentWalletAddress.length > 10) {
                 const dropdown = document.getElementById('wallet-dropdown-content');
                 dropdown.classList.toggle('show');
             } else {
