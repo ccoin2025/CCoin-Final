@@ -491,10 +491,10 @@
                 </div>
             </div>
             
-        <div id="pay-commission" class="task-box">
-            <button id="commission-button" class="task-button">
-                <span class="left-text">Pay Commission</span>
-                <i id="commission-icon" class="fas fa-chevron-right right-icon"></i>
+        <div id="pay-commission" class="task-box">     
+            <button onclick="handleCommissionClick()" class="task-button" id="commission-button">
+                <span class="left-text">Pay for Commission</span>
+                <i class="fas fa-chevron-right right-icon" id="commission-icon"></i>
             </button>
         </div>
 
@@ -541,8 +541,36 @@
                 </div>
             </div>
         </div>
-    </div>
-</div> 
+
+        <div id="commission-modal" class="commission-modal">
+            <div class="commission-modal-content">
+                <div class="logo">💰</div>
+                <h1>Commission Payment</h1>
+                <p class="subtitle">Send payment link to Telegram</p>
+
+                <div class="info-box"
+                     style="background: rgba(33, 150, 243, 0.2); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: left;">
+                    <h3 style="color: #ffd700; margin-bottom: 15px; text-align: center;">📋 How it works</h3>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• You will receive a payment link in your Telegram
+                        chat</p>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• The link will open in an external browser</p>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• Complete the payment using your Phantom
+                        wallet</p>
+                    <p style="line-height: 1.6; margin-bottom: 10px;">• Return to the app after successful payment</p>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                    <button class="modal-btn pay" onclick="handleCommissionPayment()"
+                            style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000;">
+                        💳 Send Payment Link
+                    </button>
+                    <button class="modal-btn cancel" onclick="closeCommissionModal()"
+                            style="padding: 16px 32px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; background: rgba(255, 255, 255, 0.2); color: white;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -723,17 +751,28 @@
             }
         }
 
-        
+        function handleCommissionPayment() {
+            if (!userStatuses.wallet_connected) {
+                showToast('Please connect your wallet first', 'error');
+                return;
+            }
+            
+            if (userStatuses.commission_paid) {
+                showToast('Commission has already been paid', 'info');
+                return;
+            }
+            
+            showCommissionModal();
+        }
 
         function showCommissionModal() {
-            const modal = document.getElementById('commission-modal');
+            const modal = document.getElementById('commissionModal');
             modal.classList.add('show');
         }
-        
+
         function closeCommissionModal() {
-            const modal = document.getElementById('commission-modal');
+            const modal = document.getElementById('commissionModal');
             modal.classList.remove('show');
-            isModalOpen = false;
         }
 
         function openCommissionPayment() {
@@ -757,52 +796,6 @@
             } catch (error) {
                 console.error('Error opening commission payment:', error);
                 window.location.href = commissionUrl;
-            }
-        }
-        
-        let linkSentAt = 0;
-
-        async function sendPaymentLinkToTelegram() {
-            const now = Date.now();
-
-            if (now - linkSentAt < 5000) {
-                console.log('Link already sent recently, ignoring');
-                return;
-            }
-
-            linkSentAt = now;
-            closeCommissionModal();
-
-            if (!telegramId) {
-                showToast('Error: User information not found', 'error');
-                linkSentAt = 0;
-                return;
-            }
-
-            showToast('Sending payment link...', 'info');
-
-            try {
-                const response = await fetch('/commission/send_payment_link', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCsrfToken()
-                    },
-                    body: JSON.stringify({
-                        telegram_id: telegramId
-                    })
-                });
-
-                if (response.ok) {
-                    showToast('✅ Payment link sent to Telegram!', 'success');
-                } else {
-                    throw new Error('Failed to send link');
-                    linkSentAt = 0;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showToast('❌ Error sending payment link', 'error');
-                linkSentAt = 0;
             }
         }
 
@@ -888,6 +881,6 @@
             updateTaskStatuses();
         });
     </script>
-    <script src="/static/js/airdrop.js?v=12"></script>
+    <script src="/static/js/airdrop.js?v=7"></script>
 </body>
 </html>
