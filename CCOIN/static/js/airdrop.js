@@ -383,7 +383,7 @@ async function detectPhantom() {
     }
 }
 
-function handleWalletConnection() {
+async function handleWalletConnection() {
     try {
         log('🔗 Initiating wallet connection...');
 
