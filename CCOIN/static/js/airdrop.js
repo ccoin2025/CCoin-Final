@@ -32,7 +32,7 @@ let tasksCompleted = {
     pay: INITIAL_COMMISSION_PAID
 };
 
-let connectedWallet = INITIAL_WALLET_ADDRESS;
+let connectedWallet = INITIAL_WALLET_ADDRESS || '';
 let phantomProvider = null;
 let phantomDetected = false;
 let countdownInterval = null;
@@ -385,15 +385,21 @@ async function detectPhantom() {
 
 async function handleWalletConnection() {
     try {
-        log('🔗 Initiating wallet connection...');
+        log('🔗 Wallet button clicked');
 
-        const walletUrl = `/wallet/browser/connect?telegram_id=${USER_ID}`;
-        log('Opening wallet connection page: ' + walletUrl);
+        const isConnected = tasksCompleted.wallet && connectedWallet;
+        
+        if (isConnected) {
+            const dropdown = document.getElementById('wallet-dropdown-content');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+            return;
+        }
 
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.openLink(walletUrl);
-        } else {
-            window.open(walletUrl, '_blank');
+        const modal = document.getElementById('phantomModal');
+        if (modal) {
+            modal.classList.add('show');
         }
 
     } catch (error) {
@@ -740,6 +746,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     const connectWalletBtn = document.querySelector('#connect-wallet .task-button');
     if (connectWalletBtn) {
+        connectWalletBtn.removeAttribute('onclick');
         connectWalletBtn.addEventListener('click', handleWalletConnection);
     }
 
